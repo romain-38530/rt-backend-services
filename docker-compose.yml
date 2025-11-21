@@ -1,0 +1,232 @@
+version: '3.8'
+
+services:
+  # Infrastructure
+  mongodb:
+    image: mongo:7.0
+    container_name: rt-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: rt-technologie
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - rt-network
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: rt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - rt-network
+
+  # Core Services
+  admin-gateway:
+    build:
+      context: .
+      dockerfile: services/admin-gateway/Dockerfile
+    container_name: rt-admin-gateway
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-secret-key
+    depends_on:
+      - mongodb
+      - redis
+      - authz
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  authz:
+    build:
+      context: .
+      dockerfile: services/authz/Dockerfile
+    container_name: rt-authz
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-secret-key
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  core-orders:
+    build:
+      context: .
+      dockerfile: services/core-orders/Dockerfile
+    container_name: rt-core-orders
+    ports:
+      - "3007:3007"
+    environment:
+      - NODE_ENV=development
+      - PORT=3007
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - AUTHZ_URL=http://authz:3002
+    depends_on:
+      - mongodb
+      - authz
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  notifications:
+    build:
+      context: .
+      dockerfile: services/notifications/Dockerfile
+    container_name: rt-notifications
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+    depends_on:
+      - mongodb
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  planning:
+    build:
+      context: .
+      dockerfile: services/planning/Dockerfile
+    container_name: rt-planning
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=development
+      - PORT=3005
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - NOTIFICATIONS_URL=http://notifications:3004
+    depends_on:
+      - mongodb
+      - notifications
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  affret-ia:
+    build:
+      context: .
+      dockerfile: services/affret-ia/Dockerfile
+    container_name: rt-affret-ia
+    ports:
+      - "3010:3010"
+    environment:
+      - NODE_ENV=development
+      - PORT=3010
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - mongodb
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  chatbot:
+    build:
+      context: .
+      dockerfile: services/chatbot/Dockerfile
+    container_name: rt-chatbot
+    ports:
+      - "3019:3019"
+    environment:
+      - NODE_ENV=development
+      - PORT=3019
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  geo-tracking:
+    build:
+      context: .
+      dockerfile: services/geo-tracking/Dockerfile
+    container_name: rt-geo-tracking
+    ports:
+      - "3016:3016"
+    environment:
+      - NODE_ENV=development
+      - PORT=3016
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - TOMTOM_API_KEY=${TOMTOM_API_KEY}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  palette:
+    build:
+      context: .
+      dockerfile: services/palette/Dockerfile
+    container_name: rt-palette
+    ports:
+      - "3009:3009"
+    environment:
+      - NODE_ENV=development
+      - PORT=3009
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+      - AUTHZ_URL=http://authz:3002
+    depends_on:
+      - mongodb
+      - authz
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+  vigilance:
+    build:
+      context: .
+      dockerfile: services/vigilance/Dockerfile
+    container_name: rt-vigilance
+    ports:
+      - "3008:3008"
+    environment:
+      - NODE_ENV=development
+      - PORT=3008
+      - MONGODB_URI=mongodb://admin:admin123@mongodb:27017/rt-technologie?authSource=admin
+    depends_on:
+      - mongodb
+    networks:
+      - rt-network
+    restart: unless-stopped
+
+networks:
+  rt-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local

@@ -1,0 +1,69 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy (leave empty for all)'
+        required: false
+        type: string
+
+env:
+  AWS_REGION: eu-west-3
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-3.amazonaws.com
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8.15.4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build services
+        run: pnpm build
+
+      - name: Build and push Docker images
+        run: |
+          bash infra/scripts/build-and-push.sh
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+
+      - name: Deploy to ECS
+        run: |
+          bash infra/scripts/deploy-services.sh
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          SERVICE_NAME: ${{ github.event.inputs.service }}
