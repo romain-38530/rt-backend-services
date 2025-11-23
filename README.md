@@ -228,19 +228,38 @@ curl http://localhost:3007/health  # Orders
 
 The backend is deployed on **AWS Elastic Beanstalk** with **MongoDB Atlas**.
 
-See detailed deployment guides:
+### Deployment Guides
+
+- **[DEPLOY_NEW_SERVICES.md](DEPLOY_NEW_SERVICES.md)** - Deploy the 3 new services (notifications, planning, geo-tracking)
+- **[DEPLOY_COMMANDS.md](DEPLOY_COMMANDS.md)** - Quick deployment commands reference
+- **[DEPLOYMENT_STATUS.md](DEPLOYMENT_STATUS.md)** - Current deployment status
 - [DEPLOYMENT_QUICK_GUIDE.md](DEPLOYMENT_QUICK_GUIDE.md) - Quick deployment reference
 - [INFRASTRUCTURE.md](INFRASTRUCTURE.md) - Complete infrastructure documentation
 
-### Production URLs
+### Deploy New Services (Automated)
 
-| Service | URL |
-|---------|-----|
-| Auth API | http://rt-auth-api-prod.eba-g2psqhq5.eu-central-1.elasticbeanstalk.com |
-| Orders API | http://rt-orders-api-prod.eba-dbgatxmk.eu-central-1.elasticbeanstalk.com |
-| Planning API | http://rt-planning-api-prod.eba-gbhspa2p.eu-central-1.elasticbeanstalk.com |
-| eCMR API | http://rt-ecmr-api-prod.eba-43ngua6v.eu-central-1.elasticbeanstalk.com |
-| Palettes API | http://rt-palettes-api-prod.eba-peea8hx2.eu-central-1.elasticbeanstalk.com |
+```powershell
+# Deploy all 3 new services automatically
+.\deploy-new-services.ps1
+
+# Or deploy individually
+.\deploy-new-services.ps1 -Service notifications
+.\deploy-new-services.ps1 -Service planning
+.\deploy-new-services.ps1 -Service geo-tracking
+```
+
+### Production URLs (5/8 Deployed)
+
+| Service | URL | Status |
+|---------|-----|--------|
+| Auth API | http://rt-auth-api-prod.eba-g2psqhq5.eu-central-1.elasticbeanstalk.com | ✅ Live |
+| Orders API | http://rt-orders-api-prod.eba-dbgatxmk.eu-central-1.elasticbeanstalk.com | ✅ Live |
+| Planning API | http://rt-planning-api-prod.eba-gbhspa2p.eu-central-1.elasticbeanstalk.com | ✅ Live |
+| eCMR API | http://rt-ecmr-api-prod.eba-43ngua6v.eu-central-1.elasticbeanstalk.com | ✅ Live |
+| Palettes API | http://rt-palettes-api-prod.eba-peea8hx2.eu-central-1.elasticbeanstalk.com | ✅ Live |
+| **Notifications API** | *Ready to deploy* | 🟡 Pending |
+| **Geo-Tracking API** | *Ready to deploy* | 🟡 Pending |
+| **Admin Gateway** | *To be deployed* | 🟡 Pending |
 
 ## 📁 Project Structure
 
