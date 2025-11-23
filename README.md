@@ -1,37 +1,49 @@
 # RT Technologie - Backend Services
 
-Backend microservices for the RT Technologie platform, deployed on AWS ECS Fargate.
+Backend microservices monorepo for the RT Technologie platform.
+
+## 🚀 Quick Start
+
+**New to this project?** Start here:
+- [QUICK_START.md](QUICK_START.md) - Get running in 5 minutes
+- [DEPLOY.md](DEPLOY.md) - Complete deployment guide with step-by-step instructions
+- [STATUS.md](STATUS.md) - Current status of all services
+
+**Production deployment:**
+- [DEPLOYMENT_QUICK_GUIDE.md](DEPLOYMENT_QUICK_GUIDE.md) - AWS Elastic Beanstalk deployment
+- [INFRASTRUCTURE.md](INFRASTRUCTURE.md) - Production infrastructure details
 
 ## 🏗️ Architecture
 
+This is a **monorepo** using **Turborepo** + **pnpm workspaces** containing:
+- 6 shared packages (`@rt/contracts`, `@rt/utils`, `@rt/security`, etc.)
+- 13 microservices (admin-gateway, authz, core-orders, notifications, etc.)
+- Local development with Docker Compose (MongoDB + Redis)
+- Production deployment on AWS Elastic Beanstalk + MongoDB Atlas
+
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Internet                             │
+│                    Frontend Apps                        │
+│  (rt-frontend-apps - React/Next.js)                     │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ↓
 ┌─────────────────────────────────────────────────────────┐
-│  Application Load Balancer (ALB)                        │
-│  https://api.rt-technologie.com                         │
-└────────────────────────┬────────────────────────────────┘
-                         │
-                         ↓
-┌─────────────────────────────────────────────────────────┐
-│  admin-gateway (PUBLIC)                                 │
+│  admin-gateway (Port 3001)                              │
 │  - CORS configuration                                   │
 │  - JWT authentication                                   │
-│  - Rate limiting                                        │
-│  - Request routing                                      │
+│  - Request routing to microservices                     │
 └────────────────────────┬────────────────────────────────┘
                          │
-           ┌─────────────┼─────────────┐
-           │             │             │
-           ↓             ↓             ↓
-      ┌────────┐    ┌────────┐   ┌────────┐
-      │ authz  │    │ orders │   │ chatbot│
-      └────────┘    └────────┘   └────────┘
-           │             │             │
-           └─────────────┼─────────────┘
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ↓                ↓                ↓
+   ┌────────┐      ┌──────────┐    ┌──────────┐
+   │ authz  │      │  orders  │    │ planning │
+   │ :3002  │      │  :3007   │    │  :3005   │
+   └────────┘      └──────────┘    └──────────┘
+        │                │                │
+        └────────────────┼────────────────┘
                          │
                          ↓
               ┌─────────────────────┐
@@ -40,261 +52,276 @@ Backend microservices for the RT Technologie platform, deployed on AWS ECS Farga
               └─────────────────────┘
 ```
 
-## 📦 Services
+## 📦 Services & Packages
 
-### Core Services
+### Shared Packages (6)
 
-| Service | Port | Description | Dependencies |
-|---------|------|-------------|--------------|
-| `admin-gateway` | 3001 | API Gateway | authz |
-| `authz` | 3002 | Authentication & Authorization | MongoDB, Redis |
-| `core-orders` | 3007 | Order management | MongoDB, authz, vigilance |
-| `notifications` | 3004 | Email, SMS, Push notifications | MongoDB |
-| `planning` | 3005 | Planning & scheduling | MongoDB, notifications |
+All services use these shared packages:
 
-### AI Services
+| Package | Description |
+|---------|-------------|
+| `@rt/contracts` | TypeScript types, Zod schemas, enums |
+| `@rt/utils` | Logger (Winston), validators, helpers |
+| `@rt/security` | JWT auth, bcrypt, RBAC permissions |
+| `@rt/data-mongo` | MongoDB repositories (generic pattern) |
+| `@rt/ai-client` | OpenAI & Anthropic API wrapper |
+| `@rt/cloud-aws` | AWS S3 & SES services |
 
-| Service | Port | Description | Dependencies |
-|---------|------|-------------|--------------|
-| `affret-ia` | 3010 | AI freight operations | MongoDB, OpenAI, Anthropic |
-| `chatbot` | 3019 | Intelligent chatbots | MongoDB, OpenAI, Anthropic |
-| `tracking-ia` | - | AI tracking | MongoDB |
+### Microservices (13)
 
-### Logistics Services
+| Service | Port | Status | Description |
+|---------|------|--------|-------------|
+| `admin-gateway` | 3001 | ✅ Complete | API Gateway with routing |
+| `authz` | 3002 | ✅ Complete | Authentication & Authorization |
+| `core-orders` | 3007 | ✅ Complete | Order management |
+| `notifications` | 3004 | 🟡 Template | Email, SMS, Push notifications |
+| `planning` | 3005 | 🟡 Template | Planning & scheduling |
+| `tms-sync` | 3006 | 🟡 Template | TMS synchronization |
+| `vigilance` | 3008 | 🟡 Template | Monitoring & alerts |
+| `palette` | 3009 | 🟡 Template | Palette management |
+| `affret-ia` | 3010 | 🟡 Template | AI freight operations |
+| `training` | 3012 | 🟡 Template | Training modules |
+| `ecpmr` | 3014 | 🟡 Template | Electronic CMR |
+| `storage-market` | 3015 | 🟡 Template | Storage marketplace |
+| `geo-tracking` | 3016 | 🟡 Template | Real-time geolocation |
+| `chatbot` | 3019 | 🟡 Template | Intelligent chatbots |
 
-| Service | Port | Description | Dependencies |
-|---------|------|-------------|--------------|
-| `geo-tracking` | 3016 | Real-time geolocation | MongoDB, TomTom API |
-| `palette` | 3009 | Palette management | MongoDB, authz |
-| `vigilance` | 3008 | Monitoring & alerts | MongoDB |
+**Legend:**
+- ✅ **Complete** = Fully implemented with routes, services, repositories
+- 🟡 **Template** = Basic structure ready for implementation
 
-### Integration Services
-
-| Service | Port | Description | Dependencies |
-|---------|------|-------------|--------------|
-| `erp-sync` | - | ERP synchronization | MongoDB |
-| `tms-sync` | 3006 | TMS synchronization | MongoDB |
-| `wms-sync` | - | WMS synchronization | MongoDB |
-| `ecpmr` | 3014 | Electronic CMR | MongoDB |
-
-### Business Services
-
-| Service | Port | Description | Dependencies |
-|---------|------|-------------|--------------|
-| `bourse` | - | Exchange marketplace | MongoDB |
-| `storage-market` | 3015 | Storage marketplace | MongoDB, authz, OpenAI |
-| `pricing-grids` | - | Pricing management | MongoDB |
-| `client-onboarding` | - | Client onboarding | MongoDB, VAT API |
-| `training` | 3012 | Training modules | MongoDB |
+See [STATUS.md](STATUS.md) for detailed status of each service.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js >= 20.0.0
-- pnpm >= 8.0.0
-- Docker & Docker Compose
-- MongoDB (local or Atlas)
-- Redis (local or cloud)
+- ✅ Node.js >= 20.0.0
+- ✅ pnpm >= 8.0.0
+- ✅ Docker Desktop installed and running
+- ✅ Git installed
 
-### Installation
+### Local Development (Windows)
 
 ```bash
-# Install dependencies
+# 1. Start infrastructure (MongoDB + Redis)
+START-INFRA.bat
+
+# 2. Install dependencies
 pnpm install
 
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# Build all services
-pnpm build
-```
-
-### Development
-
-```bash
-# Run all services in dev mode
+# 3. Start all services
 pnpm dev
 
-# Run specific service
+# 4. Create first admin user (in another terminal)
+CREATE-FIRST-USER.bat
+
+# 5. Test the API
+curl http://localhost:3001/api/v1/auth/login -X POST -H "Content-Type: application/json" -d "{\"email\":\"admin@rt-technologie.com\",\"password\":\"Admin123\"}"
+```
+
+**Credentials:**
+- Email: `admin@rt-technologie.com`
+- Password: `Admin123`
+
+### Run Specific Services Only
+
+```bash
+# Terminal 1 - Gateway
 pnpm --filter @rt/service-admin-gateway dev
 
-# Run with Docker Compose
-pnpm docker:up
+# Terminal 2 - Auth
+pnpm --filter @rt/service-authz dev
 
-# View logs
-pnpm docker:logs
+# Terminal 3 - Orders
+pnpm --filter @rt/service-core-orders dev
 ```
 
-### Production
+### Stop Everything
 
 ```bash
-# Build all services
-pnpm build
+# Stop infrastructure
+STOP-INFRA.bat
 
-# Start all services
-pnpm start
-
-# Deploy to AWS ECS
-pnpm deploy
+# Stop services: Ctrl+C in the terminals
 ```
 
-## 📦 Shared Packages
+**For complete setup instructions, see [DEPLOY.md](DEPLOY.md)**
 
-| Package | Description |
-|---------|-------------|
-| `@rt/contracts` | API contracts & types (from rt-shared-contracts) |
-| `@rt/utils` | Utility functions (from rt-shared-contracts) |
-| `@rt/data-mongo` | MongoDB data access layer |
-| `@rt/security` | Security utilities |
-| `@rt/ai-client` | AI client wrapper |
-| `@rt/cloud-aws` | AWS SDK wrapper |
+## 🔐 Authentication & Security
 
-## 🔐 Environment Variables
+### JWT-Based Authentication
 
-### Common (All Services)
+1. Login via `POST /api/v1/auth/login` through the gateway
+2. Receive JWT token in response
+3. Include token in all requests: `Authorization: Bearer <token>`
+4. Gateway validates token and routes to backend services
+5. Backend services re-validate token (defense in depth)
+
+### RBAC Permissions
+
+The `@rt/security` package provides role-based access control:
+
+```typescript
+import { hasPermission, Permissions } from '@rt/security';
+
+// Check permissions
+if (hasPermission(user.role, Permissions.Orders.CREATE)) {
+  // User can create orders
+}
+```
+
+See the full permission matrix in [packages/security/src/auth/permissions.ts](packages/security/src/auth/permissions.ts)
+
+## 🌐 Frontend Integration
+
+### Configuration (rt-frontend-apps)
+
+```typescript
+// Use the admin-gateway as your API base URL
+export const API_BASE_URL = 'http://localhost:3001/api/v1';
+
+// Login example
+const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    email: 'admin@rt-technologie.com',
+    password: 'Admin123'
+  })
+});
+
+const { data } = await response.json();
+localStorage.setItem('token', data.token);
+
+// Use token for subsequent requests
+const orders = await fetch(`${API_BASE_URL}/orders`, {
+  headers: {
+    'Authorization': `Bearer ${data.token}`
+  }
+});
+```
+
+### Available Endpoints
+
+All requests go through the gateway at `http://localhost:3001/api/v1`:
+
+- `POST /auth/login` - User login
+- `POST /auth/register` - User registration
+- `POST /auth/refresh` - Refresh token
+- `GET /orders` - List orders
+- `POST /orders` - Create order
+- And more... (see each service's routes)
+
+## 📊 Health Checks
+
+All services expose a `/health` endpoint:
 
 ```bash
-NODE_ENV=production
-PORT=3000
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/rt-technologie
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=your-jwt-secret
+curl http://localhost:3001/health  # Gateway
+curl http://localhost:3002/health  # Auth
+curl http://localhost:3007/health  # Orders
+# ... etc
 ```
 
-### Service-Specific
+## 🚀 Production Deployment
 
+The backend is deployed on **AWS Elastic Beanstalk** with **MongoDB Atlas**.
+
+See detailed deployment guides:
+- [DEPLOYMENT_QUICK_GUIDE.md](DEPLOYMENT_QUICK_GUIDE.md) - Quick deployment reference
+- [INFRASTRUCTURE.md](INFRASTRUCTURE.md) - Complete infrastructure documentation
+
+### Production URLs
+
+| Service | URL |
+|---------|-----|
+| Auth API | http://rt-auth-api-prod.eba-g2psqhq5.eu-central-1.elasticbeanstalk.com |
+| Orders API | http://rt-orders-api-prod.eba-dbgatxmk.eu-central-1.elasticbeanstalk.com |
+| Planning API | http://rt-planning-api-prod.eba-gbhspa2p.eu-central-1.elasticbeanstalk.com |
+| eCMR API | http://rt-ecmr-api-prod.eba-43ngua6v.eu-central-1.elasticbeanstalk.com |
+| Palettes API | http://rt-palettes-api-prod.eba-peea8hx2.eu-central-1.elasticbeanstalk.com |
+
+## 📁 Project Structure
+
+```
+rt-backend-services/
+├── packages/              # Shared packages
+│   ├── contracts/         # Types, schemas, enums
+│   ├── utils/            # Logger, validators
+│   ├── security/         # JWT, RBAC, crypto
+│   ├── data-mongo/       # MongoDB repositories
+│   ├── ai-client/        # OpenAI & Anthropic
+│   └── cloud-aws/        # AWS S3 & SES
+├── services/              # Microservices
+│   ├── admin-gateway/    # API Gateway (port 3001)
+│   ├── authz/            # Auth service (port 3002)
+│   ├── core-orders/      # Orders (port 3007)
+│   ├── notifications/    # Notifications (port 3004)
+│   └── ...               # 10 more services
+├── docker-compose.yml    # Local MongoDB + Redis
+├── turbo.json           # Turborepo config
+├── pnpm-workspace.yaml  # Workspace config
+├── .env                 # Environment variables
+├── START-INFRA.bat      # Start MongoDB + Redis
+├── STOP-INFRA.bat       # Stop infrastructure
+└── CREATE-FIRST-USER.bat # Create admin user
+```
+
+## 🐛 Troubleshooting
+
+### MongoDB won't start
 ```bash
-# AI Services
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Geo Tracking
-TOMTOM_API_KEY=...
-
-# Notifications
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=...
-SMTP_PASS=...
-SMS_API_KEY=...
-
-# Admin Gateway
-CORS_ALLOWED_ORIGINS=https://backoffice.rt-technologie.com,https://www.rt-technologie.com
+docker logs rt-mongodb
+docker compose restart mongodb
 ```
 
-## 🧪 Testing
-
+### Port already in use
 ```bash
-# Run all tests
-pnpm test
+# Find process using port 3001
+netstat -ano | findstr :3001
 
-# Run tests for specific service
-pnpm --filter @rt/service-authz test
-
-# Run tests with coverage
-pnpm test:coverage
+# Kill process (replace PID)
+taskkill /PID <PID> /F
 ```
 
-## 🏗️ Infrastructure
-
-### Terraform
-
+### Auth service not responding
 ```bash
-cd infra/terraform
+# Verify MongoDB connection
+docker exec rt-mongodb mongosh --eval "db.adminCommand('ping')"
 
-# Initialize
-terraform init
-
-# Plan
-terraform plan
-
-# Apply
-terraform apply
+# Check environment variables
+cat .env | grep MONGODB_URI
 ```
 
-### AWS ECS Deployment
-
+### CORS errors from frontend
+Verify `CORS_ALLOWED_ORIGINS` in [.env](.env) includes your frontend URLs:
 ```bash
-# Deploy all services
-bash infra/scripts/deploy-services.sh
-
-# Deploy specific service
-bash infra/scripts/deploy-service.sh admin-gateway
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174
 ```
 
-## 📊 Monitoring
+## 📚 Documentation
 
-- **CloudWatch Logs**: All services log to CloudWatch
-- **CloudWatch Metrics**: CPU, Memory, Request count
-- **AWS X-Ray**: Distributed tracing
-- **Health checks**: `/health` endpoint on all services
+- **[QUICK_START.md](QUICK_START.md)** - Get running in 5 minutes
+- **[DEPLOY.md](DEPLOY.md)** - Complete deployment guide
+- **[STATUS.md](STATUS.md)** - Current status of all services
+- **[DEPLOYMENT_QUICK_GUIDE.md](DEPLOYMENT_QUICK_GUIDE.md)** - AWS Elastic Beanstalk deployment
+- **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** - Production infrastructure
+- **[README_FINAL.md](README_FINAL.md)** - Comprehensive technical documentation
 
-## 🔒 Security
+## 🤝 Development Workflow
 
-### Authentication Flow
-
-1. Frontend → `POST /auth/login` → authz service
-2. authz validates credentials & generates JWT
-3. JWT returned to frontend
-4. Frontend includes JWT in `Authorization: Bearer <token>` header
-5. admin-gateway validates JWT
-6. Request routed to appropriate service
-7. Service re-validates JWT (defense in depth)
-
-### CORS Configuration
-
-admin-gateway allows requests from:
-- `https://backoffice.rt-technologie.com`
-- `https://www.rt-technologie.com`
-- All Amplify preview URLs
-
-### Rate Limiting
-
-- Default: 100 requests/minute per IP
-- Authenticated: 1000 requests/minute per user
-
-## 🚢 Docker
-
-### Build Images
-
-```bash
-# Build all services
-docker-compose build
-
-# Build specific service
-docker build -t rt-admin-gateway -f services/admin-gateway/Dockerfile .
-```
-
-### Run Locally
-
-```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
-```
-
-## 📖 API Documentation
-
-API documentation is available via Swagger UI:
-
-- **Admin Gateway**: http://localhost:3001/api-docs
-- Each service exposes its own `/api-docs` endpoint
-
-## 🤝 Contributing
-
-1. Create a feature branch
-2. Make your changes
-3. Write/update tests
-4. Update documentation
-5. Create a Pull Request
+1. Create feature branch from `main`
+2. Make changes in relevant service(s) or package(s)
+3. Test locally with `pnpm dev`
+4. Build with `pnpm build` (fix any TypeScript errors)
+5. Commit changes with descriptive message
+6. Push to GitHub and create Pull Request
 
 ## 📄 License
 
 Proprietary - RT Technologie © 2025
+
+---
+
+**🎉 Ready to develop?** Run `START-INFRA.bat` then `pnpm dev` to get started!
