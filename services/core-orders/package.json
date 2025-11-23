@@ -1,7 +1,7 @@
 {
-  "name": "@rt/service-planning",
+  "name": "@rt/service-core-orders",
   "version": "1.0.0",
-  "description": "planning service for RT Technologie",
+  "description": "Order management service for RT Technologie",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -11,14 +11,17 @@
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
+  "keywords": ["orders", "logistics"],
   "dependencies": {
     "@rt/contracts": "workspace:*",
     "@rt/utils": "workspace:*",
     "@rt/data-mongo": "workspace:*",
+    "@rt/security": "workspace:*",
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

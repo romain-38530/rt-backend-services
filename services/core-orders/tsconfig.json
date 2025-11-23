@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/utils" },
+    { "path": "../../packages/data-mongo" },
+    { "path": "../../packages/security" }
+  ]
+}

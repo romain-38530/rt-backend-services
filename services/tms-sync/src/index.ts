@@ -7,9 +7,9 @@ import { connectToDatabase, checkDatabaseHealth } from '@rt/data-mongo';
 
 dotenv.config();
 
-const logger = createLogger('planning');
+const logger = createLogger('tms-sync');
 const app = express();
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.PORT || 3006;
 
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
@@ -19,20 +19,20 @@ app.get('/health', async (req, res) => {
   const dbHealthy = await checkDatabaseHealth();
   res.status(dbHealthy ? 200 : 503).json({
     status: dbHealthy ? 'healthy' : 'unhealthy',
-    service: 'planning',
+    service: 'tms-sync',
     timestamp: new Date().toISOString(),
   });
 });
 
-app.get('/api/planning', (req, res) => {
-  res.json({ success: true, service: 'planning' });
+app.get('/api/tms-sync', (req, res) => {
+  res.json({ success: true, service: 'tms-sync' });
 });
 
 async function startServer() {
   try {
     await connectToDatabase();
     app.listen(PORT, () => {
-      logger.info(`planning service listening on port ${PORT}`);
+      logger.info(`tms-sync service listening on port ${PORT}`);
     });
   } catch (error) {
     logger.error('Failed to start server', { error });

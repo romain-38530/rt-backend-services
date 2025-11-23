@@ -1,7 +1,7 @@
 {
-  "name": "@rt/service-planning",
+  "name": "@rt/service-tms-sync",
   "version": "1.0.0",
-  "description": "planning service for RT Technologie",
+  "description": "tms-sync service for RT Technologie",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

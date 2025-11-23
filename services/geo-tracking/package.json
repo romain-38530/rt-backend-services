@@ -1,7 +1,7 @@
 {
-  "name": "@rt/service-planning",
+  "name": "@rt/service-geo-tracking",
   "version": "1.0.0",
-  "description": "planning service for RT Technologie",
+  "description": "geo-tracking service for RT Technologie",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

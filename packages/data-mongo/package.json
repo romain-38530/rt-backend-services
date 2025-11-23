@@ -1,0 +1,23 @@
+{
+  "name": "@rt/data-mongo",
+  "version": "1.0.0",
+  "description": "MongoDB data access layer for RT Technologie",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": ["mongodb", "database"],
+  "dependencies": {
+    "@rt/contracts": "workspace:*",
+    "@rt/utils": "workspace:*",
+    "mongodb": "^6.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}

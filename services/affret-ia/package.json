@@ -1,7 +1,7 @@
 {
-  "name": "@rt/service-planning",
+  "name": "@rt/service-affret-ia",
   "version": "1.0.0",
-  "description": "planning service for RT Technologie",
+  "description": "affret-ia service for RT Technologie",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

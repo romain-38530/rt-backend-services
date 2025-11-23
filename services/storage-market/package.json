@@ -1,7 +1,7 @@
 {
-  "name": "@rt/service-planning",
+  "name": "@rt/service-storage-market",
   "version": "1.0.0",
-  "description": "planning service for RT Technologie",
+  "description": "storage-market service for RT Technologie",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

@@ -1,7 +1,7 @@
 {
-  "name": "@rt/service-planning",
+  "name": "@rt/service-authz",
   "version": "1.0.0",
-  "description": "planning service for RT Technologie",
+  "description": "Authentication and Authorization service for RT Technologie",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -11,13 +11,16 @@
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
+  "keywords": ["auth", "authentication", "authorization"],
   "dependencies": {
     "@rt/contracts": "workspace:*",
     "@rt/utils": "workspace:*",
     "@rt/data-mongo": "workspace:*",
+    "@rt/security": "workspace:*",
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {

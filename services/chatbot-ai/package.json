@@ -1,7 +1,7 @@
 {
-  "name": "@rt/service-planning",
+  "name": "@rt/service-chatbot-ai",
   "version": "1.0.0",
-  "description": "planning service for RT Technologie",
+  "description": "chatbot-ai service for RT Technologie",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
