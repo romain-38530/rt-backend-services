@@ -1,0 +1,156 @@
+// User & Auth
+export enum UserType {
+  ADMIN = 'ADMIN',
+  DRIVER = 'DRIVER',
+  CLIENT = 'CLIENT',
+  DISPATCHER = 'DISPATCHER',
+  WAREHOUSE_MANAGER = 'WAREHOUSE_MANAGER',
+}
+
+export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
+  OPERATOR = 'OPERATOR',
+  VIEWER = 'VIEWER',
+  DRIVER = 'DRIVER',
+  CLIENT = 'CLIENT',
+}
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  PENDING = 'PENDING',
+}
+
+// Orders
+export enum OrderStatus {
+  DRAFT = 'DRAFT',
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+  ON_HOLD = 'ON_HOLD',
+}
+
+export enum OrderType {
+  TRANSPORT = 'TRANSPORT',
+  STORAGE = 'STORAGE',
+  FREIGHT = 'FREIGHT',
+  COMBINED = 'COMBINED',
+}
+
+export enum OrderPriority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  URGENT = 'URGENT',
+}
+
+// Transport
+export enum TransportType {
+  ROAD = 'ROAD',
+  RAIL = 'RAIL',
+  AIR = 'AIR',
+  SEA = 'SEA',
+  MULTIMODAL = 'MULTIMODAL',
+}
+
+export enum VehicleType {
+  VAN = 'VAN',
+  TRUCK = 'TRUCK',
+  SEMI_TRAILER = 'SEMI_TRAILER',
+  REFRIGERATED = 'REFRIGERATED',
+  TANKER = 'TANKER',
+}
+
+export enum LoadType {
+  PALLETS = 'PALLETS',
+  BULK = 'BULK',
+  CONTAINER = 'CONTAINER',
+  PARCELS = 'PARCELS',
+}
+
+// Notifications
+export enum NotificationType {
+  EMAIL = 'EMAIL',
+  SMS = 'SMS',
+  PUSH = 'PUSH',
+  IN_APP = 'IN_APP',
+}
+
+export enum NotificationStatus {
+  PENDING = 'PENDING',
+  SENT = 'SENT',
+  DELIVERED = 'DELIVERED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum NotificationPriority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+// Payment
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  PARTIAL = 'PARTIAL',
+  OVERDUE = 'OVERDUE',
+  CANCELLED = 'CANCELLED',
+  REFUNDED = 'REFUNDED',
+}
+
+export enum PaymentMethod {
+  CREDIT_CARD = 'CREDIT_CARD',
+  BANK_TRANSFER = 'BANK_TRANSFER',
+  CHEQUE = 'CHEQUE',
+  CASH = 'CASH',
+  SEPA = 'SEPA',
+}
+
+// Tracking
+export enum TrackingStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  IN_TRANSIT = 'IN_TRANSIT',
+  AT_PICKUP = 'AT_PICKUP',
+  AT_DELIVERY = 'AT_DELIVERY',
+  DELIVERED = 'DELIVERED',
+  DELAYED = 'DELAYED',
+  INCIDENT = 'INCIDENT',
+}
+
+// API Error Codes
+export enum ApiErrorCode {
+  // Auth
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
+  INVALID_TOKEN = 'INVALID_TOKEN',
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+
+  // Validation
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  INVALID_INPUT = 'INVALID_INPUT',
+  MISSING_FIELD = 'MISSING_FIELD',
+
+  // Resources
+  NOT_FOUND = 'NOT_FOUND',
+  ALREADY_EXISTS = 'ALREADY_EXISTS',
+  CONFLICT = 'CONFLICT',
+
+  // Server
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
+  SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
+  DATABASE_ERROR = 'DATABASE_ERROR',
+
+  // Business
+  INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
+  OPERATION_NOT_ALLOWED = 'OPERATION_NOT_ALLOWED',
+  QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
+}

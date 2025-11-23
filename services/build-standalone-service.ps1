@@ -93,14 +93,14 @@ $tsConfig = @{
         moduleResolution = "node"
         outDir = "dist"
         rootDir = "src"
-        strict = true
-        esModuleInterop = true
-        skipLibCheck = true
-        forceConsistentCasingInFileNames = true
-        resolveJsonModule = true
-        declaration = true
-        declarationMap = true
-        sourceMap = true
+        strict = $true
+        esModuleInterop = $true
+        skipLibCheck = $true
+        forceConsistentCasingInFileNames = $true
+        resolveJsonModule = $true
+        declaration = $true
+        declarationMap = $true
+        sourceMap = $true
     }
     include = @("src/**/*")
     exclude = @("node_modules", "dist")
@@ -112,25 +112,24 @@ $tsConfig | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $outputDir "
 Write-Host "Creating Procfile..." -ForegroundColor Cyan
 "web: npm start" | Set-Content -Path (Join-Path $outputDir "Procfile")
 
-# Create .npmrc to avoid optional dependencies issues
+# Create .npmrc
 Write-Host "Creating .npmrc..." -ForegroundColor Cyan
-@"
-optional=false
-engine-strict=false
-"@ | Set-Content -Path (Join-Path $outputDir ".npmrc")
+$npmrcContent = "optional=false`nengine-strict=false"
+$npmrcContent | Set-Content -Path (Join-Path $outputDir ".npmrc")
 
 # Create .ebignore
 Write-Host "Creating .ebignore..." -ForegroundColor Cyan
-@"
-node_modules/
-.git/
-.gitignore
-*.log
-.env.local
-.env.development
-src/
-tsconfig.json
-"@ | Set-Content -Path (Join-Path $outputDir ".ebignore")
+$ebignoreContent = @(
+    "node_modules/"
+    ".git/"
+    ".gitignore"
+    "*.log"
+    ".env.local"
+    ".env.development"
+    "src/"
+    "tsconfig.json"
+) -join "`n"
+$ebignoreContent | Set-Content -Path (Join-Path $outputDir ".ebignore")
 
 # Copy shared packages code inline
 Write-Host "Inlining shared packages..." -ForegroundColor Cyan
@@ -169,22 +168,22 @@ Copy-Item -Path (Join-Path $mongoSource "*") -Destination $mongoDir -Recurse -Er
 
 # Create README
 Write-Host "Creating README..." -ForegroundColor Cyan
-@"
+$readmeContent = @"
 # $ServiceName Service - Elastic Beanstalk Deployment
 
 This is a standalone version of the $ServiceName service for AWS Elastic Beanstalk deployment.
 
 ## Deployment
 
-\`\`\`bash
+```bash
 # Initialize EB (first time only)
-eb init -p "Node.js 20" -r eu-central-1
+eb init -p `"Node.js 20`" -r eu-central-1
 
 # Create environment
-eb create rt-$ServiceName-api-prod --region eu-central-1 --platform "Node.js 20" --instance-type t3.micro --single
+eb create rt-$ServiceName-api-prod --region eu-central-1 --platform `"Node.js 20`" --instance-type t3.micro --single
 
 # Set environment variables
-eb setenv MONGODB_URI="..." PORT="3000" JWT_SECRET="..."
+eb setenv MONGODB_URI=`"...`" PORT=`"3000`" JWT_SECRET=`"...`"
 
 # Deploy
 eb deploy
@@ -192,54 +191,56 @@ eb deploy
 # Check status
 eb status
 eb open
-\`\`\`
+```
 
 ## Local Testing
 
-\`\`\`bash
+```bash
 npm install
 npm run dev
-\`\`\`
+```
 
 ## Environment Variables
 
 See DEPLOY_NEW_SERVICES.md in the root directory for full list of required environment variables.
-"@ | Set-Content -Path (Join-Path $outputDir "README.md")
+"@
+$readmeContent | Set-Content -Path (Join-Path $outputDir "README.md")
 
 # Create deployment script
 Write-Host "Creating deployment script..." -ForegroundColor Cyan
-@"
+$deployScriptContent = @"
 # Deployment script for $ServiceName service
 # Run this from the $ServiceName-eb directory
 
-Write-Host "Deploying $ServiceName service to Elastic Beanstalk..." -ForegroundColor Green
+Write-Host `"Deploying $ServiceName service to Elastic Beanstalk...`" -ForegroundColor Green
 
 # Check if EB CLI is installed
 if (-not (Get-Command eb -ErrorAction SilentlyContinue)) {
-    Write-Error "EB CLI is not installed. Install with: pip install awsebcli"
+    Write-Error `"EB CLI is not installed. Install with: pip install awsebcli`"
     exit 1
 }
 
 # Deploy
-Write-Host "Running eb deploy..." -ForegroundColor Cyan
+Write-Host `"Running eb deploy...`" -ForegroundColor Cyan
 eb deploy
 
 if (`$LASTEXITCODE -eq 0) {
-    Write-Host "Deployment successful!" -ForegroundColor Green
-    Write-Host "Checking status..." -ForegroundColor Cyan
+    Write-Host `"Deployment successful!`" -ForegroundColor Green
+    Write-Host `"Checking status...`" -ForegroundColor Cyan
     eb status
 } else {
-    Write-Error "Deployment failed. Check logs with: eb logs"
+    Write-Error `"Deployment failed. Check logs with: eb logs`"
     exit 1
 }
-"@ | Set-Content -Path (Join-Path $outputDir "deploy-to-eb.ps1")
+"@
+$deployScriptContent | Set-Content -Path (Join-Path $outputDir "deploy-to-eb.ps1")
 
 Write-Host ""
-Write-Host "✓ Standalone service built successfully!" -ForegroundColor Green
+Write-Host "Build completed successfully!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "1. cd $outputDir" -ForegroundColor White
-Write-Host "2. Test locally: npm install && npm run dev" -ForegroundColor White
+Write-Host "2. Test locally: npm install; npm run dev" -ForegroundColor White
 Write-Host "3. Deploy: eb init (first time) then eb deploy" -ForegroundColor White
 Write-Host ""
 Write-Host "See DEPLOY_NEW_SERVICES.md for detailed deployment instructions" -ForegroundColor Cyan
