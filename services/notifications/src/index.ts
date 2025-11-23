@@ -3,7 +3,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { createLogger } from '@rt/utils';
-import { connectToDatabase, checkDatabaseHealth } from '@rt/data-mongo';
+import { connectToDatabase, checkDatabaseHealth, getDatabase } from '@rt/data-mongo';
+import { NotificationRepository } from './repositories/notification.repository.js';
+import { NotificationService } from './services/notification.service.js';
+import { createNotificationRoutes } from './routes/notification.routes.js';
 
 dotenv.config();
 
@@ -15,7 +18,7 @@ app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-app.get('/health', async (req, res) => {
+app.get('/health', async (_req, res) => {
   const dbHealthy = await checkDatabaseHealth();
   res.status(dbHealthy ? 200 : 503).json({
     status: dbHealthy ? 'healthy' : 'unhealthy',
@@ -24,13 +27,19 @@ app.get('/health', async (req, res) => {
   });
 });
 
-app.post('/api/notifications/send', (req, res) => {
-  res.json({ success: true, message: 'Notification sent' });
-});
-
 async function startServer() {
   try {
     await connectToDatabase();
+    const db = getDatabase();
+
+    // Initialize repository and service
+    const notificationCollection = db.collection('notifications');
+    const notificationRepo = new NotificationRepository(notificationCollection);
+    const notificationService = new NotificationService(notificationRepo);
+
+    // Setup routes
+    app.use('/api/notifications', createNotificationRoutes(notificationService));
+
     app.listen(PORT, () => {
       logger.info(`Notifications service listening on port ${PORT}`);
     });

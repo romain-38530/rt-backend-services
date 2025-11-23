@@ -28,3 +28,45 @@ export interface SendNotificationRequest {
   data?: Record<string, any>;
   scheduledFor?: Date;
 }
+
+export interface SendEmailRequest {
+  to: string | string[];
+  subject: string;
+  content: string; // HTML content
+  cc?: string[];
+  bcc?: string[];
+  templateId?: string;
+  templateVars?: Record<string, any>;
+  attachments?: EmailAttachment[];
+  priority?: NotificationPriority;
+}
+
+export interface EmailAttachment {
+  filename: string;
+  content: string | Buffer;
+  contentType?: string;
+}
+
+export interface SendSMSRequest {
+  to: string; // Phone number
+  message: string;
+  userId?: string;
+  priority?: NotificationPriority;
+}
+
+export interface SendPushRequest {
+  userId: string;
+  title: string;
+  message: string;
+  data?: Record<string, any>;
+  badge?: number;
+  sound?: string;
+  priority?: NotificationPriority;
+}
+
+export interface NotificationResponse {
+  id: string;
+  status: NotificationStatus;
+  message: string;
+  sentAt?: Date;
+}
