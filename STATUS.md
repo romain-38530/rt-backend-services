@@ -25,32 +25,32 @@
 
 | Service | Port | Description | Status |
 |---------|------|-------------|---------|
-| [notifications](services/notifications/) | 3004 | Email, SMS, Push notifications | ✅ Créé |
-| [planning](services/planning/) | 3005 | Planification & scheduling | ✅ Créé |
-| [tms-sync](services/tms-sync/) | 3006 | TMS synchronization | ✅ Créé |
-| [vigilance](services/vigilance/) | 3008 | Monitoring & alertes | ✅ Créé |
-| [palette](services/palette/) | 3009 | Gestion palettes | ✅ Créé |
+| [notifications](services/notifications/) | 3004 | **Email, SMS, Push notifications** | ✅ Complet |
+| [planning](services/planning/) | 3005 | **Planification & scheduling** | ✅ Complet |
+| [tms-sync](services/tms-sync/) | 3006 | TMS synchronization | 🟡 Template |
+| [vigilance](services/vigilance/) | 3008 | Monitoring & alertes | 🟡 Template |
+| [palette](services/palette/) | 3009 | Gestion palettes | 🟡 Template |
 
 ### Services IA
 
 | Service | Port | Description | Status |
 |---------|------|-------------|---------|
-| [affret-ia](services/affret-ia/) | 3010 | IA affrètement | ✅ Créé |
-| [chatbot-ai](services/chatbot-ai/) | 3019 | Chatbots intelligents | ✅ Créé |
+| [affret-ia](services/affret-ia/) | 3010 | IA affrètement | 🟡 Template |
+| [chatbot-ai](services/chatbot-ai/) | 3019 | Chatbots intelligents | 🟡 Template |
 
 ### Services Intégration
 
 | Service | Port | Description | Status |
 |---------|------|-------------|---------|
-| [training](services/training/) | 3012 | Modules de formation | ✅ Créé |
-| [ecpmr](services/ecpmr/) | 3014 | Electronic CMR | ✅ Créé |
+| [training](services/training/) | 3012 | Modules de formation | 🟡 Template |
+| [ecpmr](services/ecpmr/) | 3014 | Electronic CMR | 🟡 Template |
 
 ### Services Business
 
 | Service | Port | Description | Status |
 |---------|------|-------------|---------|
-| [storage-market](services/storage-market/) | 3015 | Marketplace stockage | ✅ Créé |
-| [geo-tracking](services/geo-tracking/) | 3016 | Géolocalisation temps réel | ✅ Créé |
+| [storage-market](services/storage-market/) | 3015 | Marketplace stockage | 🟡 Template |
+| [geo-tracking](services/geo-tracking/) | 3016 | Géolocalisation temps réel | 🟡 Template |
 
 ## 🚀 Démarrage
 
