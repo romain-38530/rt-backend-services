@@ -1,6 +1,6 @@
 # Guide de déploiement rapide
 
-Guide condensé pour déployer rapidement les APIs RT Technologie.
+Guide condensé pour déployer rapidement les APIs SYMPHONI.A.
 
 ## Déploiement initial d'une nouvelle API
 

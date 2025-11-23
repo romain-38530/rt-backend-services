@@ -1,6 +1,8 @@
-# RT Technologie - Référentiel Infrastructure
+# SYMPHONI.A - Référentiel Infrastructure
 
-Documentation complète de l'infrastructure AWS et MongoDB pour RT Technologie.
+**"L'IA qui orchestre vos flux transport."**
+
+Documentation complète de l'infrastructure AWS et MongoDB pour SYMPHONI.A.
 
 ## Table des matières
 
@@ -60,7 +62,7 @@ mongodb+srv://rt_admin:RtAdmin2024@stagingrt.v2jnoh2.mongodb.net/
 
 **Atlas Dashboard:**
 - URL: https://cloud.mongodb.com
-- Organization: RT Technologie
+- Organization: SYMPHONI.A
 - Project: RT Backend Services
 
 ---
@@ -470,7 +472,7 @@ Le `JWT_SECRET` utilisé pour l'authentification doit être:
 
 ### Contacts MongoDB Atlas
 
-**Organization:** RT Technologie
+**Organization:** SYMPHONI.A
 **Support:** support@mongodb.com
 **Tier:** M0 Free (upgrade recommandé pour Production)
 
@@ -497,4 +499,4 @@ Le `JWT_SECRET` utilisé pour l'authentification doit être:
 
 **Document mis à jour le:** 2024-11-23
 **Version:** 1.0.0
-**Auteur:** RT Technologie DevOps Team
+**Auteur:** SYMPHONI.A DevOps Team

@@ -1,6 +1,6 @@
-# RT Technologie - Backend Services
+# SYMPHONI.A - Backend Services
 
-Backend microservices monorepo for the RT Technologie platform.
+Backend microservices monorepo for the SYMPHONI.A platform.
 
 ## 🚀 Quick Start
 
@@ -320,7 +320,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhos
 
 ## 📄 License
 
-Proprietary - RT Technologie © 2025
+Proprietary - SYMPHONI.A © 2025
 
 ---
 
