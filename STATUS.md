@@ -50,7 +50,7 @@
 | Service | Port | Description | Status |
 |---------|------|-------------|---------|
 | [storage-market](services/storage-market/) | 3015 | Marketplace stockage | 🟡 Template |
-| [geo-tracking](services/geo-tracking/) | 3016 | Géolocalisation temps réel | 🟡 Template |
+| [geo-tracking](services/geo-tracking/) | 3016 | **Géolocalisation temps réel** | ✅ Complet |
 
 ## 🚀 Démarrage
 
