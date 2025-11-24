@@ -7,6 +7,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { MongoClient } = require('mongodb');
 const createECMRRoutes = require('./ecmr-routes');
+const createAccountTypesRoutes = require('./account-types-routes');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -61,7 +62,7 @@ app.get('/health', async (req, res) => {
     port: PORT,
     env: process.env.NODE_ENV || 'development',
     version: '1.0.0',
-    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr'],
+    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected,
@@ -97,6 +98,7 @@ app.get('/', (req, res) => {
       'Contract Signing',
       'E-Signatures',
       'e-CMR (Electronic Consignment Note)',
+      'Account Types Management',
       'Invoice Management',
     ],
     endpoints: [
@@ -127,6 +129,14 @@ app.get('/', (req, res) => {
       'POST /api/ecmr/:id/remarks (add loading/delivery remarks)',
       'POST /api/ecmr/:id/tracking (update GPS position)',
       'GET /api/ecmr/:cmrNumber/verify (verify e-CMR authenticity)',
+      '-- Account Types --',
+      'GET /api/account/types (list all account types)',
+      'POST /api/account/select-type (select initial account type)',
+      'GET /api/account/current/:userId (get current account)',
+      'GET /api/account/upgrade-options/:userId (get upgrade options)',
+      'POST /api/account/upgrade (request account type upgrade)',
+      'POST /api/account/upgrade/approve (approve upgrade - admin)',
+      'POST /api/account/upgrade/reject (reject upgrade - admin)',
     ],
     documentation: 'See README.md for complete API documentation',
   });
@@ -640,6 +650,15 @@ async function startServer() {
     console.warn('⚠️  e-CMR routes not mounted - MongoDB not connected');
   }
 
+  // Mount Account Types routes after MongoDB connection is established
+  if (mongoConnected) {
+    const accountTypesRouter = createAccountTypesRoutes(mongoClient, mongoConnected);
+    app.use('/api/account', accountTypesRouter);
+    console.log('✅ Account Types routes mounted successfully');
+  } else {
+    console.warn('⚠️  Account Types routes not mounted - MongoDB not connected');
+  }
+
   // Register 404 handler (must be after all routes)
   app.use((req, res) => {
     res.status(404).json({
@@ -667,7 +686,7 @@ async function startServer() {
     console.log('RT Subscriptions-Contracts API listening on port ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? 'Connected' : 'Not connected'));
-    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR');
+    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types');
   });
 }
 
