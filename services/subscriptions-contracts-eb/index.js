@@ -61,7 +61,7 @@ app.get('/health', async (req, res) => {
     port: PORT,
     env: process.env.NODE_ENV || 'development',
     version: '1.0.0',
-    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts'],
+    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected,
@@ -96,6 +96,7 @@ app.get('/', (req, res) => {
       'Subscription Management',
       'Contract Signing',
       'E-Signatures',
+      'e-CMR (Electronic Consignment Note)',
       'Invoice Management',
     ],
     endpoints: [
@@ -132,18 +133,8 @@ app.get('/', (req, res) => {
 });
 
 // ==================== e-CMR ROUTES ====================
-// Create and mount e-CMR routes
-let ecmrRouter;
-function initializeECMRRoutes() {
-  if (!ecmrRouter) {
-    ecmrRouter = createECMRRoutes(mongoClient, mongoConnected);
-  }
-  return ecmrRouter;
-}
-app.use('/api/ecmr', (req, res, next) => {
-  const router = initializeECMRRoutes();
-  router(req, res, next);
-});
+// Note: e-CMR routes will be mounted after MongoDB connection
+// This is done in the startServer function below
 
 // ==================== SUBSCRIPTION PLANS ====================
 
@@ -634,38 +625,49 @@ app.post('/api/signatures/:id/sign', async (req, res) => {
   }
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      code: 'NOT_FOUND',
-      message: `Endpoint not found: ${req.method} ${req.path}`,
-    },
-  });
-});
-
-// Error handler
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    success: false,
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: err.message || 'Internal server error',
-    },
-  });
-});
+// Note: 404 and Error handlers are registered in startServer() after e-CMR routes are mounted
 
 // Start server
 async function startServer() {
   await connectMongoDB();
 
+  // Mount e-CMR routes after MongoDB connection is established
+  if (mongoConnected) {
+    const ecmrRouter = createECMRRoutes(mongoClient, mongoConnected);
+    app.use('/api/ecmr', ecmrRouter);
+    console.log('✅ e-CMR routes mounted successfully');
+  } else {
+    console.warn('⚠️  e-CMR routes not mounted - MongoDB not connected');
+  }
+
+  // Register 404 handler (must be after all routes)
+  app.use((req, res) => {
+    res.status(404).json({
+      success: false,
+      error: {
+        code: 'NOT_FOUND',
+        message: `Endpoint not found: ${req.method} ${req.path}`,
+      },
+    });
+  });
+
+  // Register error handler (must be last)
+  app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: err.message || 'Internal server error',
+      },
+    });
+  });
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log('RT Subscriptions-Contracts API listening on port ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? 'Connected' : 'Not connected'));
-    console.log('Features: Subscriptions, Contracts, E-Signatures');
+    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR');
   });
 }
 

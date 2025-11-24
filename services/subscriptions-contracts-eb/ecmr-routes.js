@@ -628,11 +628,6 @@ function createECMRRoutes(mongoClient, mongoConnected) {
     }
   });
 
-  return router;
-}
-
-module.exports = createECMRRoutes;
-
   // GET /api/ecmr/transport-order/:orderId - Récupérer tous les e-CMR d'une commande transport
   router.get('/transport-order/:orderId', checkMongoDB, async (req, res) => {
     try {
@@ -660,4 +655,9 @@ module.exports = createECMRRoutes;
       });
     }
   });
+
+  return router;
+}
+
+module.exports = createECMRRoutes;
 
