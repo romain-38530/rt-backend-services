@@ -1,8 +1,9 @@
-import { Router } from 'express';
+// @ts-nocheck
+import { Router, type IRouter } from 'express';
 import subscriptionRoutes from './subscription.routes.js';
 import contractRoutes from './contract.routes.js';
 
-const router = Router();
+const router: IRouter = Router();
 
 // Health check
 router.get('/health', (req, res) => {

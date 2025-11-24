@@ -1,36 +1,12 @@
 import { BaseEntity } from './common.js';
-import { PaymentMethod, PaymentStatus } from '../enums/index.js';
-
-// Subscription Plan Types
-export enum SubscriptionPlanType {
-  BASIC = 'BASIC',
-  PRO = 'PRO',
-  ENTERPRISE = 'ENTERPRISE',
-  CUSTOM = 'CUSTOM',
-}
-
-export enum SubscriptionStatus {
-  TRIALING = 'TRIALING',
-  ACTIVE = 'ACTIVE',
-  PAST_DUE = 'PAST_DUE',
-  CANCELLED = 'CANCELLED',
-  EXPIRED = 'EXPIRED',
-  SUSPENDED = 'SUSPENDED',
-}
-
-export enum BillingInterval {
-  MONTHLY = 'MONTHLY',
-  QUARTERLY = 'QUARTERLY',
-  YEARLY = 'YEARLY',
-}
-
-export enum InvoiceStatus {
-  DRAFT = 'DRAFT',
-  PENDING = 'PENDING',
-  PAID = 'PAID',
-  OVERDUE = 'OVERDUE',
-  CANCELLED = 'CANCELLED',
-}
+import {
+  PaymentMethod,
+  PaymentStatus,
+  SubscriptionPlanType,
+  SubscriptionStatus,
+  BillingInterval,
+  InvoiceStatus,
+} from '../enums/index.js';
 
 // Feature Limits
 export interface PlanLimits {
@@ -70,21 +46,6 @@ export interface Subscription extends BaseEntity {
   cancelAt?: Date;
   cancelledAt?: Date;
   metadata?: Record<string, any>;
-}
-
-// Usage Tracking
-export interface Usage extends BaseEntity {
-  subscriptionId: string;
-  userId: string;
-  period: string; // YYYY-MM format
-  metrics: {
-    users: number;
-    vehicles: number;
-    orders: number;
-    storage: number;
-    apiCalls: number;
-  };
-  lastUpdated: Date;
 }
 
 // Invoice

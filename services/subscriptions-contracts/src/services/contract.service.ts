@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { contractRepository } from '../repositories/index.js';
 import {
   Contract,

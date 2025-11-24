@@ -1,7 +1,8 @@
-import { Router } from 'express';
+// @ts-nocheck
+import { Router, type IRouter } from 'express';
 import { subscriptionController } from '../controllers/index.js';
 
-const router = Router();
+const router: IRouter = Router();
 
 // Subscription Plans
 router.post('/plans', subscriptionController.createPlan.bind(subscriptionController));

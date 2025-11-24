@@ -4,7 +4,7 @@ import {
   ContractStatus,
   SignatureStatus,
   SignatureType,
-} from '../types/contract.types.js';
+} from '../enums/index.js';
 
 // Contract Party Schema
 export const contractPartySchema = z.object({

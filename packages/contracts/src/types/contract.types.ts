@@ -1,36 +1,10 @@
 import { BaseEntity } from './common.js';
-
-// Contract Types
-export enum ContractType {
-  ECMR = 'ECMR', // Electronic Consignment Note
-  TRANSPORT = 'TRANSPORT',
-  SERVICE = 'SERVICE',
-  NDA = 'NDA', // Non-Disclosure Agreement
-  CUSTOM = 'CUSTOM',
-}
-
-export enum ContractStatus {
-  DRAFT = 'DRAFT',
-  PENDING_SIGNATURES = 'PENDING_SIGNATURES',
-  PARTIALLY_SIGNED = 'PARTIALLY_SIGNED',
-  FULLY_SIGNED = 'FULLY_SIGNED',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
-  EXPIRED = 'EXPIRED',
-}
-
-export enum SignatureStatus {
-  PENDING = 'PENDING',
-  SIGNED = 'SIGNED',
-  DECLINED = 'DECLINED',
-  EXPIRED = 'EXPIRED',
-}
-
-export enum SignatureType {
-  SIMPLE = 'SIMPLE', // Simple electronic signature
-  ADVANCED = 'ADVANCED', // Advanced electronic signature
-  QUALIFIED = 'QUALIFIED', // Qualified electronic signature (eIDAS)
-}
+import {
+  ContractType,
+  ContractStatus,
+  SignatureStatus,
+  SignatureType,
+} from '../enums/index.js';
 
 // Contract Party
 export interface ContractParty {

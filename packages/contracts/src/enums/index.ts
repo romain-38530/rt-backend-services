@@ -118,6 +118,69 @@ export enum PaymentMethod {
   STRIPE = 'STRIPE',
 }
 
+// Subscriptions
+export enum SubscriptionPlanType {
+  BASIC = 'BASIC',
+  PRO = 'PRO',
+  ENTERPRISE = 'ENTERPRISE',
+  CUSTOM = 'CUSTOM',
+}
+
+export enum SubscriptionStatus {
+  TRIALING = 'TRIALING',
+  ACTIVE = 'ACTIVE',
+  PAST_DUE = 'PAST_DUE',
+  CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED',
+  SUSPENDED = 'SUSPENDED',
+}
+
+export enum BillingInterval {
+  MONTHLY = 'MONTHLY',
+  QUARTERLY = 'QUARTERLY',
+  YEARLY = 'YEARLY',
+}
+
+export enum InvoiceStatus {
+  DRAFT = 'DRAFT',
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+  CANCELLED = 'CANCELLED',
+}
+
+// Contracts
+export enum ContractType {
+  ECMR = 'ECMR', // Electronic Consignment Note
+  TRANSPORT = 'TRANSPORT',
+  SERVICE = 'SERVICE',
+  NDA = 'NDA', // Non-Disclosure Agreement
+  CUSTOM = 'CUSTOM',
+}
+
+export enum ContractStatus {
+  DRAFT = 'DRAFT',
+  PENDING_SIGNATURES = 'PENDING_SIGNATURES',
+  PARTIALLY_SIGNED = 'PARTIALLY_SIGNED',
+  FULLY_SIGNED = 'FULLY_SIGNED',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum SignatureStatus {
+  PENDING = 'PENDING',
+  SIGNED = 'SIGNED',
+  DECLINED = 'DECLINED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum SignatureType {
+  SIMPLE = 'SIMPLE', // Simple electronic signature
+  ADVANCED = 'ADVANCED', // Advanced electronic signature
+  QUALIFIED = 'QUALIFIED', // Qualified electronic signature (eIDAS)
+}
+
 // Tracking
 export enum TrackingStatus {
   NOT_STARTED = 'NOT_STARTED',

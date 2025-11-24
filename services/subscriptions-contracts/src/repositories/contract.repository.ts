@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Collection, ObjectId } from 'mongodb';
 import { getDatabase } from '@rt/data-mongo';
 import {

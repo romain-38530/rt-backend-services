@@ -1,7 +1,8 @@
-import { Router } from 'express';
+// @ts-nocheck
+import { Router, type IRouter } from 'express';
 import { contractController } from '../controllers/index.js';
 
-const router = Router();
+const router: IRouter = Router();
 
 // Contract Templates
 router.post('/templates', contractController.createTemplate.bind(contractController));

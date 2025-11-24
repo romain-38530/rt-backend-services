@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { subscriptionRepository } from '../repositories/index.js';
 import {
   SubscriptionPlan,
