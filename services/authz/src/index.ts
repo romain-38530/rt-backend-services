@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { createLogger } from '@rt/utils';
 import { connectToDatabase, checkDatabaseHealth } from '@rt/data-mongo';
 import { authRoutes } from './routes/auth.routes.js';
+import vatRoutes from './routes/vat.routes.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 
 // Load environment variables
@@ -55,6 +56,7 @@ app.get('/health', async (req, res) => {
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/vat', vatRoutes);
 
 // Error handling
 app.use(errorMiddleware);

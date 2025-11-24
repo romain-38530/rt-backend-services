@@ -16,6 +16,7 @@
     "@rt/contracts": "workspace:*",
     "@rt/utils": "workspace:*",
     "@rt/data-mongo": "workspace:*",
+    "@rt/vat-validation": "workspace:*",
     "@rt/security": "workspace:*",
     "express": "^4.18.2",
     "cors": "^2.8.5",

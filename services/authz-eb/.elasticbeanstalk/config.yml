@@ -1,12 +1,12 @@
 branch-defaults:
   main:
-    environment: rt-auth-api-prod
+    environment: rt-authz-api-prod
     group_suffix: null
 global:
-  application_name: rt-auth-api
+  application_name: rt-authz-api
   branch: null
   default_ec2_keyname: null
-  default_platform: Node.js 20
+  default_platform: Node.js 20 running on 64bit Amazon Linux 2023
   default_region: eu-central-1
   include_git_submodules: true
   instance_profile: null

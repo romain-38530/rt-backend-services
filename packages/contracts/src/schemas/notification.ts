@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   NotificationType,
-  NotificationStatus,
   NotificationPriority,
 } from '../enums/index.js';
 

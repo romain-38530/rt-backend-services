@@ -59,3 +59,19 @@ export const confirmResetPasswordSchema = z.object({
     .min(8)
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/),
 });
+export const registerWithCompanySchema = registerSchema.extend({
+  company: z.object({
+    name: z.string().min(2, 'Company name must be at least 2 characters'),
+    vatNumber: z.string().optional(),
+    siret: z.string().regex(/^\d{14}$/, 'SIRET must be 14 digits').optional(),
+    siren: z.string().regex(/^\d{9}$/, 'SIREN must be 9 digits').optional(),
+    address: z.object({
+      street: z.string(),
+      city: z.string(),
+      postalCode: z.string(),
+      country: z.string().length(2, 'Country must be 2-letter ISO code'),
+    }),
+    phone: z.string().optional(),
+    email: z.string().email().optional(),
+  }).optional(),
+});

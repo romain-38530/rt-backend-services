@@ -3,3 +3,5 @@ export * from './order.js';
 export * from './notification.js';
 export * from './planning.js';
 export * from './geo-tracking.js';
+export * from './company.js';
+export * from './ecpmr.js';

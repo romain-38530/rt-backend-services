@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TrackingStatus, VehicleStatus } from '../types/geo-tracking.types.js';
+import { VehicleStatus } from '../types/geo-tracking.types.js';
 
 const geoPositionSchema = z.object({
   latitude: z.number().min(-90).max(90),

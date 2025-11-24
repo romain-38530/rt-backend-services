@@ -135,6 +135,22 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  packages/vat-validation:
+    dependencies:
+      node-fetch:
+        specifier: ^3.3.2
+        version: 3.3.2
+      zod:
+        specifier: ^3.22.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.25
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   services/admin-gateway:
     dependencies:
       '@rt/contracts':
@@ -230,6 +246,21 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  services/affret-ia-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
+
   services/authz:
     dependencies:
       '@rt/contracts':
@@ -244,6 +275,9 @@ importers:
       '@rt/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      '@rt/vat-validation':
+        specifier: workspace:*
+        version: link:../../packages/vat-validation
       cors:
         specifier: ^2.8.5
         version: 2.8.5
@@ -278,46 +312,18 @@ importers:
 
   services/authz-eb:
     dependencies:
-      '@types/bcryptjs':
-        specifier: ^2.4.6
-        version: 2.4.6
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/jsonwebtoken':
-        specifier: ^9.0.5
-        version: 9.0.10
-      '@types/node':
-        specifier: ^20.10.0
-        version: 20.19.25
-      bcryptjs:
-        specifier: ^2.4.3
-        version: 2.4.3
       cors:
         specifier: ^2.8.5
         version: 2.8.5
-      dotenv:
-        specifier: ^16.3.1
-        version: 16.6.1
       express:
         specifier: ^4.18.2
         version: 4.21.2
-      jsonwebtoken:
-        specifier: ^9.0.2
-        version: 9.0.2
-      mongoose:
-        specifier: ^8.0.0
-        version: 8.20.1
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-    devDependencies:
-      tsx:
-        specifier: ^4.7.0
-        version: 4.20.6
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
 
   services/chatbot:
     dependencies:
@@ -389,6 +395,21 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+
+  services/chatbot-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
 
   services/core-orders:
     dependencies:
@@ -466,6 +487,21 @@ importers:
       tsx:
         specifier: ^4.7.0
         version: 4.20.6
+
+  services/ecmr-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
 
   services/ecpmr:
     dependencies:
@@ -547,6 +583,21 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  services/geo-tracking-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
+
   services/notifications:
     dependencies:
       '@rt/cloud-aws':
@@ -596,6 +647,27 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  services/notifications-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      form-data:
+        specifier: ^4.0.0
+        version: 4.0.5
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mailgun.js:
+        specifier: ^9.3.0
+        version: 9.4.1
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
+
   services/orders:
     dependencies:
       '@types/cors':
@@ -626,6 +698,21 @@ importers:
       tsx:
         specifier: ^4.7.0
         version: 4.20.6
+
+  services/orders-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
 
   services/palette:
     dependencies:
@@ -698,6 +785,21 @@ importers:
         specifier: ^4.7.0
         version: 4.20.6
 
+  services/palettes-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
+
   services/planning:
     dependencies:
       '@rt/contracts':
@@ -737,6 +839,21 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+
+  services/planning-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
 
   services/storage:
     dependencies:
@@ -809,6 +926,21 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  services/storage-market-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
+
   services/tms-sync:
     dependencies:
       '@rt/contracts':
@@ -848,6 +980,21 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+
+  services/tms-sync-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
 
   services/training:
     dependencies:
@@ -889,6 +1036,21 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  services/training-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
+
   services/vigilance:
     dependencies:
       '@rt/contracts':
@@ -928,6 +1090,21 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+
+  services/vigilance-eb:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
 
 packages:
 
@@ -2304,10 +2481,6 @@ packages:
       '@types/node': 20.19.25
     dev: true
 
-  /@types/bcryptjs@2.4.6:
-    resolution: {integrity: sha512-9xlo6R2qDs5uixm0bcIqCeMCE6HiQsIyel9KQySStiyqNl2tnj2mP3DX1Nf56MD6KMenNNlBBsy3LJ7gUEQPXQ==}
-    dev: false
-
   /@types/body-parser@1.19.6:
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
     dependencies:
@@ -2348,12 +2521,14 @@ packages:
     dependencies:
       '@types/ms': 2.1.0
       '@types/node': 20.19.25
+    dev: true
 
   /@types/mime@1.3.5:
     resolution: {integrity: sha512-/pyBZWSLD2n0dcHE3hq8s8ZvcETHtEuF+3E7XVt0Ig2nvsVQXdghHVcEkIWjy9A0wKfTn97a/PSDYohKIlnP/w==}
 
   /@types/ms@2.1.0:
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
+    dev: true
 
   /@types/node-fetch@2.6.13:
     resolution: {integrity: sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==}
@@ -2503,6 +2678,10 @@ packages:
     resolution: {integrity: sha512-Y5gU45svrR5tI2Vt/X9GPd3L0HNIKzGu202EjxrXMpuc2V2CiKgemAbUUsqYmZJvPtCXoUKjNZwBJzsNScUbXA==}
     dev: false
 
+  /base-64@1.0.0:
+    resolution: {integrity: sha512-kwDPIFCGx0NZHog36dj+tHiwP4QMzsZ3AgMViUBKI0+V5n4U0ufTCUMhnQ04diaRI8EX/QcPfql7zlhZ7j4zgg==}
+    dev: false
+
   /bcrypt@5.1.1:
     resolution: {integrity: sha512-AGBHOG5hPYZ5Xl9KXzU5iKq9516yEmvCKDg3ecP5kX2aB6UqTeXZxk2ELnDgDm6BQSMlLt9rDB4LoSMx0rYwww==}
     engines: {node: '>= 10.0.0'}
@@ -2513,10 +2692,6 @@ packages:
     transitivePeerDependencies:
       - encoding
       - supports-color
-    dev: false
-
-  /bcryptjs@2.4.3:
-    resolution: {integrity: sha512-V/Hy/X9Vt7f3BbPJEi8BdVFMByHi+jNXrYkW3huaybV/kQ0KJg0Y6PkEMbn+zeT+i+SiKZ/HMqJGIIt4LZDqNQ==}
     dev: false
 
   /body-parser@1.20.3:
@@ -2666,6 +2841,11 @@ packages:
 
   /crypt@0.0.2:
     resolution: {integrity: sha512-mCxBlsHFYh9C+HVpiEacem8FEBnMXgU9gy4zmNC+SXAZNB/1idgp/aulFJ4FgCi7GPEVbfyng092GqL2k2rmow==}
+    dev: false
+
+  /data-uri-to-buffer@4.0.1:
+    resolution: {integrity: sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A==}
+    engines: {node: '>= 12'}
     dev: false
 
   /debug@2.6.9:
@@ -2897,6 +3077,14 @@ packages:
     resolution: {integrity: sha512-OP2IUU6HeYKJi3i0z4A19kHMQoLVs4Hc+DPqqxI2h/DPZHTm/vjsfC6P0b4jCMy14XizLBqvndQ+UilD7707Jw==}
     dev: false
 
+  /fetch-blob@3.2.0:
+    resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
+    engines: {node: ^12.20 || >= 14.13}
+    dependencies:
+      node-domexception: 1.0.0
+      web-streams-polyfill: 3.3.3
+    dev: false
+
   /file-stream-rotator@0.6.1:
     resolution: {integrity: sha512-u+dBid4PvZw17PmDeRcNOtCP9CCK/9lRN2w+r1xIS7yOL9JFrIBKTvrYsxT4P0pGtThYTn++QS5ChHaUov3+zQ==}
     dependencies:
@@ -2953,6 +3141,13 @@ packages:
     dependencies:
       node-domexception: 1.0.0
       web-streams-polyfill: 4.0.0-beta.3
+    dev: false
+
+  /formdata-polyfill@4.0.10:
+    resolution: {integrity: sha512-buewHzMvYL29jdeQTVILecSaZKnt/RJWjoZCF5OW60Z67/GmSLBkOFM7qh1PI3zFNtJbaZL5eQu1vLfazOwj4g==}
+    engines: {node: '>=12.20.0'}
+    dependencies:
+      fetch-blob: 3.2.0
     dev: false
 
   /forwarded@0.2.0:
@@ -3224,6 +3419,16 @@ packages:
       triple-beam: 1.4.1
     dev: false
 
+  /mailgun.js@9.4.1:
+    resolution: {integrity: sha512-PUXZvSR6MImDHIf/EhF7uajkv2pP0fbwVfKnRCQ2xDO8uR731U6pWkGHscUxebDkU8tsLb+0zCH5t1+KP6cX3g==}
+    dependencies:
+      axios: 1.13.2
+      base-64: 1.0.0
+      url-join: 4.0.1
+    transitivePeerDependencies:
+      - debug
+    dev: false
+
   /make-dir@3.1.0:
     resolution: {integrity: sha512-g3FeP20LNwhALb/6Cz6Dd4F2ngze0jz7tbzrD2wAV+o9FeNHe4rL+yK2md0J/fiSf1sa1ADhXqi5+oVwOM/eGw==}
     engines: {node: '>=8'}
@@ -3456,6 +3661,15 @@ packages:
         optional: true
     dependencies:
       whatwg-url: 5.0.0
+    dev: false
+
+  /node-fetch@3.3.2:
+    resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+    dependencies:
+      data-uri-to-buffer: 4.0.1
+      fetch-blob: 3.2.0
+      formdata-polyfill: 4.0.10
     dev: false
 
   /nodemailer@6.10.1:
@@ -3899,6 +4113,10 @@ packages:
   /unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
     engines: {node: '>= 0.8'}
+    dev: false
+
+  /url-join@4.0.1:
+    resolution: {integrity: sha512-jk1+QP6ZJqyOiuEI9AEWQfju/nB2Pw466kbA0LEZljHwKeMgd9WrAEgEGxjPDD2+TNbbb37rTyhEfrCXfuKXnA==}
     dev: false
 
   /util-deprecate@1.0.2:

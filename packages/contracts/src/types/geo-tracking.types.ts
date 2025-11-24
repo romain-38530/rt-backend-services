@@ -1,6 +1,6 @@
 import { BaseEntity } from './common.js';
 
-export enum TrackingStatus {
+export enum VehicleTrackingStatus {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
   LOST_SIGNAL = 'LOST_SIGNAL',
@@ -31,7 +31,7 @@ export interface VehicleTracking extends BaseEntity {
   driverId?: string;
   orderId?: string;
   currentPosition: GeoPosition;
-  trackingStatus: TrackingStatus;
+  trackingStatus: VehicleTrackingStatus;
   vehicleStatus: VehicleStatus;
   batteryLevel?: number; // percentage
   fuel?: number; // percentage or liters
