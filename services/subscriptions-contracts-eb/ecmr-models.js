@@ -43,6 +43,10 @@ const eCMRSchema = {
   status: 'DRAFT',
   cmrNumber: '', // Numéro unique e-CMR (généré automatiquement)
 
+  // Lien avec la commande transport
+  transportOrderId: { required: false, type: 'string' }, // ID de la commande transport associée
+  transportOrderNumber: { required: false, type: 'string' }, // Numéro de commande transport
+
   // 1. EXPÉDITEUR (Sender) - Article 6.1.a CMR
   sender: {
     type: 'COMPANY', // ou 'INDIVIDUAL'
@@ -379,13 +383,15 @@ function generateCMRNumber() {
 }
 
 // Fonction pour créer un e-CMR vide avec valeurs par défaut
-function createEmptyECMR(createdBy) {
+function createEmptyECMR(createdBy, transportOrderId = null, transportOrderNumber = null) {
   const now = new Date();
 
   return {
     type: 'ECMR',
     status: 'DRAFT',
     cmrNumber: generateCMRNumber(),
+    transportOrderId,
+    transportOrderNumber,
 
     sender: { address: {}, contact: {} },
     consignee: { address: {}, contact: {} },

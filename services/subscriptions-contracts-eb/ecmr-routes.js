@@ -40,14 +40,14 @@ function createECMRRoutes(mongoClient, mongoConnected) {
         query.status = status;
       }
 
-      const ecmrs = await db.collection('contracts')
+      const ecmrs = await db.collection('ecmr')
         .find(query)
         .sort({ 'metadata.createdAt': -1 })
         .skip(parseInt(offset))
         .limit(parseInt(limit))
         .toArray();
 
-      const total = await db.collection('contracts').countDocuments(query);
+      const total = await db.collection('ecmr').countDocuments(query);
 
       res.json({
         success: true,
@@ -74,7 +74,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
     try {
       const db = mongoClient.db();
 
-      const ecmr = await db.collection('contracts').findOne({
+      const ecmr = await db.collection('ecmr').findOne({
         _id: new ObjectId(req.params.id),
         type: 'ECMR'
       });
@@ -143,7 +143,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
         }
       }
 
-      const result = await db.collection('contracts').insertOne(ecmrData);
+      const result = await db.collection('ecmr').insertOne(ecmrData);
 
       res.status(201).json({
         success: true,
@@ -172,7 +172,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
       const now = new Date();
 
       // Ne pas permettre la modification si déjà signé
-      const existingECMR = await db.collection('contracts').findOne({
+      const existingECMR = await db.collection('ecmr').findOne({
         _id: new ObjectId(req.params.id),
         type: 'ECMR'
       });
@@ -207,7 +207,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
 
       delete updateData._id; // Ne pas écraser l'ID
 
-      const result = await db.collection('contracts').findOneAndUpdate(
+      const result = await db.collection('ecmr').findOneAndUpdate(
         { _id: new ObjectId(req.params.id) },
         { $set: updateData },
         { returnDocument: 'after' }
@@ -235,7 +235,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
     try {
       const db = mongoClient.db();
 
-      const ecmr = await db.collection('contracts').findOne({
+      const ecmr = await db.collection('ecmr').findOne({
         _id: new ObjectId(req.params.id),
         type: 'ECMR'
       });
@@ -260,7 +260,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
         });
       }
 
-      await db.collection('contracts').deleteOne({ _id: new ObjectId(req.params.id) });
+      await db.collection('ecmr').deleteOne({ _id: new ObjectId(req.params.id) });
 
       res.json({
         success: true,
@@ -285,7 +285,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
     try {
       const db = mongoClient.db();
 
-      const ecmr = await db.collection('contracts').findOne({
+      const ecmr = await db.collection('ecmr').findOne({
         _id: new ObjectId(req.params.id),
         type: 'ECMR'
       });
@@ -314,7 +314,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
       }
 
       // Mettre à jour le statut
-      const result = await db.collection('contracts').findOneAndUpdate(
+      const result = await db.collection('ecmr').findOneAndUpdate(
         { _id: new ObjectId(req.params.id) },
         {
           $set: {
@@ -359,7 +359,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
         });
       }
 
-      const ecmr = await db.collection('contracts').findOne({
+      const ecmr = await db.collection('ecmr').findOne({
         _id: new ObjectId(req.params.id),
         type: 'ECMR'
       });
@@ -428,7 +428,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
         updateData.status = 'IN_TRANSIT'; // Transporteur a signé = en transit
       }
 
-      const result = await db.collection('contracts').findOneAndUpdate(
+      const result = await db.collection('ecmr').findOneAndUpdate(
         { _id: new ObjectId(req.params.id) },
         { $set: updateData },
         { returnDocument: 'after' }
@@ -473,7 +473,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
 
       const remarkField = type === 'loading' ? 'remarks.loadingRemarks' : 'remarks.deliveryRemarks';
 
-      const result = await db.collection('contracts').findOneAndUpdate(
+      const result = await db.collection('ecmr').findOneAndUpdate(
         { _id: new ObjectId(req.params.id), type: 'ECMR' },
         {
           $set: {
@@ -533,7 +533,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
       const now = new Date();
       const position = { latitude, longitude, timestamp: now };
 
-      const result = await db.collection('contracts').findOneAndUpdate(
+      const result = await db.collection('ecmr').findOneAndUpdate(
         { _id: new ObjectId(req.params.id), type: 'ECMR' },
         {
           $set: {
@@ -583,7 +583,7 @@ function createECMRRoutes(mongoClient, mongoConnected) {
     try {
       const db = mongoClient.db();
 
-      const ecmr = await db.collection('contracts').findOne({
+      const ecmr = await db.collection('ecmr').findOne({
         cmrNumber: req.params.cmrNumber,
         type: 'ECMR'
       });
@@ -632,3 +632,32 @@ function createECMRRoutes(mongoClient, mongoConnected) {
 }
 
 module.exports = createECMRRoutes;
+
+  // GET /api/ecmr/transport-order/:orderId - Récupérer tous les e-CMR d'une commande transport
+  router.get('/transport-order/:orderId', checkMongoDB, async (req, res) => {
+    try {
+      const db = mongoClient.db();
+
+      const ecmrs = await db.collection('ecmr')
+        .find({ transportOrderId: req.params.orderId })
+        .sort({ 'metadata.createdAt': -1 })
+        .toArray();
+
+      res.json({
+        success: true,
+        data: ecmrs,
+        count: ecmrs.length,
+        transportOrderId: req.params.orderId
+      });
+    } catch (error) {
+      console.error('Error fetching e-CMR by transport order:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error.message
+        }
+      });
+    }
+  });
+

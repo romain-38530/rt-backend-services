@@ -99,36 +99,50 @@ app.get('/', (req, res) => {
       'Invoice Management',
     ],
     endpoints: [
+      '-- Core --',
       'GET /health',
       'GET /',
+      '-- Subscription Plans --',
       'GET /api/plans',
       'POST /api/plans',
+      '-- Subscriptions --',
       'GET /api/subscriptions/:id',
       'POST /api/subscriptions',
       'POST /api/subscriptions/:id/cancel',
       'POST /api/subscriptions/:id/renew',
+      '-- Contracts --',
       'GET /api/contracts/:id',
       'POST /api/contracts',
       'POST /api/contracts/:id/send',
       'POST /api/signatures/:id/sign',
-      'GET /api/ecmr',
-      'POST /api/ecmr',
-      'GET /api/ecmr/:id',
-      'PUT /api/ecmr/:id',
-      'POST /api/ecmr/:id/validate',
-      'POST /api/ecmr/:id/sign/:party',
-      'POST /api/ecmr/:id/remarks',
-      'POST /api/ecmr/:id/tracking',
+      '-- e-CMR (Electronic Consignment Note) --',
+      'GET /api/ecmr (list all e-CMRs)',
+      'POST /api/ecmr (create e-CMR)',
+      'GET /api/ecmr/:id (get e-CMR details)',
+      'PUT /api/ecmr/:id (update e-CMR)',
+      'DELETE /api/ecmr/:id (delete DRAFT e-CMR)',
+      'POST /api/ecmr/:id/validate (validate before signatures)',
+      'POST /api/ecmr/:id/sign/:party (sign: sender/carrierPickup/consignee)',
+      'POST /api/ecmr/:id/remarks (add loading/delivery remarks)',
+      'POST /api/ecmr/:id/tracking (update GPS position)',
+      'GET /api/ecmr/:cmrNumber/verify (verify e-CMR authenticity)',
     ],
     documentation: 'See README.md for complete API documentation',
   });
 });
 
 // ==================== e-CMR ROUTES ====================
-// Mount e-CMR routes with proper MongoDB connection passing
+// Create and mount e-CMR routes
+let ecmrRouter;
+function initializeECMRRoutes() {
+  if (!ecmrRouter) {
+    ecmrRouter = createECMRRoutes(mongoClient, mongoConnected);
+  }
+  return ecmrRouter;
+}
 app.use('/api/ecmr', (req, res, next) => {
-  const ecmrRouter = createECMRRoutes(mongoClient, mongoConnected);
-  ecmrRouter(req, res, next);
+  const router = initializeECMRRoutes();
+  router(req, res, next);
 });
 
 // ==================== SUBSCRIPTION PLANS ====================
