@@ -8,7 +8,7 @@ export enum ECMRStatus {
   CANCELLED = 'CANCELLED',
 }
 
-export enum SignatureType {
+export enum ECMRSignatureType {
   SENDER = 'SENDER',
   CARRIER = 'CARRIER',
   RECEIVER = 'RECEIVER',
@@ -48,7 +48,7 @@ export interface ECMR extends BaseEntity {
   deliveryDate?: Date;
 
   // Signatures
-  signatures: Signature[];
+  signatures: ECMRSignature[];
 
   // Attachments (photos, documents)
   attachments: Attachment[];
@@ -91,8 +91,8 @@ export interface CargoInfo {
   remarks?: string;
 }
 
-export interface Signature {
-  type: SignatureType;
+export interface ECMRSignature {
+  type: ECMRSignatureType;
   signedBy: string;
   signedAt: Date;
   signatureData: string; // Base64 encoded signature image
@@ -144,7 +144,7 @@ export interface UpdateECMRRequest {
 
 export interface SignECMRRequest {
   ecmrId: string;
-  type: SignatureType;
+  type: ECMRSignatureType;
   signedBy: string;
   signatureData: string;
   location?: {

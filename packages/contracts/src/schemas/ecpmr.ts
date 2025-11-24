@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ECMRStatus, SignatureType, AttachmentType } from '../types/ecpmr.types.js';
+import { ECMRStatus, ECMRSignatureType, AttachmentType } from '../types/ecpmr.types.js';
 
 const partyInfoSchema = z.object({
   name: z.string().min(1).max(200),
@@ -57,7 +57,7 @@ export const updateECMRSchema = z.object({
 
 export const signECMRSchema = z.object({
   ecmrId: z.string(),
-  type: z.nativeEnum(SignatureType),
+  type: z.nativeEnum(ECMRSignatureType),
   signedBy: z.string().min(1).max(100),
   signatureData: z.string().min(1), // Base64 encoded signature
   location: z.object({

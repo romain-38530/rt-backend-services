@@ -99,11 +99,13 @@ export enum NotificationPriority {
 // Payment
 export enum PaymentStatus {
   PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
   PAID = 'PAID',
   PARTIAL = 'PARTIAL',
   OVERDUE = 'OVERDUE',
   CANCELLED = 'CANCELLED',
   REFUNDED = 'REFUNDED',
+  FAILED = 'FAILED',
 }
 
 export enum PaymentMethod {
@@ -112,6 +114,8 @@ export enum PaymentMethod {
   CHEQUE = 'CHEQUE',
   CASH = 'CASH',
   SEPA = 'SEPA',
+  PAYPAL = 'PAYPAL',
+  STRIPE = 'STRIPE',
 }
 
 // Tracking
