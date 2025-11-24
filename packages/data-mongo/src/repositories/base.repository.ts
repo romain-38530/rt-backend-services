@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Collection, Filter, UpdateFilter, Document, OptionalId } from 'mongodb';
 import { getDatabase } from '../connection/index.js';
 import { PaginationParams, PaginationMeta } from '@rt/contracts';

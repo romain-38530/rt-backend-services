@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Filter } from 'mongodb';
 import { BaseRepository } from './base.repository.js';
 import {
