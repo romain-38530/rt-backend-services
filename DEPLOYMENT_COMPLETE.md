@@ -2,7 +2,7 @@
 
 **Date:** 24 novembre 2025
 **Status:** 🟢 100% Opérationnel
-**Version:** 2.3.0 (e-CMR + Account Types actifs)
+**Version:** 2.4.0 (e-CMR + Account Types + Carrier Referencing actifs)
 
 ---
 
@@ -15,7 +15,7 @@ Les **2 services backend** ont été déployés avec succès en production avec 
 - **CloudFront:** E8GKHGYOIP84
 - **Status:** 🟢 Opérationnel
 
-### Service 2: Subscriptions-Contracts + e-CMR + Account Types
+### Service 2: Subscriptions-Contracts + e-CMR + Account Types + Carrier Referencing
 - **URL:** https://dgze8l03lwl5h.cloudfront.net
 - **CloudFront:** E1H1CDV902R49R
 - **MongoDB Atlas:** 🟢 Connecté et opérationnel (stagingrt.v2jnoh2.mongodb.net)
@@ -24,13 +24,15 @@ Les **2 services backend** ont été déployés avec succès en production avec 
   - ✅ Subscriptions Management
   - ✅ Contracts & E-Signatures
   - ✅ **e-CMR (Electronic Consignment Note)**
-  - ✅ **Account Types Management** 🆕
+  - ✅ **Account Types Management**
+  - ✅ **Carrier Referencing (SYMPHONI.A)** 🆕
 - **Collections MongoDB:**
   - `subscription_plans` - Plans d'abonnement
   - `subscriptions` - Abonnements actifs
   - `contracts` - Contrats standards
   - `ecmr` - e-CMR (Electronic Consignment Note)
-  - `users` - Comptes utilisateurs avec types 🆕
+  - `users` - Comptes utilisateurs avec types
+  - `carriers` - Transporteurs et référencement 🆕
 
 ---
 
@@ -274,6 +276,224 @@ Le frontend dispose déjà de tous les composants prêts:
 ```env
 NEXT_PUBLIC_ACCOUNT_API_URL=https://dgze8l03lwl5h.cloudfront.net
 ```
+
+---
+
+## 🚛 Carrier Referencing (SYMPHONI.A) - NOUVEAU
+
+### 📦 Fonctionnalités Déployées (v2.4.0)
+
+**Système complet de référencement et gestion de transporteurs**
+
+### 🔄 Modes de Référencement
+
+1. **Référencement Direct** (Invitation industrielle)
+   - Industriel ajoute le transporteur
+   - Invitation envoyée par email
+   - Onboarding avec documents obligatoires
+
+2. **Auto-Import Affret.IA**
+   - Transporteur accepte une mission via Affret.IA
+   - Devient automatiquement "transporteur invité"
+   - Peut être upgradé en "transporteur référencé"
+
+3. **Réseau Premium**
+   - Transporteurs Premium visibles pour tous
+   - Propositions Affret.IA prioritaires
+   - Recherches géolocalisées
+   - Badge "Premium Verified"
+
+### 📋 Niveaux de Référencement
+
+**Niveau 1 - Transporteur Référencé:**
+- ✅ Accès complet portail transporteur
+- ✅ Grilles tarifaires renseignées
+- ✅ Documents vigilance à jour
+- ✅ Participation chaîne d'affectation
+- ✅ Réception commandes automatiques
+
+**Niveau 1+ - Transporteur Prioritaire:**
+- ✅ Priorisation dans chaîne d'affectation
+- ✅ Volume garanti
+- ✅ Accès bourse privée
+
+**Niveau 2 - Transporteur Invité:**
+- ✅ Peut accepter missions envoyées
+- ✅ Peut recevoir appels d'offres
+- ❌ Pas dans chaîne d'affectation automatique
+
+### 🛡️ Système de Vigilance
+
+**Documents Obligatoires:**
+1. **KBIS** (3 mois de validité)
+2. **Attestation URSSAF** (3 mois)
+3. **Assurance Transport RC** (12 mois)
+4. **Pièce d'identité dirigeant** (10 ans)
+5. **Licence de transport** (10 ans)
+6. **RIB** (pas d'expiration)
+7. **Convention sous-traitance** (optionnel)
+
+**Relances Automatiques:**
+- J-30 → Email
+- J-15 → Email + Push
+- J-7 → Push + SMS
+- J-0 → **BLOCAGE AUTOMATIQUE**
+
+**Statuts:**
+- ✅ ACTIVE → Tous documents valides
+- ⚠️ ONBOARDING → Documents en cours
+- 🔴 BLOCKED → Document(s) expiré(s)
+- 🟡 SUSPENDED → Sanction temporaire
+
+### 📊 Scoring Dynamique
+
+**6 Critères (score 0-100):**
+
+| Critère | Poids | Impact |
+|---------|-------|--------|
+| Ponctualité chargement | 25% | Majeur |
+| Ponctualité livraison | 25% | Majeur |
+| Rapidité envoi POD | 20% | Important |
+| Réactivité Tracking IA | 10% | Moyen |
+| Qualité documents | 10% | Moyen |
+| Suivi / coopération | 10% | Moyen |
+
+**Règles:**
+- Score < 40 → **Hors chaîne d'affectation**
+- Score 40-60 → Normal
+- Score 61-80 → Bon
+- Score 81-100 → **VIP / Prioritaire**
+
+Score recalculé après chaque mission.
+
+### 💰 Grilles Tarifaires
+
+**Types supportés:**
+- FTL (Full Truck Load)
+- LTL (Less Than Truck Load)
+- ADR (Matières dangereuses)
+- FRIGO (Température contrôlée)
+- HAYON (Avec hayon)
+- MESSAGERIE
+- EXPRESS
+
+**Paramètres:**
+- Prix de base par zone
+- Prix au km
+- Prix minimum
+- Options (ADR, hayon, frigo, palettes)
+- Validité (date début/fin)
+
+### ⚡ Chaîne d'Affectation
+
+**Exemple de configuration:**
+```
+1. Transporteur A (prioritaire)
+   ↓ refuse/timeout
+2. Transporteur B
+   ↓ refuse/timeout
+3. Transporteur C
+   ↓ refuse/timeout
+4. Affret.IA (fallback)
+```
+
+**Conditions pour recevoir automatiquement:**
+- ✅ Documents vigilance valides
+- ✅ Scoring > 40
+- ✅ Grille tarifaire existante
+- ✅ Pas de blocage
+- ✅ Capacité disponible
+
+### 📋 Endpoints API
+
+```bash
+# Référencement
+POST   /api/carriers/invite                          # Inviter transporteur
+POST   /api/carriers/:id/onboard                     # Compléter onboarding
+
+# Vigilance
+POST   /api/carriers/:id/documents                   # Upload document
+POST   /api/carriers/:id/documents/:type/verify      # Vérifier document (admin)
+GET    /api/carriers/:id/vigilance                   # Statut vigilance
+
+# Tarification
+POST   /api/carriers/:id/pricing-grid                # Ajouter grille tarifaire
+
+# Scoring & Gestion
+POST   /api/carriers/:id/score                       # Mettre à jour scoring
+GET    /api/carriers                                  # Liste transporteurs
+GET    /api/carriers/:id                              # Détails transporteur
+PUT    /api/carriers/:id/reference-level             # Modifier niveau
+POST   /api/carriers/:id/upgrade-premium             # Upgrade Premium
+```
+
+### 📄 Modules Implémentés
+
+```
+services/subscriptions-contracts-eb/
+├── carrier-referencing-models.js  # Configuration transporteurs + règles (550 lignes)
+├── carrier-referencing-routes.js  # API REST (11 endpoints, 750 lignes)
+```
+
+### 🎯 Événements Générés
+
+```
+carrier.invited
+carrier.onboarded
+carrier.vigilance.verified
+carrier.blocked
+carrier.unblocked
+carrier.grid.updated
+carrier.scored
+carrier.set.high-priority
+carrier.upgraded.premium
+carrier.auto-imported.via.affretia
+```
+
+### ✅ Tests de Production
+
+```bash
+# Test invitation transporteur
+curl -X POST https://dgze8l03lwl5h.cloudfront.net/api/carriers/invite \
+  -H "Content-Type: application/json" \
+  -d '{
+    "industrialId":"IND001",
+    "companyName":"Transport SARL",
+    "siret":"12345678901234",
+    "email":"contact@transport.fr",
+    "transportTypes":["FTL","ADR"]
+  }'
+
+# Test liste transporteurs
+curl "https://dgze8l03lwl5h.cloudfront.net/api/carriers?industrialId=IND001"
+
+# Status: ✅ Tous les tests passés
+```
+
+### 🔄 Cycle de Vie Complet
+
+```
+1. carrier.invited
+2. carrier.onboarded
+3. carrier.vigilance.verified
+4. carrier.grid.uploaded
+5. carrier.set.in.dispatchchain
+6. carrier.receives.orders
+7. carrier.scored
+   → IF vigilance invalid → carrier.blocked
+   → IF resolved → carrier.unblocked
+8. carrier.upgraded.premium (optionnel)
+```
+
+### 💎 Transporteurs Premium
+
+**Avantages:**
+- ✅ Module complet industriel
+- ✅ Planification automatique
+- ✅ Accès Affret.IA pour leurs commandes
+- ✅ Référencement automatique réseau Premium
+- ✅ Visibilité accrue industriels
+- ✅ Badge "Premium Verified"
 
 ---
 
