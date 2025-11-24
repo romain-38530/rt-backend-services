@@ -1,0 +1,8 @@
+.git/
+.gitignore
+*.md
+*.log
+node_modules/
+.env
+.env.*
+!.env.example
