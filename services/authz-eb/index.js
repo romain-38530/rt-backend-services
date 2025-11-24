@@ -134,12 +134,12 @@ async function validateVATWithVIES(countryCode, vatNumber) {
     const data = await response.json();
 
     const result = {
-      valid: data.valid === true,
+      valid: data.isValid === true, // VIES REST API uses isValid, not valid
       countryCode,
       vatNumber,
       requestDate: data.requestDate || new Date().toISOString(),
-      name: data.name,
-      address: data.address
+      name: data.name || '---',
+      address: data.address || '---'
     };
 
     // Cache successful response
