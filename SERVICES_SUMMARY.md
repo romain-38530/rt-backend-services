@@ -40,7 +40,7 @@ POST /api/vat/calculate-price
 
 ### 2. ✅ Service Subscriptions-Contracts
 
-**Status:** 🟢 Production Ready - HTTPS Actif
+**Status:** 🟢 Production Ready - HTTPS Actif + MongoDB Atlas
 **Version:** 1.0.0
 
 #### URLs
@@ -48,7 +48,7 @@ POST /api/vat/calculate-price
 - **HTTP (Origin):** `http://rt-subscriptions-api-prod.eba-pwrpmmxu.eu-central-1.elasticbeanstalk.com`
 - **CloudFront Distribution:** `E1H1CDV902R49R`
 - **Health:** Green ✅
-- **MongoDB:** À configurer (Atlas recommandé)
+- **MongoDB Atlas:** 🟢 Connecté et opérationnel (Cluster: stagingrt.v2jnoh2)
 
 #### Fonctionnalités
 - ✅ **Gestion des abonnements**

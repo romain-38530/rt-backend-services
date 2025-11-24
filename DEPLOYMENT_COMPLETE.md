@@ -18,7 +18,8 @@ Les **2 services backend** ont été déployés avec succès en production avec 
 ### Service 2: Subscriptions-Contracts
 - **URL:** https://dgze8l03lwl5h.cloudfront.net
 - **CloudFront:** E1H1CDV902R49R
-- **Status:** 🟢 Opérationnel (MongoDB à configurer)
+- **MongoDB Atlas:** 🟢 Connecté et opérationnel
+- **Status:** 🟢 100% Opérationnel
 
 ---
 

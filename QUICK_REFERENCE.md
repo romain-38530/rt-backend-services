@@ -300,6 +300,6 @@ curl -X POST https://dgze8l03lwl5h.cloudfront.net/api/plans \
 | Service | URL HTTPS | Status |
 |---------|-----------|--------|
 | **Authz-EB** | `https://d2i50a1vlg138w.cloudfront.net` | 🟢 Opérationnel |
-| **Subscriptions** | `https://dgze8l03lwl5h.cloudfront.net` | 🟢 Opérationnel (MongoDB à config) |
+| **Subscriptions** | `https://dgze8l03lwl5h.cloudfront.net` | 🟢 Opérationnel + MongoDB Atlas |
 
 **Version:** 2.2.0 | **Status:** 🟢 Production
