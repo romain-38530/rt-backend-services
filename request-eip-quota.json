@@ -1,0 +1,6 @@
+{
+  "ServiceCode": "ec2",
+  "QuotaCode": "L-0263D0A3",
+  "DesiredValue": 15,
+  "Region": "eu-central-1"
+}
