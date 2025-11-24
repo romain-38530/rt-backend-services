@@ -1,6 +1,6 @@
 {
   "name": "rt-authz-api",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "RT Authz API with VAT Validation",
   "main": "index.js",
   "scripts": {
