@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const { MongoClient } = require('mongodb');
 const createECMRRoutes = require('./ecmr-routes');
 const createAccountTypesRoutes = require('./account-types-routes');
+const createCarrierReferencingRoutes = require('./carrier-referencing-routes');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -62,7 +63,7 @@ app.get('/health', async (req, res) => {
     port: PORT,
     env: process.env.NODE_ENV || 'development',
     version: '1.0.0',
-    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types'],
+    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types', 'carrier-referencing'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected,
@@ -99,6 +100,7 @@ app.get('/', (req, res) => {
       'E-Signatures',
       'e-CMR (Electronic Consignment Note)',
       'Account Types Management',
+      'Carrier Referencing (SYMPHONI.A)',
       'Invoice Management',
     ],
     endpoints: [
@@ -137,6 +139,18 @@ app.get('/', (req, res) => {
       'POST /api/account/upgrade (request account type upgrade)',
       'POST /api/account/upgrade/approve (approve upgrade - admin)',
       'POST /api/account/upgrade/reject (reject upgrade - admin)',
+      '-- Carrier Referencing (SYMPHONI.A) --',
+      'POST /api/carriers/invite (invite carrier)',
+      'POST /api/carriers/:carrierId/onboard (complete onboarding)',
+      'POST /api/carriers/:carrierId/documents (upload vigilance document)',
+      'POST /api/carriers/:carrierId/documents/:type/verify (verify document - admin)',
+      'GET /api/carriers/:carrierId/vigilance (check vigilance status)',
+      'POST /api/carriers/:carrierId/pricing-grid (add pricing grid)',
+      'POST /api/carriers/:carrierId/score (update scoring)',
+      'GET /api/carriers (list carriers)',
+      'GET /api/carriers/:carrierId (get carrier details)',
+      'PUT /api/carriers/:carrierId/reference-level (update reference level)',
+      'POST /api/carriers/:carrierId/upgrade-premium (upgrade to premium)',
     ],
     documentation: 'See README.md for complete API documentation',
   });
@@ -659,6 +673,15 @@ async function startServer() {
     console.warn('⚠️  Account Types routes not mounted - MongoDB not connected');
   }
 
+  // Mount Carrier Referencing routes after MongoDB connection is established
+  if (mongoConnected) {
+    const carrierReferencingRouter = createCarrierReferencingRoutes(mongoClient, mongoConnected);
+    app.use('/api/carriers', carrierReferencingRouter);
+    console.log('✅ Carrier Referencing routes mounted successfully');
+  } else {
+    console.warn('⚠️  Carrier Referencing routes not mounted - MongoDB not connected');
+  }
+
   // Register 404 handler (must be after all routes)
   app.use((req, res) => {
     res.status(404).json({
@@ -686,7 +709,7 @@ async function startServer() {
     console.log('RT Subscriptions-Contracts API listening on port ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? 'Connected' : 'Not connected'));
-    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types');
+    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types, Carrier Referencing');
   });
 }
 
