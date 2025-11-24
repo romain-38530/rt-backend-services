@@ -6,6 +6,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { MongoClient } = require('mongodb');
+const createECMRRoutes = require('./ecmr-routes');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -110,9 +111,24 @@ app.get('/', (req, res) => {
       'POST /api/contracts',
       'POST /api/contracts/:id/send',
       'POST /api/signatures/:id/sign',
+      'GET /api/ecmr',
+      'POST /api/ecmr',
+      'GET /api/ecmr/:id',
+      'PUT /api/ecmr/:id',
+      'POST /api/ecmr/:id/validate',
+      'POST /api/ecmr/:id/sign/:party',
+      'POST /api/ecmr/:id/remarks',
+      'POST /api/ecmr/:id/tracking',
     ],
     documentation: 'See README.md for complete API documentation',
   });
+});
+
+// ==================== e-CMR ROUTES ====================
+// Mount e-CMR routes with proper MongoDB connection passing
+app.use('/api/ecmr', (req, res, next) => {
+  const ecmrRouter = createECMRRoutes(mongoClient, mongoConnected);
+  ecmrRouter(req, res, next);
 });
 
 // ==================== SUBSCRIPTION PLANS ====================

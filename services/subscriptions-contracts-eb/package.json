@@ -14,7 +14,11 @@
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
     "express-rate-limit": "^7.1.5",
-    "mongodb": "^6.3.0"
+    "mongodb": "^6.3.0",
+    "pdfkit": "^0.15.0",
+    "qrcode": "^1.5.3",
+    "@aws-sdk/client-s3": "^3.490.0",
+    "@aws-sdk/client-glacier": "^3.490.0"
   },
   "keywords": [],
   "author": "",
