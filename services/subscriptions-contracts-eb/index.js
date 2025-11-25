@@ -68,7 +68,7 @@ app.get('/health', async (req, res) => {
     port: PORT,
     env: process.env.NODE_ENV || 'development',
     version: '1.0.0',
-    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types', 'carrier-referencing', 'pricing-grids', 'industrial-transport-config', 'jwt-authentication', 'stripe-payments', 'transport-orders-symphonia'],
+    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types', 'carrier-referencing', 'pricing-grids', 'industrial-transport-config', 'jwt-authentication', 'stripe-payments', 'flux-commande'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected,
@@ -761,13 +761,13 @@ async function startServer() {
     console.warn('⚠️  Stripe payment routes not mounted - MongoDB not connected');
   }
 
-  // Mount Transport Orders (SYMPHONI.A) routes after MongoDB connection is established
+  // Mount Flux Commande routes after MongoDB connection is established
   if (mongoConnected) {
     const transportOrdersRouter = createTransportOrdersRoutes(mongoClient, mongoConnected);
     app.use('/api/transport-orders', transportOrdersRouter);
-    console.log('✅ Transport Orders (SYMPHONI.A) routes mounted successfully');
+    console.log('✅ Flux Commande routes mounted successfully');
   } else {
-    console.warn('⚠️  Transport Orders routes not mounted - MongoDB not connected');
+    console.warn('⚠️  Flux Commande routes not mounted - MongoDB not connected');
   }
 
   // Register 404 handler (must be after all routes)
@@ -797,7 +797,7 @@ async function startServer() {
     console.log('RT Subscriptions-Contracts API listening on port ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? 'Connected' : 'Not connected'));
-    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types, Carrier Referencing, Pricing Grids, Industrial Transport Config, JWT Auth, Stripe Payments, Transport Orders (SYMPHONI.A)');
+    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types, Carrier Referencing, Pricing Grids, Industrial Transport Config, JWT Auth, Stripe Payments, Flux Commande');
   });
 }
 
