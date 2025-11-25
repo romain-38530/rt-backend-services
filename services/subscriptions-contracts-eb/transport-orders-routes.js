@@ -22,6 +22,7 @@ const {
 const tomtom = require('./tomtom-integration');
 const geofencing = require('./geofencing-service');
 const laneMatching = require('./lane-matching-service');
+const dispatch = require('./dispatch-service');
 
 /**
  * Create transport orders router
@@ -167,13 +168,13 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
 
   /**
    * POST /api/transport-orders/:orderId/generate-dispatch
-   * Generate dispatch chain
+   * Generate intelligent dispatch chain using AI
    */
   router.post('/:orderId/generate-dispatch', checkMongoDB, async (req, res) => {
     try {
       const db = getDb();
       const { orderId } = req.params;
-      const { carrierIds = [] } = req.body;
+      const { maxCarriers, minScore, preferLaneCarriers } = req.body;
 
       const order = await db.collection('transport_orders').findOne({
         _id: new ObjectId(orderId)
@@ -186,38 +187,51 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
         });
       }
 
-      // Generate dispatch chain
-      const dispatchChain = carrierIds.map((carrierId, index) => ({
-        carrierId,
-        order: index + 1,
-        status: 'pending',
-        checksPassed: {
-          vigilance: true, // TODO: Implement actual checks
-          availability: true,
-          scoring: true,
-          pricingGrid: true
-        }
-      }));
-
-      // Add Affret.IA as fallback
-      dispatchChain.push({
-        carrierId: 'AFFRETIA',
-        order: dispatchChain.length + 1,
-        status: 'pending',
-        checksPassed: {
-          vigilance: true,
-          availability: true,
-          scoring: true,
-          pricingGrid: true
-        }
+      // Generate dispatch chain using AI service
+      const result = await dispatch.generateDispatchChain(db, order, {
+        maxCarriers: maxCarriers || dispatch.MAX_DISPATCH_CHAIN_LENGTH,
+        minScore: minScore || dispatch.MIN_CARRIER_SCORE,
+        preferLaneCarriers: preferLaneCarriers !== false
       });
 
-      // Update order
+      if (!result.success) {
+        return res.status(500).json(result);
+      }
+
+      if (result.escalateToAffretia) {
+        // No eligible carriers, escalate immediately
+        await db.collection('transport_orders').updateOne(
+          { _id: new ObjectId(orderId) },
+          {
+            $set: {
+              status: OrderStatus.ESCALATED_TO_AFFRETIA,
+              escalationReason: result.reason,
+              updatedAt: new Date()
+            }
+          }
+        );
+
+        await createEvent(db, orderId, EventTypes.ESCALATED_TO_AFFRETIA, {
+          reason: result.reason,
+          automatic: true
+        });
+
+        return res.json({
+          success: true,
+          data: {
+            escalatedToAffretia: true,
+            reason: result.reason
+          }
+        });
+      }
+
+      // Update order with dispatch chain
       await db.collection('transport_orders').updateOne(
         { _id: new ObjectId(orderId) },
         {
           $set: {
-            dispatchChain,
+            dispatchChain: result.chain,
+            status: OrderStatus.AWAITING_ASSIGNMENT,
             updatedAt: new Date()
           }
         }
@@ -225,13 +239,26 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
 
       // Create event
       await createEvent(db, orderId, EventTypes.DISPATCH_CHAIN_GENERATED, {
-        chainLength: dispatchChain.length,
-        carriers: dispatchChain.map(c => c.carrierId)
+        chainLength: result.chain.length,
+        totalEligible: result.totalEligible,
+        totalScored: result.totalScored,
+        carriers: result.chain.map(c => ({
+          carrierId: c.carrierId,
+          score: c.score,
+          priority: c.priority
+        }))
       });
 
       res.json({
         success: true,
-        data: { dispatchChain }
+        data: {
+          dispatchChain: result.chain,
+          stats: {
+            totalEligible: result.totalEligible,
+            totalScored: result.totalScored,
+            selected: result.chain.length
+          }
+        }
       });
 
     } catch (error) {
@@ -252,41 +279,45 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
       const db = getDb();
       const { orderId } = req.params;
 
-      const order = await db.collection('transport_orders').findOne({
-        _id: new ObjectId(orderId)
-      });
+      // Use dispatch service to send to next carrier
+      const result = await dispatch.sendToNextCarrier(db, orderId);
 
-      if (!order) {
-        return res.status(404).json({
-          success: false,
-          error: 'Order not found'
+      if (!result.success) {
+        return res.status(500).json(result);
+      }
+
+      if (result.escalateToAffretia) {
+        // All carriers exhausted, escalate to Affret.IA
+        await db.collection('transport_orders').updateOne(
+          { _id: new ObjectId(orderId) },
+          {
+            $set: {
+              status: OrderStatus.ESCALATED_TO_AFFRETIA,
+              escalationReason: result.reason,
+              updatedAt: new Date()
+            }
+          }
+        );
+
+        await createEvent(db, orderId, EventTypes.ESCALATED_TO_AFFRETIA, {
+          reason: result.reason,
+          automatic: true
+        });
+
+        return res.json({
+          success: true,
+          data: {
+            escalatedToAffretia: true,
+            reason: result.reason
+          }
         });
       }
 
-      // Find next pending carrier in chain
-      const nextCarrier = order.dispatchChain?.find(c => c.status === 'pending');
-
-      if (!nextCarrier) {
-        return res.status(400).json({
-          success: false,
-          error: 'No more carriers in dispatch chain'
-        });
-      }
-
-      // Update carrier status to 'sent'
-      const updatedChain = order.dispatchChain.map(c =>
-        c.carrierId === nextCarrier.carrierId
-          ? { ...c, status: 'sent', sentAt: new Date() }
-          : c
-      );
-
-      // Update order
+      // Update order status
       await db.collection('transport_orders').updateOne(
         { _id: new ObjectId(orderId) },
         {
           $set: {
-            dispatchChain: updatedChain,
-            currentCarrierId: nextCarrier.carrierId,
             status: OrderStatus.SENT_TO_CARRIER,
             updatedAt: new Date()
           }
@@ -295,18 +326,30 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
 
       // Create event
       await createEvent(db, orderId, EventTypes.ORDER_SENT_TO_CARRIER, {
-        carrierId: nextCarrier.carrierId,
-        orderInChain: nextCarrier.order
+        carrierId: result.carrier.carrierId,
+        carrierName: result.carrier.carrierName,
+        orderInChain: result.orderInChain,
+        totalInChain: result.totalInChain,
+        priority: result.carrier.priority,
+        score: result.carrier.score,
+        estimatedPrice: result.carrier.estimatedPrice
       });
 
-      // TODO: Send actual notification (email, SMS, portal)
+      // TODO: Send actual notification (email, SMS, portal, API webhook)
 
       res.json({
         success: true,
         data: {
-          carrierId: nextCarrier.carrierId,
-          sentAt: new Date(),
-          timeout: '2 hours'
+          carrier: {
+            id: result.carrier.carrierId,
+            name: result.carrier.carrierName,
+            priority: result.carrier.priority,
+            score: result.carrier.score,
+            estimatedPrice: result.carrier.estimatedPrice
+          },
+          orderInChain: result.orderInChain,
+          totalInChain: result.totalInChain,
+          timeout: result.carrier.timeout
         }
       });
 
@@ -319,17 +362,17 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
     }
   });
 
-  // ==================== 4. CARRIER RESPONSE ====================
+  // ==================== 3. CARRIER RESPONSE ====================
 
   /**
    * POST /api/transport-orders/:orderId/carrier-response
-   * Record carrier response (accept/refuse)
+   * Record carrier response (accept/refuse) with automatic next steps
    */
   router.post('/:orderId/carrier-response', checkMongoDB, async (req, res) => {
     try {
       const db = getDb();
       const { orderId } = req.params;
-      const { carrierId, response, reason } = req.body;
+      const { carrierId, response, reason, proposedPrice } = req.body;
 
       if (!['accepted', 'refused'].includes(response)) {
         return res.status(400).json({
@@ -338,59 +381,69 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
         });
       }
 
-      const order = await db.collection('transport_orders').findOne({
-        _id: new ObjectId(orderId)
-      });
-
-      if (!order) {
-        return res.status(404).json({
-          success: false,
-          error: 'Order not found'
-        });
-      }
-
-      // Update carrier status in chain
-      const updatedChain = order.dispatchChain.map(c =>
-        c.carrierId === carrierId
-          ? { ...c, status: response, responseAt: new Date(), reason }
-          : c
+      // Process response using dispatch service
+      const result = await dispatch.processCarrierResponse(
+        db,
+        orderId,
+        carrierId,
+        response,
+        { reason, proposedPrice }
       );
 
-      if (response === 'accepted') {
-        // Carrier accepted
-        await db.collection('transport_orders').updateOne(
-          { _id: new ObjectId(orderId) },
-          {
-            $set: {
-              dispatchChain: updatedChain,
-              assignedCarrierId: carrierId,
-              status: OrderStatus.ACCEPTED,
-              updatedAt: new Date()
-            }
-          }
-        );
+      if (!result.success) {
+        return res.status(500).json(result);
+      }
 
+      if (result.action === 'assigned') {
+        // Carrier accepted!
         await createEvent(db, orderId, EventTypes.CARRIER_ACCEPTED, {
           carrierId,
+          proposedPrice,
           responseAt: new Date()
         });
 
-        res.json({
+        return res.json({
           success: true,
           data: {
+            action: 'assigned',
             status: 'accepted',
-            assignedCarrier: carrierId
+            assignedCarrier: carrierId,
+            proposedPrice
           }
         });
 
-      } else {
-        // Carrier refused - update chain and move to next
+      } else if (result.action === 'sent_to_next') {
+        // Carrier refused, sent to next
+        await createEvent(db, orderId, EventTypes.CARRIER_REFUSED, {
+          carrierId,
+          reason,
+          responseAt: new Date()
+        });
+
+        return res.json({
+          success: true,
+          data: {
+            action: 'sent_to_next',
+            status: 'refused',
+            reason,
+            nextCarrier: result.nextCarrier
+              ? {
+                  id: result.nextCarrier.carrierId,
+                  name: result.nextCarrier.carrierName,
+                  priority: result.nextCarrier.priority
+                }
+              : null
+          }
+        });
+
+      } else if (result.action === 'escalate_affretia') {
+        // All carriers exhausted
         await db.collection('transport_orders').updateOne(
           { _id: new ObjectId(orderId) },
           {
             $set: {
-              dispatchChain: updatedChain,
-              status: OrderStatus.AWAITING_ASSIGNMENT,
+              status: OrderStatus.ESCALATED_TO_AFFRETIA,
+              escalationReason: result.reason,
               updatedAt: new Date()
             }
           }
@@ -402,18 +455,25 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
           responseAt: new Date()
         });
 
-        res.json({
+        await createEvent(db, orderId, EventTypes.ESCALATED_TO_AFFRETIA, {
+          reason: result.reason,
+          automatic: true
+        });
+
+        return res.json({
           success: true,
           data: {
+            action: 'escalate_affretia',
             status: 'refused',
             reason,
-            nextAction: 'Send to next carrier in chain'
+            escalatedToAffretia: true,
+            escalationReason: result.reason
           }
         });
       }
 
     } catch (error) {
-      console.error('Error recording carrier response:', error);
+      console.error('Error processing carrier response:', error);
       res.status(500).json({
         success: false,
         error: error.message
