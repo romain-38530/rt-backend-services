@@ -20,6 +20,7 @@ const {
 } = require('./transport-orders-models');
 
 const tomtom = require('./tomtom-integration');
+const geofencing = require('./geofencing-service');
 
 /**
  * Create transport orders router
@@ -703,6 +704,85 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
         createdAt: new Date()
       });
 
+      // ========== GEOFENCING AUTOMATIC DETECTION ==========
+      let geofenceDetections = [];
+
+      if (order.trackingType === 'PREMIUM' || order.trackingType === 'INTERMEDIATE') {
+        // Detect status based on geofencing
+        const geofenceResult = await geofencing.detectStatus(order, position);
+
+        if (geofenceResult.success && geofenceResult.detections.length > 0) {
+          geofenceDetections = geofenceResult.detections;
+
+          // Process each detection
+          for (const detection of geofenceResult.detections) {
+            // Create event
+            await createEvent(db, orderId, detection.event, {
+              automatic: detection.automatic,
+              confidence: detection.confidence,
+              distance: detection.distance,
+              message: detection.message
+            });
+
+            // Update order status if high confidence
+            if (detection.confidence === 'high') {
+              await db.collection('transport_orders').updateOne(
+                { _id: new ObjectId(orderId) },
+                {
+                  $set: {
+                    status: OrderStatus[detection.status],
+                    updatedAt: new Date()
+                  }
+                }
+              );
+            }
+
+            // Notification for important statuses
+            if (geofencing.shouldNotify(detection, order)) {
+              // TODO: Send notification (email/SMS/push)
+              console.log(`[NOTIFICATION] ${detection.message}`);
+            }
+          }
+        }
+
+        // Get recent positions for loading/unloading detection
+        const recentPositions = await db.collection('tracking_positions')
+          .find({ orderId: new ObjectId(orderId) })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .toArray();
+
+        // Detect loading/unloading
+        const loadingDetection = geofencing.detectLoadingUnloading(order, recentPositions);
+
+        if (loadingDetection.loading) {
+          await createEvent(db, orderId, EventTypes.LOADING, {
+            automatic: true,
+            stationaryDuration: loadingDetection.stationaryDuration
+          });
+        }
+
+        if (loadingDetection.unloading) {
+          await createEvent(db, orderId, EventTypes.UNLOADING, {
+            automatic: true,
+            stationaryDuration: loadingDetection.stationaryDuration
+          });
+        }
+
+        // Detect unexpected stops
+        const unexpectedStop = geofencing.detectUnexpectedStop(order, position, recentPositions);
+
+        if (unexpectedStop.unexpectedStop) {
+          await createEvent(db, orderId, EventTypes.INCIDENT_REPORTED, {
+            type: 'UNEXPECTED_STOP',
+            duration: unexpectedStop.duration,
+            location: unexpectedStop.location,
+            severity: unexpectedStop.severity,
+            automatic: true
+          });
+        }
+      }
+
       res.json({
         success: true,
         data: {
@@ -711,7 +791,11 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
           etaMethod: etaData.method,
           distance: etaData.distance,
           duration: etaData.duration,
-          trafficDelay: etaData.trafficDelay || null
+          trafficDelay: etaData.trafficDelay || null,
+          geofencing: {
+            detections: geofenceDetections,
+            autoDetection: order.trackingType === 'PREMIUM' || order.trackingType === 'INTERMEDIATE'
+          }
         }
       });
 

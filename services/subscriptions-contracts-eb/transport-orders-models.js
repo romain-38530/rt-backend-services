@@ -74,9 +74,11 @@ const EventTypes = {
 
   // Étapes transport
   ARRIVED_PICKUP: 'order.arrived.pickup',
+  LOADING: 'order.loading',
   LOADED: 'order.loaded',
   DEPARTED_PICKUP: 'order.departed.pickup',
   ARRIVED_DELIVERY: 'order.arrived.delivery',
+  UNLOADING: 'order.unloading',
   DELIVERED: 'order.delivered',
 
   // RDV
