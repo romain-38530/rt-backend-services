@@ -1,0 +1,19 @@
+branch-defaults:
+  default:
+    environment: rt-subscriptions-api-prod
+environment-defaults:
+  rt-subscriptions-api-prod:
+    branch: null
+    repository: null
+global:
+  application_name: rt-subscriptions-api
+  default_ec2_keyname: null
+  default_platform: Node.js 20
+  default_region: eu-central-1
+  include_git_submodules: true
+  instance_profile: null
+  platform_name: null
+  platform_version: null
+  profile: null
+  sc: null
+  workspace_type: Application
