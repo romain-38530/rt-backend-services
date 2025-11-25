@@ -379,7 +379,8 @@ app.get('/', (req, res) => {
       'GET /',
       'POST /api/vat/validate-format',
       'POST /api/vat/validate',
-      'POST /api/vat/calculate-price'
+      'POST /api/vat/calculate-price',
+      'POST /api/onboarding/submit'
     ]
   });
 });
@@ -577,6 +578,128 @@ app.post('/api/vat/calculate-price', async (req, res) => {
     }
 
   } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error.message
+      }
+    });
+  }
+});
+
+// Onboarding endpoint
+app.post('/api/onboarding/submit', async (req, res) => {
+  try {
+    const { email, companyName, siret, vatNumber, phone, address, subscriptionType, source } = req.body;
+
+    // Validate required fields
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'email is required and must be a string'
+        }
+      });
+    }
+
+    if (!companyName || typeof companyName !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'companyName is required and must be a string'
+        }
+      });
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_EMAIL',
+          message: 'Invalid email format'
+        }
+      });
+    }
+
+    // Check if MongoDB is connected
+    if (!mongoConnected || !db) {
+      console.log('MongoDB not available for onboarding request:', email);
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: 'DATABASE_UNAVAILABLE',
+          message: 'Database connection is not available'
+        }
+      });
+    }
+
+    // Prepare onboarding document
+    const onboardingRequest = {
+      email: email.toLowerCase().trim(),
+      companyName: companyName.trim(),
+      siret: siret ? siret.trim() : null,
+      vatNumber: vatNumber ? vatNumber.trim() : null,
+      phone: phone ? phone.trim() : null,
+      address: address || null,
+      subscriptionType: subscriptionType || null,
+      source: source || 'WEB',
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || null,
+      userAgent: req.headers['user-agent'] || null
+    };
+
+    console.log('Received onboarding request from:', email, '- Company:', companyName);
+
+    // Insert into MongoDB
+    try {
+      const collection = db.collection('onboarding_requests');
+      const result = await collection.insertOne(onboardingRequest);
+
+      console.log('Onboarding request saved successfully:', result.insertedId);
+
+      // Return success response
+      res.status(201).json({
+        success: true,
+        message: 'Onboarding request submitted successfully',
+        requestId: result.insertedId.toString(),
+        email: onboardingRequest.email,
+        companyName: onboardingRequest.companyName,
+        status: 'pending',
+        createdAt: onboardingRequest.createdAt
+      });
+
+    } catch (dbError) {
+      console.error('MongoDB insert error:', dbError);
+
+      // Check if it's a duplicate key error
+      if (dbError.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          error: {
+            code: 'DUPLICATE_REQUEST',
+            message: 'An onboarding request with this email already exists'
+          }
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'DATABASE_ERROR',
+          message: 'Failed to save onboarding request'
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Onboarding endpoint error:', error);
     res.status(500).json({
       success: false,
       error: {
