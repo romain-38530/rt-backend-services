@@ -9,6 +9,7 @@ const { MongoClient } = require('mongodb');
 const createECMRRoutes = require('./ecmr-routes');
 const createAccountTypesRoutes = require('./account-types-routes');
 const createCarrierReferencingRoutes = require('./carrier-referencing-routes');
+const createPricingGridsRoutes = require('./pricing-grids-routes');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -63,7 +64,7 @@ app.get('/health', async (req, res) => {
     port: PORT,
     env: process.env.NODE_ENV || 'development',
     version: '1.0.0',
-    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types', 'carrier-referencing'],
+    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types', 'carrier-referencing', 'pricing-grids'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected,
@@ -101,6 +102,7 @@ app.get('/', (req, res) => {
       'e-CMR (Electronic Consignment Note)',
       'Account Types Management',
       'Carrier Referencing (SYMPHONI.A)',
+      'Pricing Grids Management',
       'Invoice Management',
     ],
     endpoints: [
@@ -151,6 +153,19 @@ app.get('/', (req, res) => {
       'GET /api/carriers/:carrierId (get carrier details)',
       'PUT /api/carriers/:carrierId/reference-level (update reference level)',
       'POST /api/carriers/:carrierId/upgrade-premium (upgrade to premium)',
+      '-- Pricing Grids --',
+      'POST /api/pricing-grids (create pricing grid)',
+      'GET /api/pricing-grids (list pricing grids with filters)',
+      'GET /api/pricing-grids/:gridId (get pricing grid details)',
+      'PUT /api/pricing-grids/:gridId (update pricing grid)',
+      'DELETE /api/pricing-grids/:gridId (delete DRAFT grid)',
+      'POST /api/pricing-grids/:gridId/activate (activate pricing grid)',
+      'POST /api/pricing-grids/:gridId/suspend (suspend pricing grid)',
+      'POST /api/pricing-grids/:gridId/archive (archive pricing grid)',
+      'POST /api/pricing-grids/calculate (calculate price for transport)',
+      'GET /api/pricing-grids/zones/list (list geographic zones)',
+      'GET /api/pricing-grids/options/list (list pricing options)',
+      'GET /api/pricing-grids/types/transport (list transport types)',
     ],
     documentation: 'See README.md for complete API documentation',
   });
@@ -682,6 +697,15 @@ async function startServer() {
     console.warn('⚠️  Carrier Referencing routes not mounted - MongoDB not connected');
   }
 
+  // Mount Pricing Grids routes after MongoDB connection is established
+  if (mongoConnected) {
+    const pricingGridsRouter = createPricingGridsRoutes(mongoClient, mongoConnected);
+    app.use('/api/pricing-grids', pricingGridsRouter);
+    console.log('✅ Pricing Grids routes mounted successfully');
+  } else {
+    console.warn('⚠️  Pricing Grids routes not mounted - MongoDB not connected');
+  }
+
   // Register 404 handler (must be after all routes)
   app.use((req, res) => {
     res.status(404).json({
@@ -709,7 +733,7 @@ async function startServer() {
     console.log('RT Subscriptions-Contracts API listening on port ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? 'Connected' : 'Not connected'));
-    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types, Carrier Referencing');
+    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types, Carrier Referencing, Pricing Grids');
   });
 }
 
