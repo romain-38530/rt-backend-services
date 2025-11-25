@@ -3,7 +3,7 @@
 // Version 1.0.0
 
 const { ObjectId } = require('mongodb');
-const { calculateDistance } = require('./tomtom-integration');
+const { calculateHaversineDistance } = require('./tomtom-integration');
 
 /**
  * Lane definition:
@@ -31,7 +31,7 @@ function isInArea(address, area) {
     return false;
   }
 
-  const distance = calculateDistance(
+  const distance = calculateHaversineDistance(
     address.coordinates,
     area.coordinates
   );
@@ -182,7 +182,7 @@ function analyzeLaneGroup(orders) {
   const avgVolume = orders.reduce((sum, o) => sum + (o.volume || 0), 0) / orders.length;
 
   // Calculate distance
-  const distance = calculateDistance(avgOrigin, avgDestination);
+  const distance = calculateHaversineDistance(avgOrigin, avgDestination);
 
   return {
     laneId: `LANE-${mostCommonOriginCity?.substring(0, 3)?.toUpperCase() || 'XXX'}-${mostCommonDestinationCity?.substring(0, 3)?.toUpperCase() || 'XXX'}`,
