@@ -163,76 +163,7 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
     }
   });
 
-  // ==================== 2. LANE MATCHING ====================
-
-  /**
-   * POST /api/transport-orders/:orderId/lane-match
-   * Trigger lane matching AI
-   */
-  router.post('/:orderId/lane-match', checkMongoDB, async (req, res) => {
-    try {
-      const db = getDb();
-      const { orderId } = req.params;
-
-      const order = await db.collection('transport_orders').findOne({
-        _id: new ObjectId(orderId)
-      });
-
-      if (!order) {
-        return res.status(404).json({
-          success: false,
-          error: 'Order not found'
-        });
-      }
-
-      // TODO: Implement actual AI lane matching
-      // For now, generate a basic lane ID based on pickup/delivery cities
-      const laneId = `LANE-${order.pickupAddress.city.toUpperCase()}-${order.deliveryAddress.city.toUpperCase()}`;
-
-      // Simulate confidence score
-      const confidence = 0.85 + Math.random() * 0.1;
-
-      // Update order with lane information
-      await db.collection('transport_orders').updateOne(
-        { _id: new ObjectId(orderId) },
-        {
-          $set: {
-            laneId,
-            laneConfidence: confidence,
-            updatedAt: new Date()
-          }
-        }
-      );
-
-      // Create event
-      await createEvent(db, orderId, EventTypes.LANE_DETECTED, {
-        laneId,
-        confidence
-      });
-
-      res.json({
-        success: true,
-        data: {
-          laneId,
-          confidence,
-          historicalData: {
-            averagePrice: 450,
-            averageDuration: '6h30',
-            topCarriers: []
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('Error in lane matching:', error);
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  });
-
-  // ==================== 3. DISPATCH CHAIN ====================
+  // ==================== 2. DISPATCH CHAIN ====================
 
   /**
    * POST /api/transport-orders/:orderId/generate-dispatch
@@ -1480,6 +1411,35 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
   });
 
   /**
+   * GET /api/transport-orders/lanes
+   * Get all detected lanes for an industrial (must be before /:orderId)
+   */
+  router.get('/lanes', checkMongoDB, async (req, res) => {
+    try {
+      const db = getDb();
+      const { industrialId } = req.query;
+
+      if (!industrialId) {
+        return res.status(400).json({
+          success: false,
+          error: 'industrialId query parameter is required'
+        });
+      }
+
+      const result = await laneMatching.getLanes(db, industrialId);
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error getting lanes:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
    * GET /api/transport-orders/:orderId
    * Get complete order details
    */
@@ -1897,35 +1857,6 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
 
     } catch (error) {
       console.error('Error matching lane:', error);
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  });
-
-  /**
-   * GET /api/transport-orders/lanes
-   * Get all detected lanes for an industrial
-   */
-  router.get('/lanes', checkMongoDB, async (req, res) => {
-    try {
-      const db = getDb();
-      const { industrialId } = req.query;
-
-      if (!industrialId) {
-        return res.status(400).json({
-          success: false,
-          error: 'industrialId query parameter is required'
-        });
-      }
-
-      const result = await laneMatching.getLanes(db, industrialId);
-
-      res.json(result);
-
-    } catch (error) {
-      console.error('Error getting lanes:', error);
       res.status(500).json({
         success: false,
         error: error.message
