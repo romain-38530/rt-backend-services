@@ -10,6 +10,7 @@ const createECMRRoutes = require('./ecmr-routes');
 const createAccountTypesRoutes = require('./account-types-routes');
 const createCarrierReferencingRoutes = require('./carrier-referencing-routes');
 const createPricingGridsRoutes = require('./pricing-grids-routes');
+const createIndustrialTransportConfigRoutes = require('./industrial-transport-config-routes');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -64,7 +65,7 @@ app.get('/health', async (req, res) => {
     port: PORT,
     env: process.env.NODE_ENV || 'development',
     version: '1.0.0',
-    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types', 'carrier-referencing', 'pricing-grids'],
+    features: ['express', 'cors', 'helmet', 'mongodb', 'subscriptions', 'contracts', 'ecmr', 'account-types', 'carrier-referencing', 'pricing-grids', 'industrial-transport-config'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected,
@@ -103,6 +104,7 @@ app.get('/', (req, res) => {
       'Account Types Management',
       'Carrier Referencing (SYMPHONI.A)',
       'Pricing Grids Management',
+      'Industrial Transport Configuration',
       'Invoice Management',
     ],
     endpoints: [
@@ -166,6 +168,12 @@ app.get('/', (req, res) => {
       'GET /api/pricing-grids/zones/list (list geographic zones)',
       'GET /api/pricing-grids/options/list (list pricing options)',
       'GET /api/pricing-grids/types/transport (list transport types)',
+      '-- Industrial Transport Configuration --',
+      'GET /api/industrial/:industrialId/transport-config (get transport type config)',
+      'POST /api/industrial/:industrialId/transport-config (set transport type config)',
+      'POST /api/industrial/:industrialId/transport-config/add-type (add required/optional type)',
+      'POST /api/industrial/:industrialId/transport-config/remove-type (remove transport type)',
+      'GET /api/industrial/:industrialId/carriers/compatibility (check carrier compatibility)',
     ],
     documentation: 'See README.md for complete API documentation',
   });
@@ -706,6 +714,15 @@ async function startServer() {
     console.warn('⚠️  Pricing Grids routes not mounted - MongoDB not connected');
   }
 
+  // Mount Industrial Transport Config routes after MongoDB connection is established
+  if (mongoConnected) {
+    const industrialTransportConfigRouter = createIndustrialTransportConfigRoutes(mongoClient, mongoConnected);
+    app.use('/api/industrial', industrialTransportConfigRouter);
+    console.log('✅ Industrial Transport Config routes mounted successfully');
+  } else {
+    console.warn('⚠️  Industrial Transport Config routes not mounted - MongoDB not connected');
+  }
+
   // Register 404 handler (must be after all routes)
   app.use((req, res) => {
     res.status(404).json({
@@ -733,7 +750,7 @@ async function startServer() {
     console.log('RT Subscriptions-Contracts API listening on port ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? 'Connected' : 'Not connected'));
-    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types, Carrier Referencing, Pricing Grids');
+    console.log('Features: Subscriptions, Contracts, E-Signatures, e-CMR, Account Types, Carrier Referencing, Pricing Grids, Industrial Transport Config');
   });
 }
 
