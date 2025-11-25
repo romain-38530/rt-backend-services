@@ -21,6 +21,7 @@ const {
 
 const tomtom = require('./tomtom-integration');
 const geofencing = require('./geofencing-service');
+const laneMatching = require('./lane-matching-service');
 
 /**
  * Create transport orders router
@@ -1761,6 +1762,204 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
 
     } catch (error) {
       console.error('Error reverse geocoding:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // ==================== LANE MATCHING AI ====================
+
+  /**
+   * POST /api/transport-orders/lanes/detect
+   * Detect recurring transport lanes from historical orders
+   */
+  router.post('/lanes/detect', checkMongoDB, async (req, res) => {
+    try {
+      const db = getDb();
+      const { industrialId } = req.body;
+
+      if (!industrialId) {
+        return res.status(400).json({
+          success: false,
+          error: 'industrialId is required'
+        });
+      }
+
+      // Detect lanes from historical orders
+      const detectionResult = await laneMatching.detectLanes(db, industrialId);
+
+      if (!detectionResult.success) {
+        return res.status(500).json(detectionResult);
+      }
+
+      // Save detected lanes to database
+      if (detectionResult.lanes.length > 0) {
+        const saveResult = await laneMatching.saveLanes(
+          db,
+          industrialId,
+          detectionResult.lanes
+        );
+
+        if (!saveResult.success) {
+          return res.status(500).json(saveResult);
+        }
+
+        // Create event for lane detection
+        await db.collection('transport_events').insertOne({
+          eventType: EventTypes.LANE_DETECTED,
+          timestamp: new Date(),
+          data: {
+            industrialId,
+            lanesDetected: detectionResult.lanes.length,
+            totalOrders: detectionResult.totalOrders
+          },
+          metadata: {
+            source: 'AI',
+            automatic: true
+          }
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          lanes: detectionResult.lanes,
+          totalOrders: detectionResult.totalOrders,
+          analyzedPeriodDays: detectionResult.analyzedPeriodDays,
+          saved: detectionResult.lanes.length
+        }
+      });
+
+    } catch (error) {
+      console.error('Error detecting lanes:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/:orderId/lane-match
+   * Match an order to known transport lanes
+   */
+  router.post('/:orderId/lane-match', checkMongoDB, async (req, res) => {
+    try {
+      const db = getDb();
+      const { orderId } = req.params;
+
+      const order = await db.collection('transport_orders').findOne({
+        _id: new ObjectId(orderId)
+      });
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          error: 'Order not found'
+        });
+      }
+
+      // Match order to lanes
+      const matchResult = await laneMatching.matchOrderToLane(db, order);
+
+      if (!matchResult.success) {
+        return res.status(500).json(matchResult);
+      }
+
+      // If matched, create event
+      if (matchResult.matched) {
+        await createEvent(db, orderId, EventTypes.LANE_DETECTED, {
+          laneId: matchResult.bestMatch.laneId,
+          score: matchResult.bestMatch.score,
+          confidence: matchResult.bestMatch.confidence,
+          recommendedCarriers: matchResult.bestMatch.recommendedCarriers
+        });
+
+        // Update order with lane information
+        await db.collection('transport_orders').updateOne(
+          { _id: new ObjectId(orderId) },
+          {
+            $set: {
+              laneId: matchResult.bestMatch.laneId,
+              laneMatchScore: matchResult.bestMatch.score,
+              updatedAt: new Date()
+            }
+          }
+        );
+      }
+
+      res.json({
+        success: true,
+        data: matchResult
+      });
+
+    } catch (error) {
+      console.error('Error matching lane:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/transport-orders/lanes
+   * Get all detected lanes for an industrial
+   */
+  router.get('/lanes', checkMongoDB, async (req, res) => {
+    try {
+      const db = getDb();
+      const { industrialId } = req.query;
+
+      if (!industrialId) {
+        return res.status(400).json({
+          success: false,
+          error: 'industrialId query parameter is required'
+        });
+      }
+
+      const result = await laneMatching.getLanes(db, industrialId);
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error getting lanes:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/transport-orders/lanes/:laneId
+   * Delete a specific lane
+   */
+  router.delete('/lanes/:laneId', checkMongoDB, async (req, res) => {
+    try {
+      const db = getDb();
+      const { laneId } = req.params;
+
+      const result = await db.collection('transport_lanes').deleteOne({
+        laneId
+      });
+
+      if (result.deletedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Lane not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Lane deleted successfully'
+      });
+
+    } catch (error) {
+      console.error('Error deleting lane:', error);
       res.status(500).json({
         success: false,
         error: error.message
