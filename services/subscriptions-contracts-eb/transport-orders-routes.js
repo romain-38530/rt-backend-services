@@ -19,6 +19,8 @@ const {
   calculateDistance
 } = require('./transport-orders-models');
 
+const tomtom = require('./tomtom-integration');
+
 /**
  * Create transport orders router
  */
@@ -645,12 +647,39 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
         timestamp: timestamp ? new Date(timestamp) : new Date()
       };
 
-      // Calculate new ETA
-      const eta = calculateETA(
-        position,
-        order.deliveryAddress.coordinates,
-        position
-      );
+      // Calculate ETA based on tracking type
+      let eta, etaData;
+      if (order.trackingType === 'PREMIUM') {
+        // Use TomTom for Premium tracking
+        etaData = await tomtom.calculateETA(
+          position,
+          order.deliveryAddress.coordinates,
+          {
+            vehicleWeight: order.weight,
+            averageSpeed: speed || 70
+          }
+        );
+        eta = etaData.eta;
+
+        // Check for delays
+        const delayDetection = await tomtom.detectDelay(order, position);
+        if (delayDetection.hasDelay && delayDetection.delayMinutes > 15) {
+          // Create delay event
+          await createEvent(db, orderId, EventTypes.TRACKING_DELAY_DETECTED, {
+            delayMinutes: delayDetection.delayMinutes,
+            estimatedArrival: delayDetection.estimatedArrival,
+            recommendation: delayDetection.recommendation
+          });
+        }
+      } else {
+        // Use simple calculation for Basic/Intermediate
+        eta = calculateETA(
+          position,
+          order.deliveryAddress.coordinates,
+          position
+        );
+        etaData = { eta, method: 'haversine' };
+      }
 
       // Update order
       await db.collection('transport_orders').updateOne(
@@ -659,6 +688,7 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
           $set: {
             currentPosition: position,
             eta,
+            etaData,
             updatedAt: new Date()
           }
         }
@@ -669,6 +699,7 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
         orderId: new ObjectId(orderId),
         position,
         eta,
+        etaData,
         createdAt: new Date()
       });
 
@@ -676,7 +707,11 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
         success: true,
         data: {
           position,
-          eta
+          eta,
+          etaMethod: etaData.method,
+          distance: etaData.distance,
+          duration: etaData.duration,
+          trafficDelay: etaData.trafficDelay || null
         }
       });
 
@@ -1414,6 +1449,234 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
 
     } catch (error) {
       console.error('Error getting events:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // ==================== TOMTOM ADVANCED FEATURES ====================
+
+  /**
+   * POST /api/transport-orders/:orderId/calculate-route
+   * Calculate optimal route with TomTom (Premium tracking only)
+   */
+  router.post('/:orderId/calculate-route', checkMongoDB, async (req, res) => {
+    try {
+      const db = getDb();
+      const { orderId } = req.params;
+
+      const order = await db.collection('transport_orders').findOne({
+        _id: new ObjectId(orderId)
+      });
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          error: 'Order not found'
+        });
+      }
+
+      if (order.trackingType !== 'PREMIUM') {
+        return res.status(403).json({
+          success: false,
+          error: 'Route calculation requires Premium tracking'
+        });
+      }
+
+      const origin = order.currentPosition || order.pickupAddress.coordinates;
+      const destination = order.deliveryAddress.coordinates;
+
+      const routeData = await tomtom.calculateRoute(origin, destination, {
+        vehicleWeight: order.weight,
+        departAt: new Date().toISOString(),
+        traffic: true
+      });
+
+      res.json({
+        success: routeData.success,
+        data: routeData
+      });
+
+    } catch (error) {
+      console.error('Error calculating route:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/:orderId/check-delay
+   * Check for potential delays (Premium tracking only)
+   */
+  router.post('/:orderId/check-delay', checkMongoDB, async (req, res) => {
+    try {
+      const db = getDb();
+      const { orderId } = req.params;
+
+      const order = await db.collection('transport_orders').findOne({
+        _id: new ObjectId(orderId)
+      });
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          error: 'Order not found'
+        });
+      }
+
+      if (order.trackingType !== 'PREMIUM') {
+        return res.status(403).json({
+          success: false,
+          error: 'Delay detection requires Premium tracking'
+        });
+      }
+
+      if (!order.currentPosition) {
+        return res.status(400).json({
+          success: false,
+          error: 'No current position available'
+        });
+      }
+
+      const delayData = await tomtom.detectDelay(order, order.currentPosition);
+
+      // If delay detected and significant, create event
+      if (delayData.hasDelay && delayData.delayMinutes > 15) {
+        await createEvent(db, orderId, EventTypes.TRACKING_DELAY_DETECTED, {
+          delayMinutes: delayData.delayMinutes,
+          recommendation: delayData.recommendation
+        });
+
+        // Update order status if critical
+        if (delayData.delayMinutes > 60) {
+          await updateOrderStatus(
+            db,
+            orderId,
+            OrderStatus.DELAYED,
+            EventTypes.DELAY_REPORTED,
+            { delayMinutes: delayData.delayMinutes }
+          );
+        }
+      }
+
+      res.json({
+        success: true,
+        data: delayData
+      });
+
+    } catch (error) {
+      console.error('Error checking delay:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/:orderId/suggested-departure
+   * Get suggested departure time to arrive on time
+   */
+  router.post('/:orderId/suggested-departure', checkMongoDB, async (req, res) => {
+    try {
+      const db = getDb();
+      const { orderId } = req.params;
+
+      const order = await db.collection('transport_orders').findOne({
+        _id: new ObjectId(orderId)
+      });
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          error: 'Order not found'
+        });
+      }
+
+      if (!order.deliveryTimeWindow) {
+        return res.status(400).json({
+          success: false,
+          error: 'No delivery time window defined'
+        });
+      }
+
+      const origin = order.currentPosition || order.pickupAddress.coordinates;
+      const destination = order.deliveryAddress.coordinates;
+      const desiredArrival = new Date(order.deliveryTimeWindow.start);
+
+      const suggestionData = await tomtom.getSuggestedDeparture(
+        origin,
+        destination,
+        desiredArrival
+      );
+
+      res.json({
+        success: suggestionData.success,
+        data: suggestionData
+      });
+
+    } catch (error) {
+      console.error('Error getting suggested departure:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/geocode
+   * Geocode address to coordinates (utility endpoint)
+   */
+  router.post('/geocode', async (req, res) => {
+    try {
+      const { address } = req.body;
+
+      if (!address) {
+        return res.status(400).json({
+          success: false,
+          error: 'Address is required'
+        });
+      }
+
+      const geocodeData = await tomtom.geocodeAddress(address);
+
+      res.json(geocodeData);
+
+    } catch (error) {
+      console.error('Error geocoding address:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/reverse-geocode
+   * Reverse geocode coordinates to address (utility endpoint)
+   */
+  router.post('/reverse-geocode', async (req, res) => {
+    try {
+      const { lat, lng } = req.body;
+
+      if (!lat || !lng) {
+        return res.status(400).json({
+          success: false,
+          error: 'Latitude and longitude are required'
+        });
+      }
+
+      const reverseData = await tomtom.reverseGeocode({ lat, lng });
+
+      res.json(reverseData);
+
+    } catch (error) {
+      console.error('Error reverse geocoding:', error);
       res.status(500).json({
         success: false,
         error: error.message
