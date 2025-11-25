@@ -152,12 +152,21 @@ async function sendMailgunEmail(to, subject, html) {
  * Envoyer l'email de tracking initial au chauffeur
  * @param {Object} db - MongoDB database
  * @param {String} orderId - ID de la commande
- * @param {String} driverEmail - Email du chauffeur
- * @param {Object} options - Options supplémentaires
+ * @param {Object} options - Options (carrierEmail, carrierName, driverPhone, baseUrl)
  * @returns {Promise<Object>} Résultat de l'envoi
  */
-async function sendTrackingEmail(db, orderId, driverEmail, options = {}) {
+async function sendTrackingEmail(db, orderId, options = {}) {
   try {
+    // Extract driverEmail from options (can be carrierEmail or driverEmail)
+    const driverEmail = options.carrierEmail || options.driverEmail;
+
+    if (!driverEmail) {
+      return {
+        success: false,
+        error: 'Driver email is required (carrierEmail or driverEmail)'
+      };
+    }
+
     // Récupérer la commande
     const order = await db.collection('transport_orders')
       .findOne({ _id: new ObjectId(orderId) });
