@@ -23,6 +23,13 @@ const tomtom = require('./tomtom-integration');
 const geofencing = require('./geofencing-service');
 const laneMatching = require('./lane-matching-service');
 const dispatch = require('./dispatch-service');
+const trackingBasic = require('./tracking-basic-service');
+const ocrIntegration = require('./ocr-integration-service');
+const documentManagement = require('./document-management-service');
+const rdvManagement = require('./rdv-management-service');
+const etaMonitoring = require('./eta-monitoring-service');
+const carrierScoring = require('./carrier-scoring-service');
+const orderClosure = require('./order-closure-service');
 
 /**
  * Create transport orders router
@@ -1951,6 +1958,506 @@ function createTransportOrdersRoutes(mongoClient, mongoConnected) {
 
     } catch (error) {
       console.error('Error deleting lane:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // ==================== V1.6.0: TRACKING BASIC + OCR INTEGRATION ====================
+
+  /**
+   * POST /api/transport-orders/:orderId/tracking/email/send
+   * Envoyer l'email de tracking basic au transporteur
+   */
+  router.post('/:orderId/tracking/email/send', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { carrierEmail, carrierName } = req.body;
+
+      if (!carrierEmail) {
+        return res.status(400).json({
+          success: false,
+          error: 'Carrier email is required'
+        });
+      }
+
+      const db = getDb();
+      const result = await trackingBasic.sendTrackingEmail(db, orderId, {
+        carrierEmail,
+        carrierName: carrierName || 'Transporteur'
+      });
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error sending tracking email:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/tracking/update/:token
+   * Mettre à jour le statut via token (lien cliqué dans l'email)
+   */
+  router.post('/tracking/update/:token', checkMongoDB, async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).json({
+          success: false,
+          error: 'Status is required'
+        });
+      }
+
+      const db = getDb();
+      const result = await trackingBasic.handleStatusUpdateLink(db, null, status, token);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error updating status via token:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/tracking/document-upload/:token
+   * Upload de document via lien email (POD/CMR/BL)
+   */
+  router.post('/tracking/document-upload/:token', checkMongoDB, async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { documentType, fileUrl, fileName } = req.body;
+
+      if (!documentType || !fileUrl) {
+        return res.status(400).json({
+          success: false,
+          error: 'Document type and file URL are required'
+        });
+      }
+
+      const db = getDb();
+      const result = await trackingBasic.handleDocumentUploadLink(db, null, documentType, fileUrl, fileName, token);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error uploading document via token:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/:orderId/documents/:documentId/ocr/extract
+   * Lancer l'extraction OCR sur un document
+   */
+  router.post('/:orderId/documents/:documentId/ocr/extract', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId, documentId } = req.params;
+      const { provider, documentType } = req.body;
+
+      const db = getDb();
+
+      // Récupérer le document
+      const document = await db.collection('documents').findOne({
+        _id: new ObjectId(documentId),
+        orderId: new ObjectId(orderId)
+      });
+
+      if (!document) {
+        return res.status(404).json({
+          success: false,
+          error: 'Document not found'
+        });
+      }
+
+      // Lancer l'extraction OCR
+      const result = await ocrIntegration.processDocument(db, orderId, documentId, {
+        provider: provider || 'AWS_TEXTRACT',
+        documentType: documentType || document.type
+      });
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error extracting OCR:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/transport-orders/:orderId/documents/:documentId/ocr/results
+   * Obtenir les résultats de l'extraction OCR
+   */
+  router.get('/:orderId/documents/:documentId/ocr/results', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId, documentId } = req.params;
+      const db = getDb();
+
+      const document = await db.collection('documents').findOne({
+        _id: new ObjectId(documentId),
+        orderId: new ObjectId(orderId)
+      });
+
+      if (!document) {
+        return res.status(404).json({
+          success: false,
+          error: 'Document not found'
+        });
+      }
+
+      if (!document.ocrData) {
+        return res.status(404).json({
+          success: false,
+          error: 'No OCR data available for this document',
+          message: 'OCR extraction has not been performed yet'
+        });
+      }
+
+      res.json({
+        success: true,
+        documentId,
+        orderId,
+        ocrData: document.ocrData,
+        extractedAt: document.ocrExtractedAt,
+        provider: document.ocrProvider
+      });
+
+    } catch (error) {
+      console.error('Error getting OCR results:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // ==================== V1.5.0: DOCUMENTS, RDV, ETA, SCORING, CLOSURE ====================
+
+  /**
+   * POST /api/transport-orders/:orderId/documents
+   * Upload un document pour une commande
+   */
+  router.post('/:orderId/documents', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const documentData = req.body;
+
+      const db = getDb();
+      const result = await documentManagement.uploadDocument(db, orderId, documentData);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/transport-orders/:orderId/documents
+   * Obtenir tous les documents d'une commande
+   */
+  router.get('/:orderId/documents', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const db = getDb();
+
+      const result = await documentManagement.getOrderDocuments(db, orderId);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error getting documents:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * PUT /api/transport-orders/:orderId/documents/:documentId/validate
+   * Valider un document
+   */
+  router.put('/:orderId/documents/:documentId/validate', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId, documentId } = req.params;
+      const { validatedBy } = req.body;
+
+      const db = getDb();
+      const result = await documentManagement.validateDocument(db, documentId, { validatedBy });
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error validating document:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/:orderId/rdv
+   * Demander un rendez-vous (chargement ou livraison)
+   */
+  router.post('/:orderId/rdv', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const rdvData = req.body;
+
+      const db = getDb();
+      const result = await rdvManagement.requestRDV(db, orderId, rdvData);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error requesting RDV:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * PUT /api/transport-orders/:orderId/rdv/:rdvId/confirm
+   * Confirmer un rendez-vous
+   */
+  router.put('/:orderId/rdv/:rdvId/confirm', checkMongoDB, async (req, res) => {
+    try {
+      const { rdvId } = req.params;
+      const confirmData = req.body;
+
+      const db = getDb();
+      const result = await rdvManagement.confirmRDV(db, rdvId, confirmData);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error confirming RDV:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/transport-orders/:orderId/rdv
+   * Obtenir tous les RDV d'une commande
+   */
+  router.get('/:orderId/rdv', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const db = getDb();
+
+      const result = await rdvManagement.getOrderRDVs(db, orderId);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error getting RDVs:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/:orderId/eta/update
+   * Mettre à jour l'ETA d'une commande
+   */
+  router.post('/:orderId/eta/update', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { currentPosition } = req.body;
+
+      if (!currentPosition || !currentPosition.lat || !currentPosition.lng) {
+        return res.status(400).json({
+          success: false,
+          error: 'Current position with lat/lng is required'
+        });
+      }
+
+      const db = getDb();
+      const result = await etaMonitoring.updateETA(db, orderId, currentPosition);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error updating ETA:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/transport-orders/:orderId/eta/history
+   * Obtenir l'historique ETA d'une commande
+   */
+  router.get('/:orderId/eta/history', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const db = getDb();
+
+      const result = await etaMonitoring.getETAHistory(db, orderId);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error getting ETA history:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/:orderId/score
+   * Calculer le score transporteur pour une commande
+   */
+  router.post('/:orderId/score', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const db = getDb();
+
+      const result = await carrierScoring.calculateCarrierScore(db, orderId);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error calculating carrier score:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/transport-orders/:orderId/close
+   * Clôturer une commande
+   */
+  router.post('/:orderId/close', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const options = req.body;
+
+      const db = getDb();
+      const result = await orderClosure.closeOrder(db, orderId, options);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error closing order:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/transport-orders/:orderId/closure-status
+   * Obtenir le statut de clôture d'une commande
+   */
+  router.get('/:orderId/closure-status', checkMongoDB, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const db = getDb();
+
+      const result = await orderClosure.getClosureStatus(db, orderId);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error getting closure status:', error);
       res.status(500).json({
         success: false,
         error: error.message
