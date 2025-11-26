@@ -1,7 +1,7 @@
 // ============================================================================
-// RT SYMPHONI.A - Subscriptions & Contracts API + Suite Chatbots
+// RT SYMPHONI.A - Subscriptions & Contracts API
 // ============================================================================
-// Version: v2.0.0 (SYMPHONI.A + AFFRET.IA + Planning + Chatbots Suite)
+// Version: v1.9.1 (SYMPHONI.A + AFFRET.IA + Planning Module + Real-time)
 // Deployment: AWS Elastic Beanstalk (Amazon Linux 2023, Node.js 20)
 // ============================================================================
 
@@ -23,8 +23,6 @@ const notificationService = require('./notification-service');
 const { configureAffretiaRoutes } = require('./affretia-routes');
 const { createPlanningRoutes } = require('./planning-routes');
 const { PlanningWebSocketService } = require('./planning-websocket');
-const { createChatbotRoutes } = require('./chatbot-routes');
-const { TicketingService } = require('./ticketing-service');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -32,15 +30,11 @@ const PORT = process.env.PORT || 8080;
 // Create HTTP server for WebSocket support
 const server = http.createServer(app);
 
-// Event emitter for real-time updates (shared by Planning + Chatbot)
-const appEventEmitter = new EventEmitter();
-const planningEventEmitter = appEventEmitter; // Alias for backward compatibility
+// Event emitter for real-time updates
+const planningEventEmitter = new EventEmitter();
 
 // WebSocket service instance
 let planningWebSocket = null;
-
-// Ticketing service instance
-let ticketingService = null;
 
 // MongoDB connection
 let mongoClient;
@@ -90,7 +84,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: 'v2.0.0-chatbot-suite',
+    version: 'v1.9.1-planning-realtime',
     features: [
       'express', 'advanced-security', 'rate-limiting', 'cors', 'helmet',
       'input-sanitization', 'mongodb', 'subscriptions', 'contracts', 'ecmr',
@@ -103,11 +97,7 @@ app.get('/health', async (req, res) => {
       'auto-negotiation', 'carrier-scoring-selection', 'vigilance-verification',
       'planning-chargement-livraison', 'site-planning', 'rdv-management',
       'driver-checkin-kiosk', 'driver-queue', 'ecmr-signature',
-      'websocket-realtime', 'planning-notifications-email-sms', 'driver-push-notifications',
-      'chatbot-suite', 'rt-helpbot', 'planif-ia-assistant', 'routier-assistant',
-      'quai-wms-assistant', 'livraisons-assistant', 'expedition-assistant',
-      'freight-ia-assistant', 'copilote-chauffeur-assistant', 'ticketing-sla',
-      'knowledge-base', 'faq-system', 'teams-integration', 'auto-escalation'
+      'websocket-realtime', 'planning-notifications-email-sms', 'driver-push-notifications'
     ],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -135,9 +125,9 @@ app.get('/health', async (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    message: 'RT SYMPHONI.A - Subscriptions & Contracts API + Suite Chatbots',
-    version: 'v2.0.0-chatbot-suite',
-    description: 'Transport Management System with Advanced Security + AFFRET.IA + Planning + Suite Chatbots Intelligents',
+    message: 'RT SYMPHONI.A - Subscriptions & Contracts API',
+    version: 'v1.9.1-planning-realtime',
+    description: 'Transport Management System with Advanced Security + AFFRET.IA + Planning Module + Real-time WebSocket',
     features: [
       'Express.js',
       'MongoDB Atlas',
@@ -327,35 +317,6 @@ app.get('/', (req, res) => {
       'POST /api/planning/tracking/early-arrival (handle early arrival)',
       'POST /api/planning/tracking/delay (handle delay)',
       'GET /api/planning/types (get all types/enums)',
-      '-- Chatbot Suite --',
-      'POST /api/chatbot/conversations (start conversation)',
-      'GET /api/chatbot/conversations (list user conversations)',
-      'GET /api/chatbot/conversations/:id (get conversation)',
-      'POST /api/chatbot/conversations/:id/messages (send message)',
-      'POST /api/chatbot/conversations/:id/close (close conversation)',
-      'POST /api/chatbot/conversations/:id/feedback (submit feedback)',
-      'POST /api/chatbot/conversations/:id/escalate (escalate to tech)',
-      'POST /api/chatbot/conversations/:id/diagnostic (run diagnostic)',
-      '-- Tickets Support --',
-      'GET /api/chatbot/tickets (list user tickets)',
-      'GET /api/chatbot/tickets/:id (get ticket)',
-      '-- Technicians --',
-      'GET /api/chatbot/technician/tickets (list all tickets)',
-      'POST /api/chatbot/technician/tickets/:id/assign (assign ticket)',
-      'POST /api/chatbot/technician/tickets/:id/resolve (resolve ticket)',
-      'POST /api/chatbot/technician/tickets/:id/close (close ticket)',
-      'POST /api/chatbot/technician/conversations/:id/reply (tech reply)',
-      '-- Knowledge Base & FAQ --',
-      'GET /api/chatbot/knowledge (search knowledge base)',
-      'GET /api/chatbot/knowledge/:id (get article)',
-      'POST /api/chatbot/knowledge (create article - admin)',
-      'GET /api/chatbot/faq (list FAQs)',
-      'POST /api/chatbot/faq (create FAQ - admin)',
-      '-- Chatbot Stats --',
-      'GET /api/chatbot/stats (statistics)',
-      'GET /api/chatbot/stats/dashboard (real-time dashboard)',
-      'GET /api/chatbot/config (user chatbot config)',
-      'GET /api/chatbot/health (chatbot health check)',
     ],
     documentation: 'See README.md for complete API documentation',
   });
@@ -981,24 +942,6 @@ async function startServer() {
     console.warn('⚠️  Planning routes not mounted - MongoDB not connected');
   }
 
-  // Mount Chatbot Suite routes
-  if (mongoConnected) {
-    const chatbotRouter = createChatbotRoutes(mongoClient.db(), appEventEmitter);
-    app.use('/api/chatbot', chatbotRouter);
-    console.log('✅ Chatbot Suite routes mounted successfully');
-
-    // Initialize Ticketing Service with SLA monitoring
-    ticketingService = new TicketingService(mongoClient.db(), appEventEmitter, {
-      teamsWebhookUrl: process.env.TEAMS_WEBHOOK_URL,
-      slackWebhookUrl: process.env.SLACK_WEBHOOK_URL,
-      autoAssignment: true
-    });
-    ticketingService.startSLAMonitoring();
-    console.log('✅ Ticketing Service initialized with SLA monitoring');
-  } else {
-    console.warn('⚠️  Chatbot Suite routes not mounted - MongoDB not connected');
-  }
-
   // ==================== SCHEDULED JOBS ENDPOINTS ====================
   // Endpoint to get scheduled jobs status
   app.get('/api/admin/scheduled-jobs/status', (req, res) => {
@@ -1084,51 +1027,54 @@ async function startServer() {
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log('============================================================================');
-    console.log('🚀 RT SYMPHONI.A v2.0.0 - Suite Chatbots Intelligents');
+    console.log('🚀 RT SYMPHONI.A - Subscriptions & Contracts API + AFFRET.IA + Planning');
     console.log('============================================================================');
-    console.log('Version: v2.0.0-chatbot-suite');
+    console.log('Version: v1.9.1-planning-realtime (100% Conformite Cahier des Charges)');
     console.log('Port: ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? '✅ Connected' : '❌ Not connected'));
     console.log('Security: ✅ Rate Limiting, CORS, Helmet, Input Sanitization');
     console.log('WebSocket: ✅ Real-time updates on /ws/planning');
     console.log('============================================================================');
-    console.log('Modules: 28/28 Operational');
-    console.log('  - Subscriptions & Contracts & e-CMR');
+    console.log('Features: 20/20 Modules Operational');
+    console.log('  - Subscriptions & Contracts');
+    console.log('  - E-Signatures & e-CMR');
     console.log('  - Account Types & Carrier Referencing');
     console.log('  - Pricing Grids & Industrial Transport Config');
     console.log('  - JWT Authentication & Stripe Payments');
     console.log('  - Transport Orders & Tracking (GPS + Email)');
     console.log('  - Geofencing & OCR Integration');
     console.log('  - Document Management & Carrier Scoring');
-    console.log('  - Scheduled Jobs & Multi-Channel Notifications');
+    console.log('  - OVHcloud (DNS & Email Management)');
+    console.log('  - Scheduled Jobs (Cron: Timeouts, ETA, Delays)');
+    console.log('  - Multi-Channel Notifications (Email + SMS)');
     console.log('  - AFFRET.IA - Intelligent Freight Module');
     console.log('  - Planning Chargement & Livraison');
-    console.log('  - Suite Chatbots Intelligents (8 assistants)');
+    console.log('  - WebSocket Real-time Updates');
     console.log('============================================================================');
-    console.log('🤖 Suite Chatbots RT Technologie:');
-    console.log('  - RT HelpBot: Support technique avec escalade automatique');
-    console.log('  - Planif\'IA: Assistant pour industriels (ERP, Affret.IA)');
-    console.log('  - Routier: Assistant pour transporteurs (grilles, RDV, POD)');
-    console.log('  - Quai & WMS: Assistant pour logisticiens (planning quais)');
-    console.log('  - Livraisons: Assistant pour destinataires (RDV, suivi)');
-    console.log('  - Expedition: Assistant pour fournisseurs (envois)');
-    console.log('  - Freight IA: Assistant pour transitaires (import/export)');
-    console.log('  - Copilote Chauffeur: Assistant mobile (mission, signature)');
+    console.log('AFFRET.IA Features:');
+    console.log('  - AI-Powered Carrier Shortlist (20-200 carriers)');
+    console.log('  - Multi-Channel Broadcast (Email, Marketplace, Push, SMS)');
+    console.log('  - Auto-Negotiation (up to +15%)');
+    console.log('  - 6-Criteria Scoring Algorithm');
+    console.log('  - Vigilance & Compliance Verification');
     console.log('============================================================================');
-    console.log('📋 Systeme de Ticketing:');
-    console.log('  - SLA 3 niveaux (Standard/Important/Critique)');
-    console.log('  - Escalade automatique vers technicien');
-    console.log('  - Notifications Microsoft Teams');
-    console.log('  - Base de connaissances & FAQ');
-    console.log('  - Auto-assignment intelligent');
-    console.log('  - Surveillance SLA temps reel');
+    console.log('Planning Chargement & Livraison Features:');
+    console.log('  - Multi-Site Planning & Dock Management');
+    console.log('  - RDV Workflow (Request/Propose/Confirm/Refuse)');
+    console.log('  - Auto-RDV for Premium Carriers (score >= 85)');
+    console.log('  - Driver Virtual Check-in Kiosk (Geofence/QR/Manual)');
+    console.log('  - Driver Queue & Wait Time Management');
+    console.log('  - eCMR Electronic Signature Integration');
+    console.log('  - Email/SMS Notifications (Mailgun + Twilio)');
+    console.log('  - Push Notification Chauffeur (Appel file attente)');
+    console.log('  - WebSocket Temps Reel (Mise a jour instantanee)');
+    console.log('  - Tracking IA Integration (Early/Delay Detection)');
     console.log('============================================================================');
     console.log('Scheduled Jobs:');
     console.log('  - checkTimeouts: every 5 min');
     console.log('  - monitorETA: every 1 min');
     console.log('  - detectDelays: every 2 min');
-    console.log('  - SLA Monitoring: every 5 min');
     console.log('============================================================================');
     console.log('📝 API Documentation: /');
     console.log('🏥 Health Check: /health');
@@ -1136,7 +1082,6 @@ async function startServer() {
     console.log('📧 Notifications: /api/admin/notifications/status');
     console.log('🚛 AFFRET.IA: /api/affretia/constants');
     console.log('📅 Planning: /api/planning/types');
-    console.log('🤖 Chatbot: /api/chatbot/health');
     console.log('============================================================================');
   });
 }

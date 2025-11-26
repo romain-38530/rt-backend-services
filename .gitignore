@@ -48,3 +48,10 @@ docker-compose.override.yml
 # AWS
 .aws/
 *.pem
+
+# Large bundles
+*.zip
+*.tar
+*.tar.gz
+nul
+NUL

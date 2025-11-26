@@ -1,13 +1,11 @@
 // ============================================================================
-// RT SYMPHONI.A - Subscriptions & Contracts API + Suite Chatbots
+// RT SYMPHONI.A - Subscriptions & Contracts API
 // ============================================================================
-// Version: v2.0.0 (SYMPHONI.A + AFFRET.IA + Planning + Chatbots Suite)
+// Version: v1.6.2 (SYMPHONI.A Complete - 100% Conformity)
 // Deployment: AWS Elastic Beanstalk (Amazon Linux 2023, Node.js 20)
 // ============================================================================
 
 const express = require('express');
-const http = require('http');
-const { EventEmitter } = require('events');
 const { MongoClient } = require('mongodb');
 const security = require('./security-middleware');
 const createECMRRoutes = require('./ecmr-routes');
@@ -18,29 +16,9 @@ const createIndustrialTransportConfigRoutes = require('./industrial-transport-co
 const createAuthRoutes = require('./auth-routes');
 const createStripeRoutes = require('./stripe-routes');
 const createTransportOrdersRoutes = require('./transport-orders-routes');
-const scheduledJobs = require('./scheduled-jobs');
-const notificationService = require('./notification-service');
-const { configureAffretiaRoutes } = require('./affretia-routes');
-const { createPlanningRoutes } = require('./planning-routes');
-const { PlanningWebSocketService } = require('./planning-websocket');
-const { createChatbotRoutes } = require('./chatbot-routes');
-const { TicketingService } = require('./ticketing-service');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-
-// Create HTTP server for WebSocket support
-const server = http.createServer(app);
-
-// Event emitter for real-time updates (shared by Planning + Chatbot)
-const appEventEmitter = new EventEmitter();
-const planningEventEmitter = appEventEmitter; // Alias for backward compatibility
-
-// WebSocket service instance
-let planningWebSocket = null;
-
-// Ticketing service instance
-let ticketingService = null;
 
 // MongoDB connection
 let mongoClient;
@@ -90,32 +68,20 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: 'v2.0.0-chatbot-suite',
+    version: 'v1.6.2-security',
     features: [
       'express', 'advanced-security', 'rate-limiting', 'cors', 'helmet',
       'input-sanitization', 'mongodb', 'subscriptions', 'contracts', 'ecmr',
       'account-types', 'carrier-referencing', 'pricing-grids',
       'industrial-transport-config', 'jwt-authentication', 'stripe-payments',
       'flux-commande', 'tracking-basic-email', 'tracking-premium-gps',
-      'geofencing', 'ocr-integration', 'document-management', 'carrier-scoring',
-      'scheduled-jobs', 'multi-channel-notifications', 'sms-twilio',
-      'affretia-intelligent-freight', 'carrier-shortlist', 'multi-channel-broadcast',
-      'auto-negotiation', 'carrier-scoring-selection', 'vigilance-verification',
-      'planning-chargement-livraison', 'site-planning', 'rdv-management',
-      'driver-checkin-kiosk', 'driver-queue', 'ecmr-signature',
-      'websocket-realtime', 'planning-notifications-email-sms', 'driver-push-notifications',
-      'chatbot-suite', 'rt-helpbot', 'planif-ia-assistant', 'routier-assistant',
-      'quai-wms-assistant', 'livraisons-assistant', 'expedition-assistant',
-      'freight-ia-assistant', 'copilote-chauffeur-assistant', 'ticketing-sla',
-      'knowledge-base', 'faq-system', 'teams-integration', 'auto-escalation'
+      'geofencing', 'ocr-integration', 'document-management', 'carrier-scoring'
     ],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected,
       status: mongoConnected ? 'active' : 'not connected',
     },
-    scheduledJobs: scheduledJobs.getJobsStatus(),
-    notifications: notificationService.getNotificationServicesStatus()
   };
 
   if (mongoConnected && mongoClient) {
@@ -135,9 +101,9 @@ app.get('/health', async (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    message: 'RT SYMPHONI.A - Subscriptions & Contracts API + Suite Chatbots',
-    version: 'v2.0.0-chatbot-suite',
-    description: 'Transport Management System with Advanced Security + AFFRET.IA + Planning + Suite Chatbots Intelligents',
+    message: 'RT SYMPHONI.A - Subscriptions & Contracts API',
+    version: 'v1.6.2-security',
+    description: 'Transport Management System with Advanced Security',
     features: [
       'Express.js',
       'MongoDB Atlas',
@@ -160,19 +126,6 @@ app.get('/', (req, res) => {
       'ETA Monitoring & Delay Detection',
       'RDV Management (Rendez-vous)',
       'Carrier Scoring & Performance Metrics',
-      'AFFRET.IA - Intelligent Automated Freight Module',
-      'AI-Powered Carrier Shortlist Generation',
-      'Multi-Channel Broadcast (Email, Marketplace, Push, SMS)',
-      'Auto-Negotiation (up to +15%)',
-      'Carrier Scoring & Selection Algorithm',
-      'Vigilance & Compliance Verification',
-      'Planning Chargement & Livraison Module',
-      'Site Planning & Dock Management',
-      'RDV Management (Request/Propose/Confirm)',
-      'Auto-RDV for Premium Carriers',
-      'Driver Virtual Check-in Kiosk',
-      'Driver Queue & Wait Time Management',
-      'eCMR Electronic Signature Integration',
     ],
     security: {
       rateLimiting: {
@@ -264,98 +217,6 @@ app.get('/', (req, res) => {
       'GET /api/stripe/payment-history (get payment history - requires auth)',
       'POST /api/stripe/webhook (Stripe webhook endpoint - NO auth)',
       'GET /api/stripe/products (list available products - public)',
-      '-- AFFRET.IA (Intelligent Freight) --',
-      'POST /api/affretia/trigger (trigger AFFRET.IA session)',
-      'POST /api/affretia/analyze/:sessionId (analyze and generate shortlist)',
-      'POST /api/affretia/broadcast/:sessionId (broadcast to carriers)',
-      'POST /api/affretia/response/:sessionId (record carrier response)',
-      'POST /api/affretia/select/:sessionId (select best carrier)',
-      'POST /api/affretia/assign/:sessionId (assign mission to carrier)',
-      'POST /api/affretia/tracking/activate/:sessionId (activate tracking)',
-      'POST /api/affretia/tracking/position/:sessionId (update position)',
-      'POST /api/affretia/tracking/geofence/:sessionId (record geofence event)',
-      'POST /api/affretia/documents/:sessionId (upload document)',
-      'GET /api/affretia/documents/:sessionId (list documents)',
-      'POST /api/affretia/vigilance/:sessionId (perform vigilance check)',
-      'POST /api/affretia/scoring/:sessionId (calculate final scoring)',
-      'POST /api/affretia/close/:sessionId (close session)',
-      'GET /api/affretia/session/:sessionId (get session details)',
-      'GET /api/affretia/sessions (list sessions)',
-      'GET /api/affretia/sessions/active (list active sessions)',
-      'GET /api/affretia/stats (get statistics)',
-      'POST /api/affretia/workflow/auto/:orderId (auto workflow)',
-      'GET /api/affretia/constants (get constants for frontend)',
-      '-- Planning Chargement & Livraison --',
-      'POST /api/planning/create (create site planning)',
-      'PUT /api/planning/update/:id (update site planning)',
-      'GET /api/planning/view/:id (get site planning)',
-      'GET /api/planning/list (list organization plannings)',
-      'POST /api/planning/generate-slots/:id (generate time slots)',
-      'GET /api/planning/slots/available (search available slots)',
-      'GET /api/planning/slots/calendar/:sitePlanningId (calendar view)',
-      'POST /api/planning/slots/block/:id (block slot)',
-      '-- RDV (Appointments) --',
-      'POST /api/planning/rdv/request (request RDV)',
-      'POST /api/planning/rdv/propose/:id (propose alternative slot)',
-      'POST /api/planning/rdv/confirm/:id (confirm RDV)',
-      'POST /api/planning/rdv/refuse/:id (refuse RDV)',
-      'PUT /api/planning/rdv/reschedule/:id (reschedule RDV)',
-      'POST /api/planning/rdv/cancel/:id (cancel RDV)',
-      'GET /api/planning/rdv/:id (get RDV details)',
-      'GET /api/planning/rdv/list (list RDVs)',
-      'GET /api/planning/rdv/by-order/:transportOrderId (RDVs by order)',
-      '-- Driver Check-in (Virtual Kiosk) --',
-      'POST /api/planning/driver/approaching (signal approach via geofence)',
-      'POST /api/planning/driver/checkin (driver check-in)',
-      'POST /api/planning/driver/at-dock (signal arrival at dock)',
-      'POST /api/planning/driver/checkout (driver check-out)',
-      'GET /api/planning/driver/status/:rdvId (get driver status)',
-      'GET /api/planning/driver/queue/:sitePlanningId (get driver queue)',
-      'POST /api/planning/driver/call-next (call next driver)',
-      'POST /api/planning/driver/no-show/:rdvId (mark no-show)',
-      '-- Operations --',
-      'POST /api/planning/operation/start/:rdvId (start loading/unloading)',
-      'POST /api/planning/operation/complete/:rdvId (complete operation)',
-      '-- eCMR Signature --',
-      'POST /api/planning/ecmr/sign/:rdvId (sign eCMR)',
-      'POST /api/planning/ecmr/validate/:rdvId (validate eCMR)',
-      'GET /api/planning/ecmr/download/:rdvId (download eCMR)',
-      'GET /api/planning/ecmr/history/:transportOrderId (eCMR history)',
-      '-- Planning Stats & Tracking Integration --',
-      'GET /api/planning/stats/site/:sitePlanningId (site statistics)',
-      'GET /api/planning/stats/carrier/:carrierId (carrier statistics)',
-      'POST /api/planning/tracking/early-arrival (handle early arrival)',
-      'POST /api/planning/tracking/delay (handle delay)',
-      'GET /api/planning/types (get all types/enums)',
-      '-- Chatbot Suite --',
-      'POST /api/chatbot/conversations (start conversation)',
-      'GET /api/chatbot/conversations (list user conversations)',
-      'GET /api/chatbot/conversations/:id (get conversation)',
-      'POST /api/chatbot/conversations/:id/messages (send message)',
-      'POST /api/chatbot/conversations/:id/close (close conversation)',
-      'POST /api/chatbot/conversations/:id/feedback (submit feedback)',
-      'POST /api/chatbot/conversations/:id/escalate (escalate to tech)',
-      'POST /api/chatbot/conversations/:id/diagnostic (run diagnostic)',
-      '-- Tickets Support --',
-      'GET /api/chatbot/tickets (list user tickets)',
-      'GET /api/chatbot/tickets/:id (get ticket)',
-      '-- Technicians --',
-      'GET /api/chatbot/technician/tickets (list all tickets)',
-      'POST /api/chatbot/technician/tickets/:id/assign (assign ticket)',
-      'POST /api/chatbot/technician/tickets/:id/resolve (resolve ticket)',
-      'POST /api/chatbot/technician/tickets/:id/close (close ticket)',
-      'POST /api/chatbot/technician/conversations/:id/reply (tech reply)',
-      '-- Knowledge Base & FAQ --',
-      'GET /api/chatbot/knowledge (search knowledge base)',
-      'GET /api/chatbot/knowledge/:id (get article)',
-      'POST /api/chatbot/knowledge (create article - admin)',
-      'GET /api/chatbot/faq (list FAQs)',
-      'POST /api/chatbot/faq (create FAQ - admin)',
-      '-- Chatbot Stats --',
-      'GET /api/chatbot/stats (statistics)',
-      'GET /api/chatbot/stats/dashboard (real-time dashboard)',
-      'GET /api/chatbot/config (user chatbot config)',
-      'GET /api/chatbot/health (chatbot health check)',
     ],
     documentation: 'See README.md for complete API documentation',
   });
@@ -948,117 +809,6 @@ async function startServer() {
     console.warn('⚠️  OVHcloud routes not mounted:', error.message);
   }
 
-  // Mount AFFRET.IA routes after MongoDB connection is established
-  if (mongoConnected) {
-    const authRouter = require('./auth-routes');
-    const authenticateToken = authRouter.authenticateToken || ((req, res, next) => {
-      // Fallback simple authentication middleware
-      const authHeader = req.headers['authorization'];
-      if (!authHeader) {
-        return res.status(401).json({ success: false, error: 'Token requis' });
-      }
-      // In production, this should verify JWT token properly
-      req.user = { userId: 'system', organizationId: req.headers['x-organization-id'] || 'default' };
-      next();
-    });
-
-    configureAffretiaRoutes(app, mongoClient.db(), authenticateToken);
-    console.log('✅ AFFRET.IA routes mounted successfully (Intelligent Freight Module)');
-  } else {
-    console.warn('⚠️  AFFRET.IA routes not mounted - MongoDB not connected');
-  }
-
-  // Mount Planning Chargement & Livraison routes with EventEmitter for real-time
-  if (mongoConnected) {
-    const planningRouter = createPlanningRoutes(mongoClient.db(), planningEventEmitter);
-    app.use('/api/planning', planningRouter);
-    console.log('✅ Planning Chargement & Livraison routes mounted successfully');
-
-    // Initialize WebSocket service for real-time updates
-    planningWebSocket = new PlanningWebSocketService(server, planningEventEmitter);
-    console.log('✅ Planning WebSocket service initialized on /ws/planning');
-  } else {
-    console.warn('⚠️  Planning routes not mounted - MongoDB not connected');
-  }
-
-  // Mount Chatbot Suite routes
-  if (mongoConnected) {
-    const chatbotRouter = createChatbotRoutes(mongoClient.db(), appEventEmitter);
-    app.use('/api/chatbot', chatbotRouter);
-    console.log('✅ Chatbot Suite routes mounted successfully');
-
-    // Initialize Ticketing Service with SLA monitoring
-    ticketingService = new TicketingService(mongoClient.db(), appEventEmitter, {
-      teamsWebhookUrl: process.env.TEAMS_WEBHOOK_URL,
-      slackWebhookUrl: process.env.SLACK_WEBHOOK_URL,
-      autoAssignment: true
-    });
-    ticketingService.startSLAMonitoring();
-    console.log('✅ Ticketing Service initialized with SLA monitoring');
-  } else {
-    console.warn('⚠️  Chatbot Suite routes not mounted - MongoDB not connected');
-  }
-
-  // ==================== SCHEDULED JOBS ENDPOINTS ====================
-  // Endpoint to get scheduled jobs status
-  app.get('/api/admin/scheduled-jobs/status', (req, res) => {
-    res.json({
-      success: true,
-      data: scheduledJobs.getJobsStatus()
-    });
-  });
-
-  // Endpoint to run a job manually
-  app.post('/api/admin/scheduled-jobs/run/:jobName', async (req, res) => {
-    const { jobName } = req.params;
-    const result = await scheduledJobs.runJobManually(jobName);
-    res.json(result);
-  });
-
-  // ==================== NOTIFICATION ENDPOINTS ====================
-  // Get notification services status
-  app.get('/api/admin/notifications/status', (req, res) => {
-    res.json({
-      success: true,
-      data: notificationService.getNotificationServicesStatus()
-    });
-  });
-
-  // Get notification history
-  app.get('/api/admin/notifications/history', async (req, res) => {
-    if (!mongoConnected) {
-      return res.status(503).json({ success: false, error: 'Database not connected' });
-    }
-    const { orderId, type, limit, skip } = req.query;
-    const result = await notificationService.getNotificationHistory(mongoClient.db(), {
-      orderId, type,
-      limit: parseInt(limit) || 50,
-      skip: parseInt(skip) || 0
-    });
-    res.json(result);
-  });
-
-  // Send test notification
-  app.post('/api/admin/notifications/test', async (req, res) => {
-    const { email, phone, message } = req.body;
-    const result = await notificationService.sendDirectNotification({
-      email,
-      phone,
-      subject: 'Test RT SYMPHONI.A',
-      body: `<h2>Test Notification</h2><p>${message || 'Ceci est un test.'}</p>`,
-      smsBody: `RT Test: ${message || 'Ceci est un test.'}`
-    });
-    res.json(result);
-  });
-
-  // Start scheduled jobs after MongoDB is connected
-  if (mongoConnected) {
-    scheduledJobs.startAllJobs(mongoClient.db());
-    console.log('✅ Scheduled jobs started');
-  } else {
-    console.warn('⚠️  Scheduled jobs not started - MongoDB not connected');
-  }
-
   // Register 404 handler (must be after all routes)
   app.use((req, res) => {
     res.status(404).json({
@@ -1082,61 +832,27 @@ async function startServer() {
     });
   });
 
-  server.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log('============================================================================');
-    console.log('🚀 RT SYMPHONI.A v2.0.0 - Suite Chatbots Intelligents');
+    console.log('🚀 RT SYMPHONI.A - Subscriptions & Contracts API');
     console.log('============================================================================');
-    console.log('Version: v2.0.0-chatbot-suite');
+    console.log('Version: v1.6.5-external-services');
     console.log('Port: ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? '✅ Connected' : '❌ Not connected'));
     console.log('Security: ✅ Rate Limiting, CORS, Helmet, Input Sanitization');
-    console.log('WebSocket: ✅ Real-time updates on /ws/planning');
-    console.log('============================================================================');
-    console.log('Modules: 28/28 Operational');
-    console.log('  - Subscriptions & Contracts & e-CMR');
+    console.log('Features: 14/14 Modules Operational');
+    console.log('  - Subscriptions & Contracts');
+    console.log('  - E-Signatures & e-CMR');
     console.log('  - Account Types & Carrier Referencing');
     console.log('  - Pricing Grids & Industrial Transport Config');
     console.log('  - JWT Authentication & Stripe Payments');
     console.log('  - Transport Orders & Tracking (GPS + Email)');
     console.log('  - Geofencing & OCR Integration');
     console.log('  - Document Management & Carrier Scoring');
-    console.log('  - Scheduled Jobs & Multi-Channel Notifications');
-    console.log('  - AFFRET.IA - Intelligent Freight Module');
-    console.log('  - Planning Chargement & Livraison');
-    console.log('  - Suite Chatbots Intelligents (8 assistants)');
-    console.log('============================================================================');
-    console.log('🤖 Suite Chatbots RT Technologie:');
-    console.log('  - RT HelpBot: Support technique avec escalade automatique');
-    console.log('  - Planif\'IA: Assistant pour industriels (ERP, Affret.IA)');
-    console.log('  - Routier: Assistant pour transporteurs (grilles, RDV, POD)');
-    console.log('  - Quai & WMS: Assistant pour logisticiens (planning quais)');
-    console.log('  - Livraisons: Assistant pour destinataires (RDV, suivi)');
-    console.log('  - Expedition: Assistant pour fournisseurs (envois)');
-    console.log('  - Freight IA: Assistant pour transitaires (import/export)');
-    console.log('  - Copilote Chauffeur: Assistant mobile (mission, signature)');
-    console.log('============================================================================');
-    console.log('📋 Systeme de Ticketing:');
-    console.log('  - SLA 3 niveaux (Standard/Important/Critique)');
-    console.log('  - Escalade automatique vers technicien');
-    console.log('  - Notifications Microsoft Teams');
-    console.log('  - Base de connaissances & FAQ');
-    console.log('  - Auto-assignment intelligent');
-    console.log('  - Surveillance SLA temps reel');
-    console.log('============================================================================');
-    console.log('Scheduled Jobs:');
-    console.log('  - checkTimeouts: every 5 min');
-    console.log('  - monitorETA: every 1 min');
-    console.log('  - detectDelays: every 2 min');
-    console.log('  - SLA Monitoring: every 5 min');
     console.log('============================================================================');
     console.log('📝 API Documentation: /');
     console.log('🏥 Health Check: /health');
-    console.log('⚙️  Admin Jobs: /api/admin/scheduled-jobs/status');
-    console.log('📧 Notifications: /api/admin/notifications/status');
-    console.log('🚛 AFFRET.IA: /api/affretia/constants');
-    console.log('📅 Planning: /api/planning/types');
-    console.log('🤖 Chatbot: /api/chatbot/health');
     console.log('============================================================================');
   });
 }

@@ -1,0 +1,14 @@
+# Configuration API OVH
+# Copiez ce fichier en .ovhrc et remplissez vos credentials
+
+# Endpoint OVH (selon votre région)
+# ovh-eu : Europe
+# ovh-ca : Canada
+# ovh-us : États-Unis
+endpoint=ovh-eu
+
+# Credentials de l'application OVH
+# Pour les obtenir : https://eu.api.ovh.com/createApp/
+appKey=VOTRE_APPLICATION_KEY
+appSecret=VOTRE_APPLICATION_SECRET
+consumerKey=VOTRE_CONSUMER_KEY
