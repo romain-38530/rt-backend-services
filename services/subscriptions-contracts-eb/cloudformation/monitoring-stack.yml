@@ -1,0 +1,436 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RT SYMPHONI.A - Monitoring Stack for Subscriptions Contracts EB (v1.6.2)'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: 'production'
+    Description: 'Environment name (production, staging, development)'
+    AllowedValues:
+      - production
+      - staging
+      - development
+
+  EmailAlertCritical:
+    Type: String
+    Description: 'Email address for critical alerts'
+    Default: 'alerts-critical@rt-symphonia.com'
+
+  EmailAlertWarning:
+    Type: String
+    Description: 'Email address for warning alerts'
+    Default: 'alerts-warning@rt-symphonia.com'
+
+  SlackWebhookUrl:
+    Type: String
+    Description: 'Slack webhook URL (optional, leave empty if not used)'
+    Default: ''
+    NoEcho: true
+
+  ElasticBeanstalkEnvironmentName:
+    Type: String
+    Description: 'Elastic Beanstalk environment name'
+    Default: 'subscriptions-contracts-eb-prod'
+
+Resources:
+  # ============================================================================
+  # SNS TOPICS - Notifications
+  # ============================================================================
+
+  CriticalAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'rt-symphonia-${EnvironmentName}-critical-alerts'
+      DisplayName: 'RT SYMPHONI.A Critical Alerts'
+      Subscription:
+        - Endpoint: !Ref EmailAlertCritical
+          Protocol: email
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Application
+          Value: 'subscriptions-contracts'
+        - Key: AlertLevel
+          Value: 'critical'
+
+  WarningAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'rt-symphonia-${EnvironmentName}-warning-alerts'
+      DisplayName: 'RT SYMPHONI.A Warning Alerts'
+      Subscription:
+        - Endpoint: !Ref EmailAlertWarning
+          Protocol: email
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Application
+          Value: 'subscriptions-contracts'
+        - Key: AlertLevel
+          Value: 'warning'
+
+  # ============================================================================
+  # CLOUDWATCH ALARMS - Infrastructure
+  # ============================================================================
+
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-high-cpu'
+      AlarmDescription: 'CPU utilization exceeds 80% for 5 minutes'
+      MetricName: CPUUtilization
+      Namespace: AWS/ElasticBeanstalk
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: EnvironmentName
+          Value: !Ref ElasticBeanstalkEnvironmentName
+      AlarmActions:
+        - !Ref WarningAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'infrastructure'
+
+  CriticalCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-critical-cpu'
+      AlarmDescription: 'CPU utilization exceeds 95% - CRITICAL'
+      MetricName: CPUUtilization
+      Namespace: AWS/ElasticBeanstalk
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 95
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: EnvironmentName
+          Value: !Ref ElasticBeanstalkEnvironmentName
+      AlarmActions:
+        - !Ref CriticalAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'infrastructure'
+
+  HighMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-high-memory'
+      AlarmDescription: 'Memory utilization exceeds 90%'
+      MetricName: MemoryUtilization
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: EnvironmentName
+          Value: !Ref ElasticBeanstalkEnvironmentName
+      AlarmActions:
+        - !Ref CriticalAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'infrastructure'
+
+  HighDiskUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-high-disk'
+      AlarmDescription: 'Disk space utilization exceeds 85%'
+      MetricName: DiskSpaceUtilization
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: EnvironmentName
+          Value: !Ref ElasticBeanstalkEnvironmentName
+      AlarmActions:
+        - !Ref WarningAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'infrastructure'
+
+  # ============================================================================
+  # CLOUDWATCH ALARMS - Application Performance
+  # ============================================================================
+
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-high-error-rate'
+      AlarmDescription: 'API error rate exceeds 5%'
+      MetricName: ErrorRate
+      Namespace: RT/SYMPHONIA/SubscriptionsContracts
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref CriticalAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'application'
+
+  High5xxErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-high-5xx-errors'
+      AlarmDescription: '5xx errors exceed 10 per minute'
+      MetricName: 5xxErrors
+      Namespace: RT/SYMPHONIA/SubscriptionsContracts
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref CriticalAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'application'
+
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-high-latency'
+      AlarmDescription: 'Response time P95 exceeds 1000ms'
+      MetricName: ResponseTimeP95
+      Namespace: RT/SYMPHONIA/SubscriptionsContracts
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref WarningAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'application'
+
+  MongoDBConnectionFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-mongodb-failure'
+      AlarmDescription: 'MongoDB connection failures detected'
+      MetricName: MongoDBConnectionFailures
+      Namespace: RT/SYMPHONIA/SubscriptionsContracts
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref CriticalAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'database'
+
+  # ============================================================================
+  # CLOUDWATCH ALARMS - Business Metrics
+  # ============================================================================
+
+  LowOrderVolumeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-low-order-volume'
+      AlarmDescription: 'Transport orders below expected threshold'
+      MetricName: TransportOrdersCreated
+      Namespace: RT/SYMPHONIA/SubscriptionsContracts
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref WarningAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'business'
+
+  HighDeliveryDelayRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-high-delay-rate'
+      AlarmDescription: 'Delivery delay rate exceeds 20%'
+      MetricName: DeliveryDelayRate
+      Namespace: RT/SYMPHONIA/SubscriptionsContracts
+      Statistic: Average
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref WarningAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'business'
+
+  LowCarrierScoreAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-subscriptions-contracts-low-carrier-score'
+      AlarmDescription: 'Average carrier score below 70'
+      MetricName: AverageCarrierScore
+      Namespace: RT/SYMPHONIA/SubscriptionsContracts
+      Statistic: Average
+      Period: 3600
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref WarningAlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Category
+          Value: 'business'
+
+  # ============================================================================
+  # CLOUDWATCH LOG GROUPS
+  # ============================================================================
+
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/elasticbeanstalk/${ElasticBeanstalkEnvironmentName}/application'
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Application
+          Value: 'subscriptions-contracts'
+
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/elasticbeanstalk/${ElasticBeanstalkEnvironmentName}/access'
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Application
+          Value: 'subscriptions-contracts'
+
+  ErrorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/elasticbeanstalk/${ElasticBeanstalkEnvironmentName}/errors'
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Application
+          Value: 'subscriptions-contracts'
+
+  # ============================================================================
+  # CLOUDWATCH METRIC FILTERS - Extract metrics from logs
+  # ============================================================================
+
+  ErrorLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[time, request_id, level=ERROR*, ...]'
+      LogGroupName: !Ref ApplicationLogGroup
+      MetricTransformations:
+        - MetricName: ApplicationErrors
+          MetricNamespace: RT/SYMPHONIA/SubscriptionsContracts
+          MetricValue: '1'
+          DefaultValue: 0
+
+  MongoDBErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[..., msg="*MongoDB*connection*failed*"]'
+      LogGroupName: !Ref ApplicationLogGroup
+      MetricTransformations:
+        - MetricName: MongoDBConnectionFailures
+          MetricNamespace: RT/SYMPHONIA/SubscriptionsContracts
+          MetricValue: '1'
+          DefaultValue: 0
+
+  SecurityEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[..., level=WARN*, msg="*Rate limit exceeded*" || msg="*Unauthorized*" || msg="*Invalid*token*"]'
+      LogGroupName: !Ref ApplicationLogGroup
+      MetricTransformations:
+        - MetricName: SecurityEvents
+          MetricNamespace: RT/SYMPHONIA/SubscriptionsContracts
+          MetricValue: '1'
+          DefaultValue: 0
+
+# ============================================================================
+# OUTPUTS
+# ============================================================================
+
+Outputs:
+  CriticalAlertsTopicArn:
+    Description: 'ARN of the Critical Alerts SNS Topic'
+    Value: !Ref CriticalAlertsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-CriticalAlertsTopic'
+
+  WarningAlertsTopicArn:
+    Description: 'ARN of the Warning Alerts SNS Topic'
+    Value: !Ref WarningAlertsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-WarningAlertsTopic'
+
+  ApplicationLogGroupName:
+    Description: 'Name of the Application Log Group'
+    Value: !Ref ApplicationLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationLogGroup'
+
+  ErrorLogGroupName:
+    Description: 'Name of the Error Log Group'
+    Value: !Ref ErrorLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ErrorLogGroup'
+
+  StackRegion:
+    Description: 'AWS Region where the stack is deployed'
+    Value: !Ref AWS::Region
+
+  MonitoringStackVersion:
+    Description: 'Monitoring Stack Version'
+    Value: '1.0.0'

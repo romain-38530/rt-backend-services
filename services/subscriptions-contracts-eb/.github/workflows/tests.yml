@@ -1,0 +1,214 @@
+name: E2E and Load Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'services/subscriptions-contracts-eb/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'services/subscriptions-contracts-eb/**'
+  workflow_dispatch:
+    inputs:
+      run_load_tests:
+        description: 'Run load tests'
+        required: false
+        default: 'false'
+
+env:
+  API_URL: https://rt-subscriptions-api-prod.eba-pwrpmmxu.eu-central-1.elasticbeanstalk.com
+  NODE_VERSION: '20.x'
+
+jobs:
+  e2e-tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: services/subscriptions-contracts-eb
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: services/subscriptions-contracts-eb/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        env:
+          API_URL: ${{ env.API_URL }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: npm run test:e2e
+        continue-on-error: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: services/subscriptions-contracts-eb/test-results/
+          retention-days: 30
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-html-report
+          path: services/subscriptions-contracts-eb/test-results/html/
+          retention-days: 30
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const resultsPath = 'services/subscriptions-contracts-eb/test-results/results.json';
+
+            if (fs.existsSync(resultsPath)) {
+              const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+              const { stats } = results;
+
+              const body = `## 🧪 E2E Test Results
+
+              - ✅ Passed: ${stats.expected || 0}
+              - ❌ Failed: ${stats.unexpected || 0}
+              - ⏭️ Skipped: ${stats.skipped || 0}
+              - ⏱️ Duration: ${(stats.duration / 1000).toFixed(2)}s
+
+              [View detailed report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              `;
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+  load-tests:
+    name: Load Tests (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event.inputs.run_load_tests == 'true' || github.ref == 'refs/heads/main'
+
+    defaults:
+      run:
+        working-directory: services/subscriptions-contracts-eb
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run API load test
+        env:
+          API_URL: ${{ env.API_URL }}
+        run: k6 run tests/load/api-load-test.js --out json=test-results/load-results.json
+        continue-on-error: true
+
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: services/subscriptions-contracts-eb/test-results/load-results.json
+          retention-days: 30
+
+      - name: Analyze load test results
+        if: always()
+        run: |
+          echo "📊 Load Test Summary:"
+          if [ -f test-results/load-results.json ]; then
+            echo "✅ Load test results generated"
+            # Parse and display key metrics
+            cat test-results/load-results.json | tail -20
+          else
+            echo "⚠️ No load test results found"
+          fi
+
+  mongodb-load-test:
+    name: MongoDB Load Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.inputs.run_load_tests == 'true'
+
+    defaults:
+      run:
+        working-directory: services/subscriptions-contracts-eb
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: services/subscriptions-contracts-eb/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run MongoDB load test
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: npm run test:load:mongodb
+        continue-on-error: true
+
+      - name: Upload MongoDB test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mongodb-load-test-results
+          path: services/subscriptions-contracts-eb/test-results/
+          retention-days: 30
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [e2e-tests]
+    if: always()
+
+    steps:
+      - name: Download test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results
+
+      - name: Generate test summary
+        run: |
+          echo "# 🧪 Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## E2E Tests" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f test-results/results.json ]; then
+            echo "✅ E2E tests completed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "View the detailed HTML report in the artifacts." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No test results found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- 📄 Playwright Report: Available in workflow artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 HTML Report: Available in workflow artifacts" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,10 @@
+{
+  "email": "autre-email@example.com",
+  "companyName": "Autre Nom Entreprise",
+  "siret": "11122233344455",
+  "vatNumber": "FR99988877766",
+  "phone": "+33987654321",
+  "address": "456 Different Street, 69001 Lyon",
+  "subscriptionType": "basic",
+  "source": "WEB"
+}

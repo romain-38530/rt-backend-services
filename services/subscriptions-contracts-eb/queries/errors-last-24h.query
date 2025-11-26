@@ -1,0 +1,9 @@
+# CloudWatch Logs Insights Query
+# Description: Retrieve all errors from the last 24 hours
+# Log Group: /aws/elasticbeanstalk/subscriptions-contracts-eb/application
+# Time Range: Last 24 hours
+
+fields @timestamp, level, @message, requestId, method, url, statusCode
+| filter level = "ERROR" or statusCode >= 500
+| sort @timestamp desc
+| limit 100

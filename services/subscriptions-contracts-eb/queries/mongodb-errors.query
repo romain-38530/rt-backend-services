@@ -1,0 +1,9 @@
+# CloudWatch Logs Insights Query
+# Description: Find MongoDB connection and operation errors
+# Log Group: /aws/elasticbeanstalk/subscriptions-contracts-eb/application
+# Time Range: Last 24 hours
+
+fields @timestamp, @message, requestId
+| filter @message like /MongoDB/ and (@message like /error/ or @message like /failed/ or @message like /connection/)
+| sort @timestamp desc
+| limit 100

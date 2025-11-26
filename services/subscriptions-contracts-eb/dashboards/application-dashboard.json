@@ -1,0 +1,333 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "APIRequests", { "stat": "Sum", "label": "Total Requests" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "API Requests (Total)",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "4xxErrors", { "stat": "Sum", "label": "4xx Errors", "color": "#ff9900" } ],
+          [ ".", "5xxErrors", { "stat": "Sum", "label": "5xx Errors", "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "API Errors",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "value": 10,
+              "label": "Error Threshold",
+              "color": "#d62728"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "ErrorRate", { "stat": "Average", "label": "Error Rate" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Error Rate",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 100,
+            "label": "Percent"
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "value": 5,
+              "label": "Critical Threshold",
+              "color": "#d62728"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "ResponseTime", { "stat": "Average", "label": "Average" } ],
+          [ "...", { "stat": "p50", "label": "p50" } ],
+          [ "...", { "stat": "p95", "label": "p95" } ],
+          [ "...", { "stat": "p99", "label": "p99" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Response Time (Latency)",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Milliseconds"
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "value": 1000,
+              "label": "SLA Threshold (1s)",
+              "color": "#ff9900"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "ResponseTimeP50", { "label": "p50" } ],
+          [ ".", "ResponseTimeP95", { "label": "p95" } ],
+          [ ".", "ResponseTimeP99", { "label": "p99" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Response Time Percentiles",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Milliseconds"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "MongoDBOperations", { "stat": "Sum", "label": "Total Operations" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "MongoDB Operations",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "MongoDBConnectionFailures", { "stat": "Sum", "label": "Connection Failures", "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "MongoDB Connection Failures",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "MongoDBHealthy", { "stat": "Average", "label": "MongoDB Status" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "MongoDB Health Status",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 1,
+            "label": "Healthy (1) / Unhealthy (0)"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 18,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "MongoDBOperationDuration", { "stat": "Average", "label": "Average Duration" } ],
+          [ "...", { "stat": "p95", "label": "p95 Duration" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "MongoDB Operation Duration",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Milliseconds"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 18,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "SlowRequests", { "stat": "Sum", "label": "Slow Requests (>1s)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Slow Requests",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 24,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "SecurityEvents", { "stat": "Sum", "label": "Security Events" } ],
+          [ ".", "RateLimitExceeded", { "stat": "Sum", "label": "Rate Limit Exceeded" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Security Events",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 24,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "ApplicationErrors", { "stat": "Sum", "label": "Application Errors" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Application Errors (from Logs)",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 30,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/elasticbeanstalk/subscriptions-contracts-eb/application'\n| fields @timestamp, method, url, statusCode, duration\n| filter statusCode >= 500\n| sort duration desc\n| limit 20",
+        "region": "eu-central-1",
+        "title": "Recent 5xx Errors (Slowest First)",
+        "stacked": false
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 36,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/elasticbeanstalk/subscriptions-contracts-eb/application'\n| fields @timestamp, endpoint, duration\n| filter duration > 1000\n| sort duration desc\n| limit 20",
+        "region": "eu-central-1",
+        "title": "Slowest Requests (>1s)",
+        "stacked": false
+      }
+    }
+  ]
+}

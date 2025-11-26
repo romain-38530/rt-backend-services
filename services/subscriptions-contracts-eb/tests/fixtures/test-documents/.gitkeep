@@ -1,0 +1,5 @@
+# This directory contains mock documents for testing
+# Add mock PDF files here for document upload tests:
+# - mock-bl.pdf
+# - mock-cmr.pdf
+# - mock-pod.pdf

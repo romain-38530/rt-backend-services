@@ -1,0 +1,10 @@
+{
+  "email": "transport.express@example.com",
+  "companyName": "Transport Express SARL",
+  "siret": "88877766655544",
+  "vatNumber": "FR88877766655",
+  "phone": "+33612345678",
+  "address": "25 Avenue du Transport, 69100 Lyon",
+  "invitedBy": "industrial_rt_groupe",
+  "referenceMode": "direct"
+}

@@ -1,0 +1,10 @@
+{
+  "email": "test-duplicate@example.com",
+  "companyName": "Test Duplicate Detection",
+  "siret": "99988877766655",
+  "vatNumber": "FR99988877766",
+  "phone": "+33123456789",
+  "address": "123 Test Street, 75001 Paris",
+  "subscriptionType": "premium",
+  "source": "WEB"
+}

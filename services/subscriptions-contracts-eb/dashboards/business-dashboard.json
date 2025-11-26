@@ -1,0 +1,337 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "TransportOrdersCreated", { "stat": "Sum", "label": "Orders Created" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Transport Orders Created",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "DeliveryCompleted", { "stat": "Sum", "label": "Deliveries Completed" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Deliveries Completed",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "OrderRevenue", { "stat": "Sum", "label": "Total Revenue" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Order Revenue (EUR)",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "label": "EUR"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "DeliveryDelayRate", { "stat": "Average", "label": "Delay Rate" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Delivery Delay Rate",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 100,
+            "label": "Percent"
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "value": 20,
+              "label": "Target Threshold (20%)",
+              "color": "#ff9900"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "DeliveryDelay", { "stat": "Average", "label": "Average Delay" } ],
+          [ "...", { "stat": "Maximum", "label": "Maximum Delay" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Delivery Delay Duration",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "label": "Minutes"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "AverageCarrierScore", { "stat": "Average", "label": "Average Score" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Average Carrier Score",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 100,
+            "label": "Score"
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "value": 70,
+              "label": "Minimum Acceptable Score",
+              "color": "#ff9900"
+            },
+            {
+              "value": 85,
+              "label": "Good Score",
+              "color": "#2ca02c"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "CarrierScoreUpdates", { "stat": "Sum", "label": "Score Updates" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Carrier Score Updates",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 18,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "ECMRSignatures", { "stat": "Sum", "label": "Total Signatures" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "e-CMR Signatures",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 18,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "SignatureTime", { "stat": "Average", "label": "Average Signature Time" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "e-CMR Signature Time",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "label": "Milliseconds"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 18,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "SubscriptionEvents", { "stat": "Sum", "label": "Subscription Events" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Subscription Events",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "label": "Count"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 24,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "SubscriptionRevenue", { "stat": "Sum", "label": "Subscription Revenue" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Subscription Revenue (EUR)",
+        "period": 86400,
+        "yAxis": {
+          "left": {
+            "label": "EUR"
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 24,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ { "expression": "m1 + m2", "label": "Total Revenue", "id": "e1" } ],
+          [ "RT/SYMPHONIA/SubscriptionsContracts", "OrderRevenue", { "stat": "Sum", "id": "m1", "visible": false } ],
+          [ ".", "SubscriptionRevenue", { "stat": "Sum", "id": "m2", "visible": false } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Total Revenue (Orders + Subscriptions)",
+        "period": 86400,
+        "yAxis": {
+          "left": {
+            "label": "EUR"
+          }
+        }
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 30,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/elasticbeanstalk/subscriptions-contracts-eb/business-metrics'\n| fields @timestamp, metric, value, metadata.orderId\n| filter metric = \"transport_order_created\"\n| sort @timestamp desc\n| limit 20",
+        "region": "eu-central-1",
+        "title": "Recent Transport Orders",
+        "stacked": false
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 36,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/elasticbeanstalk/subscriptions-contracts-eb/business-metrics'\n| fields @timestamp, metric, value, metadata.onTime, metadata.delay\n| filter metric = \"delivery_completed\" and metadata.onTime = false\n| sort metadata.delay desc\n| limit 20",
+        "region": "eu-central-1",
+        "title": "Recent Delayed Deliveries",
+        "stacked": false
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 42,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/elasticbeanstalk/subscriptions-contracts-eb/business-metrics'\n| fields @timestamp, metric, value, metadata.carrierId, metadata.newScore\n| filter metric = \"carrier_score_updated\"\n| sort @timestamp desc\n| limit 20",
+        "region": "eu-central-1",
+        "title": "Recent Carrier Score Updates",
+        "stacked": false
+      }
+    }
+  ]
+}

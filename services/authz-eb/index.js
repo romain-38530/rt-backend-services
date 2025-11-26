@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const { MongoClient } = require('mongodb');
 const fetch = require('node-fetch');
+const { setupCarrierRoutes } = require('./carriers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -364,15 +365,19 @@ app.get('/health', async (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    message: 'RT Authentication API with VAT Validation',
-    version: '2.2.0',
+    message: 'RT Authentication API with VAT Validation & Carrier Management',
+    version: '3.0.0',
     features: [
       'Express',
       'MongoDB',
       'CORS',
       'Helmet',
       'VAT Validation (Multi-API Fallback: VIES -> AbstractAPI -> APILayer)',
-      'Price Calculation'
+      'Price Calculation',
+      'Carrier Management System (SYMPHONI.A)',
+      'Document Vigilance System',
+      'Dynamic Scoring Algorithm',
+      'Dispatch Chain Management'
     ],
     endpoints: [
       'GET /health',
@@ -380,7 +385,16 @@ app.get('/', (req, res) => {
       'POST /api/vat/validate-format',
       'POST /api/vat/validate',
       'POST /api/vat/calculate-price',
-      'POST /api/onboarding/submit'
+      'POST /api/onboarding/submit',
+      'POST /api/carriers/invite',
+      'POST /api/carriers/onboard',
+      'GET /api/carriers',
+      'GET /api/carriers/:carrierId',
+      'POST /api/carriers/:carrierId/documents',
+      'PUT /api/carriers/:carrierId/documents/:documentId/verify',
+      'POST /api/carriers/:carrierId/pricing-grids',
+      'POST /api/carriers/:carrierId/calculate-score',
+      'POST /api/dispatch-chains'
     ]
   });
 });
@@ -724,6 +738,12 @@ app.post('/api/onboarding/submit', async (req, res) => {
 // Start server
 async function startServer() {
   await connectMongoDB();
+
+  // Setup carrier management routes after MongoDB connection
+  if (mongoConnected && db) {
+    setupCarrierRoutes(app, db);
+    console.log('✓ Carrier management routes configured');
+  }
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log('RT Authentication API listening on port ' + PORT);

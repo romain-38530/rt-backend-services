@@ -1,0 +1,9 @@
+# CloudWatch Logs Insights Query
+# Description: Find slow API requests (>1000ms)
+# Log Group: /aws/elasticbeanstalk/subscriptions-contracts-eb/application
+# Time Range: Last 1 hour
+
+fields @timestamp, method, url, duration, statusCode, requestId
+| filter duration > 1000
+| sort duration desc
+| limit 50

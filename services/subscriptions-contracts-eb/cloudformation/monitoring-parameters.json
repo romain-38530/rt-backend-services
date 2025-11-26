@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "EnvironmentName",
+    "ParameterValue": "production"
+  },
+  {
+    "ParameterKey": "EmailAlertCritical",
+    "ParameterValue": "tech@rt-symphonia.com"
+  },
+  {
+    "ParameterKey": "EmailAlertWarning",
+    "ParameterValue": "tech@rt-symphonia.com"
+  },
+  {
+    "ParameterKey": "ElasticBeanstalkEnvironmentName",
+    "ParameterValue": "rt-subscriptions-api-prod"
+  },
+  {
+    "ParameterKey": "SlackWebhookUrl",
+    "ParameterValue": ""
+  }
+]

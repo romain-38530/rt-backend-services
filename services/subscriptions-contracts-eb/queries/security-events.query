@@ -1,0 +1,9 @@
+# CloudWatch Logs Insights Query
+# Description: Retrieve all security events
+# Log Group: /aws/elasticbeanstalk/subscriptions-contracts-eb/security
+# Time Range: Last 24 hours
+
+fields @timestamp, eventType, severity, details.ip, details.userId
+| filter severity = "critical" or severity = "warning"
+| sort @timestamp desc
+| limit 100

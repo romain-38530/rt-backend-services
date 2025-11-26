@@ -1,0 +1,9 @@
+# CloudWatch Logs Insights Query
+# Description: Analyze API request patterns by endpoint
+# Log Group: /aws/elasticbeanstalk/subscriptions-contracts-eb/application
+# Time Range: Last 1 hour
+
+fields method, url, statusCode, duration
+| stats count(*) as request_count, avg(duration) as avg_duration, max(duration) as max_duration by url, method
+| sort request_count desc
+| limit 50

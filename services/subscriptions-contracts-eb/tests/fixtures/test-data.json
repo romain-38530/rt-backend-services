@@ -1,0 +1,180 @@
+{
+  "users": {
+    "admin": {
+      "email": "admin@rt-test.com",
+      "password": "AdminTest123!",
+      "role": "admin"
+    },
+    "client": {
+      "email": "client@rt-test.com",
+      "password": "ClientTest123!",
+      "role": "client"
+    },
+    "carrier": {
+      "email": "carrier@rt-test.com",
+      "password": "CarrierTest123!",
+      "role": "carrier"
+    }
+  },
+  "transportOrders": {
+    "standard": {
+      "pickupLocation": {
+        "address": "10 Rue de Rivoli",
+        "city": "Paris",
+        "postalCode": "75001",
+        "country": "FR",
+        "coordinates": {
+          "lat": 48.8566,
+          "lng": 2.3522
+        }
+      },
+      "deliveryLocation": {
+        "address": "1 Place Bellecour",
+        "city": "Lyon",
+        "postalCode": "69002",
+        "country": "FR",
+        "coordinates": {
+          "lat": 45.7578,
+          "lng": 4.8320
+        }
+      },
+      "goods": [
+        {
+          "description": "Electronic Components",
+          "weight": 250,
+          "quantity": 5,
+          "dimensions": {
+            "length": 100,
+            "width": 80,
+            "height": 60
+          },
+          "value": 5000
+        }
+      ],
+      "transportType": "standard",
+      "urgency": "normal"
+    },
+    "urgent": {
+      "pickupLocation": {
+        "address": "50 Avenue des Champs-Élysées",
+        "city": "Paris",
+        "postalCode": "75008",
+        "country": "FR",
+        "coordinates": {
+          "lat": 48.8698,
+          "lng": 2.3078
+        }
+      },
+      "deliveryLocation": {
+        "address": "1 Place du Capitole",
+        "city": "Toulouse",
+        "postalCode": "31000",
+        "country": "FR",
+        "coordinates": {
+          "lat": 43.6047,
+          "lng": 1.4442
+        }
+      },
+      "goods": [
+        {
+          "description": "Medical Supplies",
+          "weight": 50,
+          "quantity": 1,
+          "dimensions": {
+            "length": 50,
+            "width": 40,
+            "height": 30
+          },
+          "value": 10000
+        }
+      ],
+      "transportType": "express",
+      "urgency": "urgent"
+    }
+  },
+  "carriers": {
+    "standard": {
+      "name": "Transport Express France",
+      "siret": "12345678901234",
+      "vatNumber": "FR12345678901",
+      "email": "contact@transport-express.fr",
+      "phone": "+33123456789",
+      "address": {
+        "street": "123 Avenue de la République",
+        "city": "Lyon",
+        "postalCode": "69003",
+        "country": "FR"
+      },
+      "transportTypes": ["standard", "express"],
+      "capacity": {
+        "maxWeight": 10000,
+        "maxVolume": 30,
+        "vehicleCount": 15
+      }
+    },
+    "premium": {
+      "name": "Logistique Premium SAS",
+      "siret": "98765432109876",
+      "vatNumber": "FR98765432109",
+      "email": "contact@logistique-premium.fr",
+      "phone": "+33987654321",
+      "address": {
+        "street": "456 Boulevard Haussmann",
+        "city": "Paris",
+        "postalCode": "75009",
+        "country": "FR"
+      },
+      "transportTypes": ["standard", "express", "special"],
+      "capacity": {
+        "maxWeight": 25000,
+        "maxVolume": 80,
+        "vehicleCount": 50
+      }
+    }
+  },
+  "documents": {
+    "types": ["BL", "CMR", "POD", "INVOICE", "CUSTOMS"],
+    "mockFiles": {
+      "bl": "tests/fixtures/test-documents/mock-bl.pdf",
+      "cmr": "tests/fixtures/test-documents/mock-cmr.pdf",
+      "pod": "tests/fixtures/test-documents/mock-pod.pdf"
+    }
+  },
+  "locations": {
+    "paris": {
+      "city": "Paris",
+      "coordinates": { "lat": 48.8566, "lng": 2.3522 },
+      "postalCode": "75001"
+    },
+    "lyon": {
+      "city": "Lyon",
+      "coordinates": { "lat": 45.7640, "lng": 4.8357 },
+      "postalCode": "69001"
+    },
+    "marseille": {
+      "city": "Marseille",
+      "coordinates": { "lat": 43.2965, "lng": 5.3698 },
+      "postalCode": "13001"
+    },
+    "toulouse": {
+      "city": "Toulouse",
+      "coordinates": { "lat": 43.6047, "lng": 1.4442 },
+      "postalCode": "31000"
+    },
+    "lille": {
+      "city": "Lille",
+      "coordinates": { "lat": 50.6292, "lng": 3.0573 },
+      "postalCode": "59000"
+    }
+  },
+  "tracking": {
+    "gpsPoints": [
+      { "lat": 48.8566, "lng": 2.3522, "speed": 50, "heading": 180 },
+      { "lat": 48.5734, "lng": 2.4345, "speed": 80, "heading": 180 },
+      { "lat": 47.9029, "lng": 3.0789, "speed": 90, "heading": 180 },
+      { "lat": 47.0502, "lng": 3.8734, "speed": 85, "heading": 180 },
+      { "lat": 46.3422, "lng": 4.5234, "speed": 70, "heading": 180 },
+      { "lat": 45.7640, "lng": 4.8357, "speed": 40, "heading": 180 }
+    ]
+  }
+}
