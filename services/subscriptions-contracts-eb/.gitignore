@@ -3,3 +3,12 @@
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+
+# External Services Configuration (SECRETS - DO NOT COMMIT!)
+.env.external-services
+.env.ovhcloud
+google-credentials.json
+
+# EB Extensions with real credentials (DO NOT COMMIT!)
+.ebextensions/*.config
+!.ebextensions/*.config.example

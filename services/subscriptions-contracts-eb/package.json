@@ -4,7 +4,15 @@
   "description": "RT Subscriptions & Contracts API for Elastic Beanstalk",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "playwright test",
+    "test:e2e": "playwright test tests/e2e",
+    "test:load": "k6 run tests/load/api-load-test.js",
+    "test:load:mongodb": "node tests/load/mongodb-load-test.js",
+    "test:load:websocket": "k6 run tests/load/websocket-load-test.js",
+    "test:coverage": "playwright test --coverage",
+    "test:all": "npm run test:e2e && npm run test:load",
+    "generate:test-data": "node tests/load/generate-test-data.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -19,11 +27,19 @@
     "qrcode": "^1.5.3",
     "@aws-sdk/client-s3": "^3.490.0",
     "@aws-sdk/client-glacier": "^3.490.0",
+    "@aws-sdk/client-cloudwatch": "^3.490.0",
     "jsonwebtoken": "^9.0.2",
     "bcrypt": "^5.1.1",
     "stripe": "^14.10.0",
     "mailgun.js": "^9.4.1",
-    "form-data": "^4.0.0"
+    "form-data": "^4.0.0",
+    "ovh": "^2.0.6",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "k6": "^0.0.0",
+    "dotenv": "^16.3.1"
   },
   "keywords": [],
   "author": "",
