@@ -18,6 +18,7 @@ const {
   DefaultConfig
 } = require('./planning-models');
 const { PlanningNotificationService } = require('./planning-notification-service');
+const { PlanningAIOptimizer } = require('./planning-ai-optimizer');
 
 // ============================================================================
 // CLASSE PRINCIPALE: PlanningService
@@ -34,6 +35,8 @@ class PlanningService {
     this.transportOrders = db.collection('transport_orders');
     this.carriers = db.collection('carriers');
     this.notificationService = new PlanningNotificationService(db);
+    this.aiOptimizer = new PlanningAIOptimizer();
+    console.log('✅ Planning Service with AI Optimizer initialized');
   }
 
   // ==========================================================================

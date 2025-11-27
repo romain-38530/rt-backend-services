@@ -90,7 +90,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: 'v2.0.0-chatbot-suite',
+    version: 'v2.0.2-ai-enhanced',
     features: [
       'express', 'advanced-security', 'rate-limiting', 'cors', 'helmet',
       'input-sanitization', 'mongodb', 'subscriptions', 'contracts', 'ecmr',
@@ -136,7 +136,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT SYMPHONI.A - Subscriptions & Contracts API + Suite Chatbots',
-    version: 'v2.0.0-chatbot-suite',
+    version: 'v2.0.2-ai-enhanced',
     description: 'Transport Management System with Advanced Security + AFFRET.IA + Planning + Suite Chatbots Intelligents',
     features: [
       'Express.js',
@@ -1086,7 +1086,7 @@ async function startServer() {
     console.log('============================================================================');
     console.log('🚀 RT SYMPHONI.A v2.0.0 - Suite Chatbots Intelligents');
     console.log('============================================================================');
-    console.log('Version: v2.0.0-chatbot-suite');
+    console.log('Version: v2.0.2-ai-enhanced');
     console.log('Port: ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? '✅ Connected' : '❌ Not connected'));

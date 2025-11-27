@@ -15,6 +15,7 @@
 const { ObjectId } = require('mongodb');
 const crypto = require('crypto');
 const https = require('https');
+const { ClaudeIntegrationService } = require('./claude-integration');
 const {
   ChatbotTypes,
   UserRoles,
@@ -112,6 +113,8 @@ class RTHelpBot {
 
     // Cache pour les FAQ frequentes
     this.faqCache = new Map();
+    this.claudeService = new ClaudeIntegrationService();
+    console.log('✅ RT HelpBot initialized with Claude IA:', this.claudeService.isEnabled());
     this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
   }
 
@@ -443,7 +446,7 @@ class RTHelpBot {
       return response;
     }
 
-    // Rechercher dans les FAQ
+    // Rechercher dans les FAQ (rapide)
     const faqs = await this._searchFAQs(content, conversation.chatbotType);
     if (faqs.length > 0) {
       response.content = faqs[0].answer;
@@ -461,7 +464,45 @@ class RTHelpBot {
       return response;
     }
 
-    // Rechercher dans la base de connaissances
+    // Utiliser Claude IA pour une reponse intelligente
+    if (this.claudeService && this.claudeService.isEnabled()) {
+      try {
+        const claudeResponse = await this.claudeService.generateResponse({
+          chatbotType: conversation.chatbotType,
+          userRole: conversation.userRole,
+          userMessage: content,
+          conversationHistory: conversation.messages || [],
+          context: {
+            priority: analysis.priority,
+            category: analysis.category,
+            module: analysis.module,
+            orderNumber: conversation.context?.orderReference
+          }
+        });
+
+        if (claudeResponse.success) {
+          response.content = claudeResponse.response;
+          response.suggestions = [
+            'Cela repond a ma question',
+            'J\'ai besoin de plus de details',
+            'Parler a un technicien'
+          ];
+
+          // Ajouter metadata Claude
+          response.metadata = {
+            generatedBy: 'claude',
+            tokensUsed: claudeResponse.usage
+          };
+
+          return response;
+        }
+      } catch (error) {
+        console.error('❌ Erreur Claude AI, fallback vers reponses statiques:', error.message);
+        // Continue vers les reponses statiques en cas d'erreur
+      }
+    }
+
+    // Fallback: Rechercher dans la base de connaissances
     const articles = await this._searchKnowledgeBase(content, analysis);
     if (articles.length > 0) {
       response.articles = articles.slice(0, 3);
@@ -477,7 +518,7 @@ class RTHelpBot {
       return response;
     }
 
-    // Reponse basee sur la categorie
+    // Derniere option: Reponse basee sur la categorie
     response.content = this._getCategoryResponse(analysis.category, analysis.module);
     response.suggestions = this._getCategorySuggestions(analysis.category);
 

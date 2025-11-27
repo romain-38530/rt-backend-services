@@ -1,7 +1,7 @@
 {
   "name": "rt-subscriptions-contracts-api",
-  "version": "2.0.0",
-  "description": "RT SYMPHONI.A v2.0.0 - Subscriptions & Contracts API + AFFRET.IA + Planning + Suite Chatbots Intelligents for Elastic Beanstalk",
+  "version": "2.0.2",
+  "description": "RT SYMPHONI.A v2.0.2 - Subscriptions & Contracts API + Suite Chatbots avec Claude IA + Optimisation IA AFFRET.IA & Planning",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -28,9 +28,23 @@
     "ovh": "^2.0.3",
     "twilio": "^4.23.0",
     "node-fetch": "^2.7.0",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "@anthropic-ai/sdk": "^0.30.1"
   },
-  "keywords": ["transport", "logistics", "tms", "symphonia", "affretia", "freight", "chatbot", "helpbot", "ticketing", "support"],
+  "keywords": [
+    "transport",
+    "logistics",
+    "tms",
+    "symphonia",
+    "affretia",
+    "freight",
+    "chatbot",
+    "helpbot",
+    "ticketing",
+    "support",
+    "claude",
+    "ai"
+  ],
   "author": "RT SYMPHONI.A",
   "license": "ISC",
   "type": "commonjs"

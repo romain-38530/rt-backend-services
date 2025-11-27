@@ -14,6 +14,7 @@
  */
 
 const { ObjectId } = require('mongodb');
+const { ClaudeIntegrationService } = require('./claude-integration');
 const crypto = require('crypto');
 const {
   ChatbotTypes,
@@ -38,6 +39,7 @@ class BaseAssistant {
     this.conversations = db.collection('chatbot_conversations');
     this.users = db.collection('users');
     this.organizations = db.collection('organizations');
+    this.claudeService = new ClaudeIntegrationService();
   }
 
   /**
