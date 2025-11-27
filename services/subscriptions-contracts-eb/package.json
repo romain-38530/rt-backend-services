@@ -1,18 +1,10 @@
 {
   "name": "rt-subscriptions-contracts-api",
-  "version": "1.0.0",
-  "description": "RT Subscriptions & Contracts API for Elastic Beanstalk",
+  "version": "2.0.1",
+  "description": "RT SYMPHONI.A v2.0.1 - Subscriptions & Contracts API + AFFRET.IA + Planning + Suite Chatbots Intelligents avec Claude IA",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "playwright test",
-    "test:e2e": "playwright test tests/e2e",
-    "test:load": "k6 run tests/load/api-load-test.js",
-    "test:load:mongodb": "node tests/load/mongodb-load-test.js",
-    "test:load:websocket": "k6 run tests/load/websocket-load-test.js",
-    "test:coverage": "playwright test --coverage",
-    "test:all": "npm run test:e2e && npm run test:load",
-    "generate:test-data": "node tests/load/generate-test-data.js"
+    "start": "node index.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -27,22 +19,33 @@
     "qrcode": "^1.5.3",
     "@aws-sdk/client-s3": "^3.490.0",
     "@aws-sdk/client-glacier": "^3.490.0",
-    "@aws-sdk/client-cloudwatch": "^3.490.0",
     "jsonwebtoken": "^9.0.2",
     "bcrypt": "^5.1.1",
     "stripe": "^14.10.0",
     "mailgun.js": "^9.4.1",
     "form-data": "^4.0.0",
-    "ovh": "^2.0.6",
-    "axios": "^1.6.2"
+    "axios": "^1.6.2",
+    "ovh": "^2.0.3",
+    "twilio": "^4.23.0",
+    "node-fetch": "^2.7.0",
+    "ws": "^8.16.0",
+    "@anthropic-ai/sdk": "^0.30.1"
   },
-  "devDependencies": {
-    "@playwright/test": "^1.40.0",
-    "k6": "^0.0.0",
-    "dotenv": "^16.3.1"
-  },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "transport",
+    "logistics",
+    "tms",
+    "symphonia",
+    "affretia",
+    "freight",
+    "chatbot",
+    "helpbot",
+    "ticketing",
+    "support",
+    "claude",
+    "ai"
+  ],
+  "author": "RT SYMPHONI.A",
   "license": "ISC",
   "type": "commonjs"
 }
