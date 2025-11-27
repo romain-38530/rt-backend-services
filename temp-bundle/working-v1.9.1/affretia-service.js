@@ -4,6 +4,7 @@
  * Version: 1.0.0
  */
 
+const { AffretiaAIEnhancement } = require('./affretia-ai-enhancement');
 const { ObjectId } = require('mongodb');
 const crypto = require('crypto');
 const {
@@ -20,6 +21,9 @@ const {
   DefaultConfig
 } = require('./affretia-models');
 
+
+// AI Enhancement Service
+const affretiaAI = new AffretiaAIEnhancement();
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
