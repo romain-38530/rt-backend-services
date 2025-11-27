@@ -1035,6 +1035,297 @@ function createPlanningRoutes(db, eventEmitter = null) {
   });
 
   // ========================================================================
+  // AI OPTIMIZATION ENDPOINTS
+  // ========================================================================
+
+  /**
+   * POST /ai/optimize-slots
+   * Optimisation IA de l'allocation des créneaux RDV
+   */
+  router.post('/ai/optimize-slots', async (req, res) => {
+    try {
+      const { sitePlanningId, rdvRequests, availableSlots, constraints } = req.body;
+
+      if (!sitePlanningId || !rdvRequests || !availableSlots) {
+        return res.status(400).json({
+          success: false,
+          error: 'sitePlanningId, rdvRequests et availableSlots requis'
+        });
+      }
+
+      // Récupérer le site planning
+      const sitePlanning = await planningService.getSitePlanning(sitePlanningId);
+      if (!sitePlanning) {
+        return res.status(404).json({
+          success: false,
+          error: 'Site planning non trouvé'
+        });
+      }
+
+      const result = await planningService.aiOptimizer.optimizeSlotAllocation(
+        sitePlanning,
+        rdvRequests,
+        availableSlots,
+        constraints || {}
+      );
+
+      if (!result.optimized) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          allocation: result.allocation,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[Planning AI] Erreur optimize-slots:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /ai/resolve-conflicts
+   * Résolution IA automatique des conflits de planning
+   */
+  router.post('/ai/resolve-conflicts', async (req, res) => {
+    try {
+      const { sitePlanningId, conflicts, allRdvs } = req.body;
+
+      if (!sitePlanningId || !conflicts || !Array.isArray(conflicts)) {
+        return res.status(400).json({
+          success: false,
+          error: 'sitePlanningId et conflicts (array) requis'
+        });
+      }
+
+      const sitePlanning = await planningService.getSitePlanning(sitePlanningId);
+      if (!sitePlanning) {
+        return res.status(404).json({
+          success: false,
+          error: 'Site planning non trouvé'
+        });
+      }
+
+      const result = await planningService.aiOptimizer.resolveSchedulingConflicts(
+        conflicts,
+        sitePlanning,
+        allRdvs || []
+      );
+
+      if (!result.resolved) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          solutions: result.solutions,
+          priority: result.priority,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[Planning AI] Erreur resolve-conflicts:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /ai/predict-bottlenecks
+   * Prédiction IA des goulots d'étranglement futurs
+   */
+  router.post('/ai/predict-bottlenecks', async (req, res) => {
+    try {
+      const { sitePlanningId, historicalData, upcomingRdvs } = req.body;
+
+      if (!sitePlanningId) {
+        return res.status(400).json({
+          success: false,
+          error: 'sitePlanningId requis'
+        });
+      }
+
+      const sitePlanning = await planningService.getSitePlanning(sitePlanningId);
+      if (!sitePlanning) {
+        return res.status(404).json({
+          success: false,
+          error: 'Site planning non trouvé'
+        });
+      }
+
+      const result = await planningService.aiOptimizer.predictBottlenecks(
+        sitePlanning,
+        historicalData || [],
+        upcomingRdvs || []
+      );
+
+      if (!result.predicted) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          bottlenecks: result.bottlenecks,
+          trends: result.trends,
+          recommendations: result.recommendations,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[Planning AI] Erreur predict-bottlenecks:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /ai/suggest-reorganization
+   * Suggestion IA de réorganisation en cas de crise
+   */
+  router.post('/ai/suggest-reorganization', async (req, res) => {
+    try {
+      const { sitePlanningId, currentRdvs, issue } = req.body;
+
+      if (!sitePlanningId || !issue) {
+        return res.status(400).json({
+          success: false,
+          error: 'sitePlanningId et issue requis'
+        });
+      }
+
+      const sitePlanning = await planningService.getSitePlanning(sitePlanningId);
+      if (!sitePlanning) {
+        return res.status(404).json({
+          success: false,
+          error: 'Site planning non trouvé'
+        });
+      }
+
+      const result = await planningService.aiOptimizer.suggestReorganization(
+        sitePlanning,
+        currentRdvs || [],
+        issue
+      );
+
+      if (!result.suggested) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          reorganization: result.reorganization,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[Planning AI] Erreur suggest-reorganization:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /ai/analyze-efficiency
+   * Analyse IA de l'efficacité du planning
+   */
+  router.post('/ai/analyze-efficiency', async (req, res) => {
+    try {
+      const { sitePlanningId, rdvs, metrics } = req.body;
+
+      if (!sitePlanningId || !metrics) {
+        return res.status(400).json({
+          success: false,
+          error: 'sitePlanningId et metrics requis'
+        });
+      }
+
+      const sitePlanning = await planningService.getSitePlanning(sitePlanningId);
+      if (!sitePlanning) {
+        return res.status(404).json({
+          success: false,
+          error: 'Site planning non trouvé'
+        });
+      }
+
+      const result = await planningService.aiOptimizer.analyzePlanningEfficiency(
+        sitePlanning,
+        rdvs || [],
+        metrics
+      );
+
+      if (!result.analyzed) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          insights: result.insights,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[Planning AI] Erreur analyze-efficiency:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /ai/status
+   * Statut du service IA Planning
+   */
+  router.get('/ai/status', (req, res) => {
+    const stats = planningService.aiOptimizer.getStats();
+    res.json({
+      success: true,
+      data: stats
+    });
+  });
+
+  // ========================================================================
   // ROUTES TYPES ET REFERENCES
   // ========================================================================
 

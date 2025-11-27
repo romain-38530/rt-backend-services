@@ -1064,6 +1064,273 @@ function configureAffretiaRoutes(app, db, authenticateToken) {
   });
 
   // ============================================================================
+  // AI ENHANCEMENT ENDPOINTS
+  // ============================================================================
+
+  /**
+   * POST /api/affretia/ai/analyze-mission
+   * Analyse intelligente d'une mission de transport avec recommandations IA
+   */
+  app.post('/api/affretia/ai/analyze-mission', authenticateToken, async (req, res) => {
+    try {
+      const { mission, orderDetails } = req.body;
+
+      if (!mission) {
+        return res.status(400).json({
+          success: false,
+          error: 'Données de mission requises'
+        });
+      }
+
+      const result = await affretiaService.affretiaAI.enhanceTransportAnalysis(mission, orderDetails);
+
+      if (!result.enhanced) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          analysis: result.analysis,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[AFFRET.IA AI] Erreur analyze-mission:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/affretia/ai/optimize-shortlist
+   * Optimisation IA de la shortlist transporteurs
+   */
+  app.post('/api/affretia/ai/optimize-shortlist', authenticateToken, async (req, res) => {
+    try {
+      const { candidates, mission, sessionContext } = req.body;
+
+      if (!candidates || !Array.isArray(candidates)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Liste de candidats requise'
+        });
+      }
+
+      const result = await affretiaService.affretiaAI.optimizeCarrierShortlist(
+        candidates,
+        mission || {},
+        sessionContext || {}
+      );
+
+      if (!result.optimized) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          recommendations: result.recommendations,
+          summary: result.summary,
+          alternativeStrategy: result.alternativeStrategy,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[AFFRET.IA AI] Erreur optimize-shortlist:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/affretia/ai/generate-offer-description
+   * Génération IA d'une description d'offre professionnelle
+   */
+  app.post('/api/affretia/ai/generate-offer-description', authenticateToken, async (req, res) => {
+    try {
+      const { mission, targetCarriers } = req.body;
+
+      if (!mission) {
+        return res.status(400).json({
+          success: false,
+          error: 'Données de mission requises'
+        });
+      }
+
+      const result = await affretiaService.affretiaAI.generateOfferDescription(
+        mission,
+        targetCarriers || []
+      );
+
+      if (!result.generated) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          description: result.description,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[AFFRET.IA AI] Erreur generate-offer:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/affretia/ai/suggest-negotiation
+   * Suggestion IA de stratégie de négociation
+   */
+  app.post('/api/affretia/ai/suggest-negotiation', authenticateToken, async (req, res) => {
+    try {
+      const { sessionId, carrierResponse } = req.body;
+
+      if (!sessionId || !carrierResponse) {
+        return res.status(400).json({
+          success: false,
+          error: 'sessionId et carrierResponse requis'
+        });
+      }
+
+      // Récupérer la session
+      const session = await affretiaService.getSession(db, sessionId);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          error: 'Session non trouvée'
+        });
+      }
+
+      const result = await affretiaService.affretiaAI.suggestNegotiationStrategy(
+        session,
+        carrierResponse
+      );
+
+      if (!result.suggested) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          strategy: result.strategy,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[AFFRET.IA AI] Erreur suggest-negotiation:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/affretia/ai/analyze-responses
+   * Analyse IA des réponses transporteurs
+   */
+  app.post('/api/affretia/ai/analyze-responses', authenticateToken, async (req, res) => {
+    try {
+      const { sessionId } = req.body;
+
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          error: 'sessionId requis'
+        });
+      }
+
+      // Récupérer la session avec les réponses
+      const session = await affretiaService.getSession(db, sessionId);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          error: 'Session non trouvée'
+        });
+      }
+
+      const responses = session.responses || [];
+      if (responses.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Aucune réponse à analyser'
+        });
+      }
+
+      const result = await affretiaService.affretiaAI.analyzeResponses(
+        responses,
+        session.mission || {}
+      );
+
+      if (!result.analyzed) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service IA non disponible',
+          fallback: true
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          insights: result.insights,
+          tokensUsed: result.tokensUsed
+        }
+      });
+
+    } catch (error) {
+      console.error('[AFFRET.IA AI] Erreur analyze-responses:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/affretia/ai/status
+   * Statut du service IA AFFRET.IA
+   */
+  app.get('/api/affretia/ai/status', authenticateToken, (req, res) => {
+    const stats = affretiaService.affretiaAI.getStats();
+    res.json({
+      success: true,
+      data: stats
+    });
+  });
+
+  // ============================================================================
   // CONSTANTES (pour le frontend)
   // ============================================================================
 
