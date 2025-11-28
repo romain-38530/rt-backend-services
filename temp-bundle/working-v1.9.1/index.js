@@ -25,6 +25,7 @@ const { createPlanningRoutes } = require('./planning-routes');
 const { PlanningWebSocketService } = require('./planning-websocket');
 const { createChatbotRoutes } = require('./chatbot-routes');
 const { TicketingService } = require('./ticketing-service');
+const { configureStorageMarketRoutes } = require('./storage-market-routes');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -90,7 +91,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: 'v2.0.3-ai-api-endpoints',
+    version: 'v2.0.4-storage-market-ai',
     features: [
       'express', 'advanced-security', 'rate-limiting', 'cors', 'helmet',
       'input-sanitization', 'mongodb', 'subscriptions', 'contracts', 'ecmr',
@@ -107,7 +108,9 @@ app.get('/health', async (req, res) => {
       'chatbot-suite', 'rt-helpbot', 'planif-ia-assistant', 'routier-assistant',
       'quai-wms-assistant', 'livraisons-assistant', 'expedition-assistant',
       'freight-ia-assistant', 'copilote-chauffeur-assistant', 'ticketing-sla',
-      'knowledge-base', 'faq-system', 'teams-integration', 'auto-escalation'
+      'knowledge-base', 'faq-system', 'teams-integration', 'auto-escalation',
+      'storage-market', 'storage-rfp-ai-generation', 'storage-rfp-standardization',
+      'logistician-capacity-management', 'storage-response-ai-analysis', 'storage-ai-matching'
     ],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -136,7 +139,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT SYMPHONI.A - Subscriptions & Contracts API + Suite Chatbots',
-    version: 'v2.0.3-ai-api-endpoints',
+    version: 'v2.0.4-storage-market-ai',
     description: 'Transport Management System with Advanced Security + AFFRET.IA + Planning + Suite Chatbots Intelligents',
     features: [
       'Express.js',
@@ -966,6 +969,14 @@ async function startServer() {
     console.log('✅ AFFRET.IA routes mounted successfully (Intelligent Freight Module)');
   } else {
     console.warn('⚠️  AFFRET.IA routes not mounted - MongoDB not connected');
+  }
+
+  // Mount Storage Market routes (Bourse de Stockage) with AI assistance
+  if (mongoConnected) {
+    configureStorageMarketRoutes(app, mongoClient.db(), authenticateToken);
+    console.log('✅ Storage Market routes mounted successfully (Bourse de Stockage avec IA)');
+  } else {
+    console.warn('⚠️  Storage Market routes not mounted - MongoDB not connected');
   }
 
   // Mount Planning Chargement & Livraison routes with EventEmitter for real-time

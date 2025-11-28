@@ -1,7 +1,7 @@
 {
   "name": "rt-subscriptions-contracts-api",
-  "version": "2.0.3",
-  "description": "RT SYMPHONI.A v2.0.3 - Subscriptions & Contracts API + Suite Chatbots Claude IA + API Endpoints Optimisation IA AFFRET.IA & Planning",
+  "version": "2.0.4",
+  "description": "RT SYMPHONI.A v2.0.4 - Subscriptions & Contracts API + Suite Chatbots Claude IA + Bourse de Stockage avec IA + API Endpoints IA",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
