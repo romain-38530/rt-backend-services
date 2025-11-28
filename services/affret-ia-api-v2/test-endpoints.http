@@ -1,0 +1,276 @@
+### AFFRET.IA API v2 - Tests des Endpoints
+### Base URL
+@baseUrl = http://localhost:3017
+@prodUrl = http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com
+
+### ==================== HEALTH CHECK ====================
+
+### Health Check
+GET {{baseUrl}}/health
+
+### ==================== SESSION MANAGEMENT ====================
+
+### 1. Declencher AFFRET.IA
+POST {{baseUrl}}/api/v1/affretia/trigger
+Content-Type: application/json
+
+{
+  "orderId": "ORD251128001",
+  "organizationId": "ORG001",
+  "triggerType": "auto_failure",
+  "reason": "Aucun transporteur disponible dans le reseau",
+  "userId": "user123"
+}
+
+### 2. Obtenir les details d'une session
+GET {{baseUrl}}/api/v1/affretia/session/AFFRET-20251128-0001
+
+### 3. Liste des sessions
+GET {{baseUrl}}/api/v1/affretia/sessions?limit=10
+
+### 4. Liste des sessions par organisation
+GET {{baseUrl}}/api/v1/affretia/sessions?organizationId=ORG001&status=analyzing
+
+### ==================== ANALYSE IA ====================
+
+### 5. Lancer l'analyse IA (requires valid orderId in Orders API)
+POST {{baseUrl}}/api/v1/affretia/analyze
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001"
+}
+
+### ==================== DIFFUSION ====================
+
+### 6. Lancer la diffusion multi-canal
+POST {{baseUrl}}/api/v1/affretia/broadcast
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001",
+  "channels": ["email", "bourse", "push"]
+}
+
+### 7. Diffusion selective (certains transporteurs uniquement)
+POST {{baseUrl}}/api/v1/affretia/broadcast
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001",
+  "channels": ["email"],
+  "carrierIds": ["TR001", "TR002"]
+}
+
+### ==================== BOURSE PUBLIQUE ====================
+
+### 8. Consulter la bourse publique
+GET {{baseUrl}}/api/v1/affretia/bourse?limit=20
+
+### 9. Consulter la bourse avec filtres
+GET {{baseUrl}}/api/v1/affretia/bourse?postalCodePickup=75&postalCodeDelivery=69&limit=10
+
+### 10. Soumettre une proposition via la bourse
+POST {{baseUrl}}/api/v1/affretia/bourse/submit
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001",
+  "carrierId": "TR005",
+  "carrierName": "Transport Bourse Express",
+  "proposedPrice": 440,
+  "vehicleType": "VUL",
+  "vehiclePlate": "AB-123-CD",
+  "driverName": "Jean Dupont",
+  "driverPhone": "+33612345678",
+  "driverEmail": "jean.dupont@transport.com",
+  "estimatedPickupDate": "2025-11-29T08:00:00Z",
+  "estimatedDeliveryDate": "2025-11-29T14:00:00Z",
+  "services": {
+    "tailgate": true,
+    "insurance": true,
+    "tracking": "premium"
+  }
+}
+
+### ==================== PROPOSITIONS ====================
+
+### 11. Enregistrer une reponse de transporteur
+POST {{baseUrl}}/api/v1/affretia/response
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001",
+  "carrierId": "TR001",
+  "carrierName": "Transport Express",
+  "proposedPrice": 430,
+  "vehicleType": "VUL",
+  "estimatedPickupDate": "2025-11-29T08:00:00Z",
+  "estimatedDeliveryDate": "2025-11-29T14:00:00Z",
+  "services": {
+    "tailgate": true,
+    "insurance": true
+  },
+  "source": "email"
+}
+
+### 12. Liste des propositions pour une session
+GET {{baseUrl}}/api/v1/affretia/proposals/AFFRET-20251128-0001
+
+### 13. Liste des propositions avec filtre statut
+GET {{baseUrl}}/api/v1/affretia/proposals/AFFRET-20251128-0001?status=pending
+
+### 14. Accepter une proposition manuellement
+PUT {{baseUrl}}/api/v1/affretia/proposals/PROP_ID_HERE/accept
+Content-Type: application/json
+
+{
+  "userId": "user123",
+  "reason": "Meilleur rapport qualite/prix"
+}
+
+### 15. Rejeter une proposition manuellement
+PUT {{baseUrl}}/api/v1/affretia/proposals/PROP_ID_HERE/reject
+Content-Type: application/json
+
+{
+  "userId": "user123",
+  "reason": "Prix trop eleve"
+}
+
+### 16. Negocier une proposition
+POST {{baseUrl}}/api/v1/affretia/proposals/PROP_ID_HERE/negotiate
+Content-Type: application/json
+
+{
+  "counterPrice": 420,
+  "message": "Nous pouvons vous proposer 420€ pour cette prestation.",
+  "userId": "user123"
+}
+
+### ==================== SELECTION ====================
+
+### 17. Selectionner automatiquement le meilleur transporteur
+POST {{baseUrl}}/api/v1/affretia/select
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001",
+  "algorithm": "overall"
+}
+
+### 18. Selection avec algorithme meilleur prix
+POST {{baseUrl}}/api/v1/affretia/select
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001",
+  "algorithm": "best_price"
+}
+
+### 19. Selection avec algorithme meilleure qualite
+POST {{baseUrl}}/api/v1/affretia/select
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001",
+  "algorithm": "best_quality"
+}
+
+### 20. Classement des propositions
+GET {{baseUrl}}/api/v1/affretia/ranking/AFFRET-20251128-0001
+
+### ==================== ASSIGNATION ====================
+
+### 21. Assigner la mission au transporteur selectionne
+POST {{baseUrl}}/api/v1/affretia/assign
+Content-Type: application/json
+
+{
+  "sessionId": "AFFRET-20251128-0001",
+  "userId": "user123"
+}
+
+### ==================== VIGILANCE ====================
+
+### 22. Verifier la conformite d'un transporteur
+POST {{baseUrl}}/api/v1/affretia/vigilance/check
+Content-Type: application/json
+
+{
+  "carrierId": "TR001",
+  "checks": ["kbis", "insurance", "license", "blacklist"]
+}
+
+### 23. Verification partielle
+POST {{baseUrl}}/api/v1/affretia/vigilance/check
+Content-Type: application/json
+
+{
+  "carrierId": "TR002",
+  "checks": ["insurance", "blacklist"]
+}
+
+### 24. Obtenir le statut de vigilance
+GET {{baseUrl}}/api/v1/affretia/vigilance/TR001
+
+### ==================== STATS & REPORTING ====================
+
+### 25. Statistiques globales AFFRET.IA
+GET {{baseUrl}}/api/v1/affretia/stats
+
+### 26. Statistiques avec filtre dates
+GET {{baseUrl}}/api/v1/affretia/stats?dateFrom=2025-11-01&dateTo=2025-11-30
+
+### 27. Statistiques par organisation
+GET {{baseUrl}}/api/v1/affretia/stats/ORG001
+
+### 28. Statistiques organisation avec dates
+GET {{baseUrl}}/api/v1/affretia/stats/ORG001?dateFrom=2025-11-01&dateTo=2025-11-30
+
+### ==================== WORKFLOW COMPLET ====================
+
+### SCENARIO: Workflow complet d'affretement
+### Step 1: Declencher AFFRET.IA
+POST {{baseUrl}}/api/v1/affretia/trigger
+Content-Type: application/json
+
+{
+  "orderId": "ORD251128999",
+  "organizationId": "ORG001",
+  "triggerType": "auto_failure",
+  "reason": "Aucun transporteur disponible",
+  "userId": "user123"
+}
+
+### Step 2: Analyser la commande (utiliser le sessionId recu)
+# POST {{baseUrl}}/api/v1/affretia/analyze
+# {"sessionId": "AFFRET-XXXXXXXX-XXXX"}
+
+### Step 3: Diffuser aux transporteurs
+# POST {{baseUrl}}/api/v1/affretia/broadcast
+# {"sessionId": "AFFRET-XXXXXXXX-XXXX", "channels": ["email", "bourse"]}
+
+### Step 4: Recevoir des propositions
+# POST {{baseUrl}}/api/v1/affretia/response
+# {"sessionId": "...", "carrierId": "TR001", "proposedPrice": 430, ...}
+
+### Step 5: Selectionner le meilleur
+# POST {{baseUrl}}/api/v1/affretia/select
+# {"sessionId": "AFFRET-XXXXXXXX-XXXX", "algorithm": "overall"}
+
+### Step 6: Verifier la vigilance
+# POST {{baseUrl}}/api/v1/affretia/vigilance/check
+# {"carrierId": "TR001", "checks": ["kbis", "insurance", "license"]}
+
+### Step 7: Assigner la mission
+# POST {{baseUrl}}/api/v1/affretia/assign
+# {"sessionId": "AFFRET-XXXXXXXX-XXXX", "userId": "user123"}
+
+### ==================== TESTS PRODUCTION ====================
+
+### Health Check Production
+GET {{prodUrl}}/health
+
+### Stats Production
+GET {{prodUrl}}/api/v1/affretia/stats

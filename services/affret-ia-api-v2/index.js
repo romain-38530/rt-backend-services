@@ -28,6 +28,9 @@ function emitEvent(eventName, data) {
   }
 }
 
+// Make emitEvent globally available
+global.emitEvent = emitEvent;
+
 // Assignment Schema
 const assignmentSchema = new mongoose.Schema({
   orderId: { type: String, required: true, index: true },
@@ -204,6 +207,10 @@ async function selectBestCarrier(carriers, algorithm = 'balanced') {
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'affret-ia-api-v2', version: '2.0.0' });
 });
+
+// ==================== AFFRET.IA ROUTES ====================
+const affretiaRoutes = require('./routes/affretia.routes');
+app.use('/api/v1/affretia', affretiaRoutes);
 
 // POST /api/v1/affret-ia/search - Rechercher des transporteurs disponibles
 app.post('/api/v1/affret-ia/search', async (req, res) => {
