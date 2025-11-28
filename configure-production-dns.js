@@ -12,7 +12,7 @@ const axios = require('axios');
 // URL de l'API subscriptions-contracts (déjà déployée sur AWS EB)
 const API_BASE_URL = 'http://rt-subscriptions-api-prod.eba-pwrpmmxu.eu-central-1.elasticbeanstalk.com';
 
-const DOMAIN = 'rt-symphonia.com';
+const DOMAIN = 'symphonia-controltower.com';
 
 // Configuration DNS
 const DNS_CONFIG = {
@@ -164,8 +164,8 @@ async function main() {
     console.log('⏳ Propagation DNS : 15 minutes à 24 heures');
     console.log();
     console.log('🔍 Vérifier la propagation :');
-    console.log('   dig app.rt-symphonia.com');
-    console.log('   nslookup auth.rt-symphonia.com');
+    console.log('   dig app.symphonia-controltower.com');
+    console.log('   nslookup auth.symphonia-controltower.com');
     console.log();
     console.log('📋 Lister les enregistrements :');
     console.log(`   curl ${API_BASE_URL}/api/ovhcloud/dns/records`);
