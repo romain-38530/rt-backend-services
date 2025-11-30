@@ -170,12 +170,37 @@ router.get('/stats/:organizationId', affretiaController.getOrganizationStats);
 router.get('/campaigns/:campaignId', affretiaController.getCampaign);
 
 // ==================== TRACKING IA ====================
+// IMPORTANT: Routes specifiques AVANT routes avec parametres
+
+/**
+ * GET /api/v1/affretia/tracking/levels
+ * Obtenir les niveaux de tracking disponibles
+ */
+router.get('/tracking/levels', affretiaController.getTrackingLevels);
 
 /**
  * POST /api/v1/affretia/tracking/configure
  * Configurer le tracking pour une commande (Basic/Intermediate/Premium)
  */
 router.post('/tracking/configure', affretiaController.configureTracking);
+
+/**
+ * GET /api/v1/affretia/tracking/eta/:orderId
+ * Obtenir l'ETA predictif d'une commande
+ */
+router.get('/tracking/eta/:orderId', affretiaController.getETA);
+
+/**
+ * PUT /api/v1/affretia/tracking/alerts/:alertId/acknowledge
+ * Reconnaitre une alerte
+ */
+router.put('/tracking/alerts/:alertId/acknowledge', affretiaController.acknowledgeAlert);
+
+/**
+ * PUT /api/v1/affretia/tracking/alerts/:alertId/resolve
+ * Resoudre une alerte
+ */
+router.put('/tracking/alerts/:alertId/resolve', affretiaController.resolveAlert);
 
 /**
  * GET /api/v1/affretia/tracking/:orderId
@@ -196,34 +221,10 @@ router.post('/tracking/:trackingId/position', affretiaController.updateTrackingP
 router.put('/tracking/:trackingId/status', affretiaController.updateTrackingStatus);
 
 /**
- * GET /api/v1/affretia/tracking/eta/:orderId
- * Obtenir l'ETA predictif d'une commande
- */
-router.get('/tracking/eta/:orderId', affretiaController.getETA);
-
-/**
  * GET /api/v1/affretia/tracking/:trackingId/alerts
  * Obtenir les alertes actives d'un tracking
  */
 router.get('/tracking/:trackingId/alerts', affretiaController.getTrackingAlerts);
-
-/**
- * PUT /api/v1/affretia/tracking/alerts/:alertId/acknowledge
- * Reconnaitre une alerte
- */
-router.put('/tracking/alerts/:alertId/acknowledge', affretiaController.acknowledgeAlert);
-
-/**
- * PUT /api/v1/affretia/tracking/alerts/:alertId/resolve
- * Resoudre une alerte
- */
-router.put('/tracking/alerts/:alertId/resolve', affretiaController.resolveAlert);
-
-/**
- * GET /api/v1/affretia/tracking/levels
- * Obtenir les niveaux de tracking disponibles
- */
-router.get('/tracking/levels', affretiaController.getTrackingLevels);
 
 // ==================== BLACKLIST ====================
 
