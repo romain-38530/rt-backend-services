@@ -1,0 +1,28 @@
+{
+  "name": "billing-api",
+  "version": "1.0.0",
+  "description": "Module Prefacturation & Facturation Transport - RT Technologie SYMPHONI.A",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.6.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.0",
+    "axios": "^1.6.2",
+    "node-cron": "^3.0.3",
+    "pdfkit": "^0.14.0",
+    "pdf-parse": "^1.1.1",
+    "tesseract.js": "^5.0.4",
+    "multer": "^1.4.5-lts.1",
+    "moment": "^2.29.4",
+    "xml2js": "^0.6.2"
+  },
+  "author": "RT Technologie",
+  "license": "PROPRIETARY"
+}

@@ -1,0 +1,10 @@
+branch-defaults:
+  main:
+    environment: rt-billing-prod
+global:
+  application_name: rt-billing-api
+  default_ec2_keyname: null
+  default_platform: Node.js 18
+  default_region: eu-central-1
+  profile: null
+  sc: git
