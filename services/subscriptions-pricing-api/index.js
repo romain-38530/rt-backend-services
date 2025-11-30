@@ -127,6 +127,42 @@ const PRICING_GRID = {
         'Suivi cross-border',
         'Partenariats transitaires'
       ]
+    },
+    LOGISTICIEN_INVITE: {
+      id: 'LOGISTICIEN_INVITE',
+      name: 'Logisticien Invité',
+      description: 'Accès planning et gestion RDV d\'un seul industriel partenaire',
+      priceMonthly: 0,
+      priceLaunch: 0,
+      features: [
+        'Accès planning basique',
+        'Gestion RDV simple',
+        'Vue quais limitée',
+        'Support communautaire'
+      ],
+      limitations: [
+        'Un seul industriel partenaire',
+        'Pas de gestion multisites',
+        'Pas de KPI avancés'
+      ]
+    },
+    TRANSITAIRE_INVITE: {
+      id: 'TRANSITAIRE_INVITE',
+      name: 'Transitaire Invité',
+      description: 'Accès aux dossiers de vos clients industriels',
+      priceMonthly: 0,
+      priceLaunch: 0,
+      features: [
+        'Consultation dossiers clients',
+        'Documents basiques',
+        'Suivi expéditions',
+        'Support communautaire'
+      ],
+      limitations: [
+        'Lecture seule',
+        'Pas de bourse maritime',
+        'Pas de KPI'
+      ]
     }
   },
 
@@ -229,6 +265,62 @@ const PRICING_GRID = {
         'Workflow validation',
         'Export comptable'
       ]
+    },
+    TMS_SYNC_PREMIUM: {
+      id: 'TMS_SYNC_PREMIUM',
+      name: 'TMS Sync Premium',
+      description: 'Connecteurs TMS avancés',
+      priceMonthly: 149.00,
+      features: [
+        'Connecteur Transics',
+        'Connecteur PTV',
+        'Connecteur Dashdoc',
+        'Connecteur CityLogin',
+        'Connecteur Microtrans',
+        'API JSON custom'
+      ]
+    },
+    CHATBOT_IA: {
+      id: 'CHATBOT_IA',
+      name: 'Chatbot IA',
+      description: 'Support technique 24/7 avec IA',
+      priceMonthly: 49.00,
+      features: [
+        'Support technique 24/7',
+        'Réponses automatiques IA',
+        'Escalade vers agent humain',
+        'Base de connaissances',
+        'Historique conversations'
+      ]
+    }
+  },
+
+  // Services complémentaires (one-shot ou à l'usage)
+  services: {
+    TRAINING: {
+      id: 'TRAINING',
+      name: 'Training et Formation',
+      description: 'Formation complète de vos équipes',
+      priceOneShot: 299.00,
+      features: [
+        'Formation complète équipes',
+        'Paramétrage initial personnalisé',
+        'Onboarding multi-profils',
+        'Documentation sur mesure'
+      ]
+    },
+    SMS: {
+      id: 'SMS',
+      name: 'Notifications SMS',
+      description: 'Notifications SMS à l\'usage',
+      pricePerUnit: 0.04,
+      unit: 'SMS',
+      features: [
+        'Notifications transporteurs',
+        'Alertes chauffeurs',
+        'Informations destinataires',
+        'Confirmations livraison'
+      ]
     }
   },
 
@@ -286,25 +378,28 @@ const PRICING_GRID = {
     },
     ULTIMATE: {
       id: 'PACK_ULTIMATE',
-      name: 'Pack Ultimate',
-      description: 'L\'offre la plus complète SYMPHONI.A',
+      name: 'Pack Ultimate SYMPHONI.A',
+      description: 'La solution complète ultime - Tout SYMPHONI.A inclus',
       priceMonthly: 999.00,
       savings: '50%',
       includes: [
         { type: 'subscription', id: 'INDUSTRIEL' },
-        { type: 'trackingIA', id: 'PREMIUM' },
+        { type: 'trackingIA', id: 'INTERMEDIAIRE' },
         { type: 'module', id: 'AFFRET_IA' },
         { type: 'module', id: 'PALETTES_EUROPE' },
         { type: 'module', id: 'SIGNATURE_ELECTRONIQUE' },
-        { type: 'module', id: 'PREFACTURATION' }
+        { type: 'module', id: 'PREFACTURATION' },
+        { type: 'module', id: 'CHATBOT_IA' },
+        { type: 'module', id: 'TMS_SYNC_PREMIUM' }
       ],
       bonusFeatures: [
         'Account manager VIP',
         'Support 24/7',
-        'Formation sur site',
+        'Formation sur site incluse',
         'Personnalisation interface',
         'API prioritaire',
-        'SLA 99.9%'
+        'SLA 99.9%',
+        'Tout inclus'
       ]
     }
   },
@@ -794,6 +889,14 @@ app.get('/pricing/packs', (req, res) => {
  */
 app.get('/pricing/discounts', (req, res) => {
   res.json(Object.values(PRICING_GRID.discounts));
+});
+
+/**
+ * GET /pricing/services
+ * Services complémentaires (Training, SMS)
+ */
+app.get('/pricing/services', (req, res) => {
+  res.json(Object.values(PRICING_GRID.services));
 });
 
 /**
