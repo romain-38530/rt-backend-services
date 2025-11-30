@@ -8,9 +8,11 @@ const AffretSession = require('../models/AffretSession');
 const CarrierProposal = require('../models/CarrierProposal');
 const BroadcastCampaign = require('../models/BroadcastCampaign');
 const VigilanceCheck = require('../models/VigilanceCheck');
+const TrackingSession = require('../models/TrackingSession');
 const AIScoringEngine = require('../modules/ai-scoring-engine');
 const broadcastService = require('../services/broadcast.service');
 const negotiationService = require('../services/negotiation.service');
+const trackingService = require('../services/tracking.service');
 
 const scoringEngine = new AIScoringEngine();
 
@@ -1155,6 +1157,566 @@ exports.getOrganizationStats = async (req, res) => {
 
   } catch (error) {
     console.error('[AFFRETIA CONTROLLER] Error getting organization stats:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ==================== TRACKING IA ====================
+
+/**
+ * POST /api/v1/affretia/tracking/configure
+ * Configurer le tracking pour une commande
+ */
+exports.configureTracking = async (req, res) => {
+  try {
+    const { sessionId, orderId, carrierId, level = 'basic' } = req.body;
+
+    if (!orderId || !carrierId) {
+      return res.status(400).json({
+        success: false,
+        error: 'orderId and carrierId are required'
+      });
+    }
+
+    // Valider le niveau
+    const validLevels = ['basic', 'intermediate', 'premium'];
+    if (!validLevels.includes(level)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid level. Must be one of: ${validLevels.join(', ')}`
+      });
+    }
+
+    const tracking = await trackingService.configureTracking(
+      sessionId,
+      orderId,
+      carrierId,
+      level
+    );
+
+    res.json({
+      success: true,
+      data: {
+        trackingId: tracking.trackingId,
+        orderId: tracking.orderId,
+        level: tracking.level,
+        config: tracking.config,
+        status: tracking.status
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error configuring tracking:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/tracking/:orderId
+ * Obtenir les infos de tracking d'une commande
+ */
+exports.getTracking = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const tracking = await trackingService.getTrackingByOrder(orderId);
+
+    if (!tracking) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tracking not found for this order'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: tracking
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting tracking:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/tracking/:trackingId/position
+ * Mettre a jour la position GPS
+ */
+exports.updateTrackingPosition = async (req, res) => {
+  try {
+    const { trackingId } = req.params;
+    const { latitude, longitude, accuracy, speed, heading, altitude, source } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        error: 'latitude and longitude are required'
+      });
+    }
+
+    const result = await trackingService.updatePosition(trackingId, {
+      latitude,
+      longitude,
+      accuracy,
+      speed,
+      heading,
+      altitude,
+      source: source || 'gps'
+    });
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error updating position:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * PUT /api/v1/affretia/tracking/:trackingId/status
+ * Mettre a jour le statut manuellement
+ */
+exports.updateTrackingStatus = async (req, res) => {
+  try {
+    const { trackingId } = req.params;
+    const { status, notes } = req.body;
+
+    const validStatuses = [
+      'pending', 'pickup_en_route', 'at_pickup', 'loading',
+      'in_transit', 'at_delivery', 'unloading', 'delivered',
+      'completed', 'incident', 'cancelled'
+    ];
+
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+      });
+    }
+
+    const tracking = await trackingService.updateStatus(trackingId, status, notes);
+
+    res.json({
+      success: true,
+      data: {
+        trackingId: tracking.trackingId,
+        status: tracking.status,
+        timestamps: tracking.timestamps
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error updating status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/tracking/eta/:orderId
+ * Obtenir l'ETA predictif
+ */
+exports.getETA = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const eta = await trackingService.getETA(orderId);
+
+    if (!eta) {
+      return res.status(404).json({
+        success: false,
+        error: 'No tracking found for this order'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: eta
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting ETA:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/tracking/:trackingId/alerts
+ * Obtenir les alertes actives
+ */
+exports.getTrackingAlerts = async (req, res) => {
+  try {
+    const { trackingId } = req.params;
+
+    const alerts = await trackingService.getActiveAlerts(trackingId);
+
+    res.json({
+      success: true,
+      data: alerts,
+      count: alerts.length
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting alerts:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * PUT /api/v1/affretia/tracking/alerts/:alertId/acknowledge
+ * Reconnaitre une alerte
+ */
+exports.acknowledgeAlert = async (req, res) => {
+  try {
+    const { alertId } = req.params;
+    const { trackingId, userId } = req.body;
+
+    if (!trackingId) {
+      return res.status(400).json({
+        success: false,
+        error: 'trackingId is required'
+      });
+    }
+
+    const tracking = await TrackingSession.findOne({ trackingId });
+
+    if (!tracking) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tracking session not found'
+      });
+    }
+
+    const alert = tracking.acknowledgeAlert(alertId, userId);
+
+    if (!alert) {
+      return res.status(404).json({
+        success: false,
+        error: 'Alert not found'
+      });
+    }
+
+    await tracking.save();
+
+    res.json({
+      success: true,
+      data: alert
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error acknowledging alert:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * PUT /api/v1/affretia/tracking/alerts/:alertId/resolve
+ * Resoudre une alerte
+ */
+exports.resolveAlert = async (req, res) => {
+  try {
+    const { alertId } = req.params;
+    const { trackingId, resolution } = req.body;
+
+    if (!trackingId) {
+      return res.status(400).json({
+        success: false,
+        error: 'trackingId is required'
+      });
+    }
+
+    const tracking = await TrackingSession.findOne({ trackingId });
+
+    if (!tracking) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tracking session not found'
+      });
+    }
+
+    const alert = tracking.resolveAlert(alertId, resolution);
+
+    if (!alert) {
+      return res.status(404).json({
+        success: false,
+        error: 'Alert not found'
+      });
+    }
+
+    await tracking.save();
+
+    res.json({
+      success: true,
+      data: alert
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error resolving alert:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/tracking/levels
+ * Obtenir les niveaux de tracking disponibles
+ */
+exports.getTrackingLevels = async (req, res) => {
+  try {
+    const levels = {
+      basic: {
+        name: 'Basic',
+        description: 'Statuts manuels uniquement',
+        features: ['Mise a jour manuelle des statuts', 'Timeline des evenements'],
+        config: TrackingSession.getLevelConfig('basic'),
+        price: 'Inclus'
+      },
+      intermediate: {
+        name: 'Intermediaire',
+        description: 'Geolocalisation toutes les 2h + geofencing',
+        features: [
+          'Toutes fonctionnalites Basic',
+          'Position GPS toutes les 2h',
+          'Detection arrivee/depart (geofencing)',
+          'Alertes basiques'
+        ],
+        config: TrackingSession.getLevelConfig('intermediate'),
+        price: '5€/transport'
+      },
+      premium: {
+        name: 'Premium',
+        description: 'GPS temps reel + ETA predictif + alertes avancees',
+        features: [
+          'Toutes fonctionnalites Intermediaire',
+          'Position GPS temps reel (5 min)',
+          'ETA predictif avec trafic',
+          'Alertes avancees (retard, deviation, vitesse)',
+          'Historique complet du trajet'
+        ],
+        config: TrackingSession.getLevelConfig('premium'),
+        price: '15€/transport'
+      }
+    };
+
+    res.json({
+      success: true,
+      data: levels
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting tracking levels:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ==================== BLACKLIST ====================
+
+/**
+ * GET /api/v1/affretia/blacklist
+ * Liste des transporteurs blacklistes
+ */
+exports.getBlacklist = async (req, res) => {
+  try {
+    const { organizationId, severity, limit = 100 } = req.query;
+
+    const filters = {
+      'checks.blacklist.listed': true
+    };
+
+    if (severity) {
+      filters['checks.blacklist.severity'] = severity;
+    }
+
+    const blacklistedCarriers = await VigilanceCheck.find(filters)
+      .select('carrierId checks.blacklist overallStatus createdAt updatedAt')
+      .limit(parseInt(limit))
+      .sort({ 'checks.blacklist.addedAt': -1 });
+
+    res.json({
+      success: true,
+      data: blacklistedCarriers.map(c => ({
+        carrierId: c.carrierId,
+        reason: c.checks.blacklist.reason,
+        severity: c.checks.blacklist.severity,
+        addedAt: c.checks.blacklist.addedAt,
+        addedBy: c.checks.blacklist.addedBy
+      })),
+      count: blacklistedCarriers.length
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting blacklist:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/blacklist
+ * Ajouter un transporteur a la blacklist
+ */
+exports.addToBlacklist = async (req, res) => {
+  try {
+    const { carrierId, reason, severity = 'high', userId } = req.body;
+
+    if (!carrierId || !reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'carrierId and reason are required'
+      });
+    }
+
+    // Trouver ou creer le VigilanceCheck
+    let vigilance = await VigilanceCheck.findOne({ carrierId });
+
+    if (!vigilance) {
+      vigilance = new VigilanceCheck({
+        carrierId,
+        checks: {}
+      });
+    }
+
+    // Ajouter a la blacklist
+    vigilance.checks.blacklist = {
+      clean: false,
+      listed: true,
+      reason,
+      severity,
+      addedAt: new Date(),
+      addedBy: userId
+    };
+
+    vigilance.overallStatus = 'blacklisted';
+    vigilance.addAlert('blacklist_added', 'critical', `Transporteur ajoute a la blacklist: ${reason}`);
+
+    await vigilance.save();
+
+    // Emettre evenement
+    global.emitEvent?.('carrier.blacklisted', {
+      carrierId,
+      reason,
+      severity
+    });
+
+    res.json({
+      success: true,
+      data: {
+        carrierId,
+        blacklisted: true,
+        reason,
+        severity,
+        addedAt: vigilance.checks.blacklist.addedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error adding to blacklist:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * DELETE /api/v1/affretia/blacklist/:carrierId
+ * Retirer un transporteur de la blacklist
+ */
+exports.removeFromBlacklist = async (req, res) => {
+  try {
+    const { carrierId } = req.params;
+    const { reason, userId } = req.body;
+
+    const vigilance = await VigilanceCheck.findOne({ carrierId });
+
+    if (!vigilance) {
+      return res.status(404).json({
+        success: false,
+        error: 'Carrier not found in vigilance records'
+      });
+    }
+
+    if (!vigilance.checks.blacklist || !vigilance.checks.blacklist.listed) {
+      return res.status(400).json({
+        success: false,
+        error: 'Carrier is not blacklisted'
+      });
+    }
+
+    // Retirer de la blacklist
+    vigilance.checks.blacklist = {
+      clean: true,
+      listed: false,
+      reason: null,
+      severity: 'none',
+      removedAt: new Date(),
+      removedBy: userId,
+      removalReason: reason
+    };
+
+    // Recalculer le statut global
+    vigilance.updateOverallStatus();
+    vigilance.addAlert('blacklist_removed', 'info', `Transporteur retire de la blacklist: ${reason || 'Non specifie'}`);
+
+    await vigilance.save();
+
+    // Emettre evenement
+    global.emitEvent?.('carrier.unblacklisted', {
+      carrierId,
+      reason
+    });
+
+    res.json({
+      success: true,
+      data: {
+        carrierId,
+        blacklisted: false,
+        removedAt: vigilance.checks.blacklist.removedAt,
+        removalReason: reason
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error removing from blacklist:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/blacklist/:carrierId
+ * Verifier si un transporteur est blackliste
+ */
+exports.checkBlacklist = async (req, res) => {
+  try {
+    const { carrierId } = req.params;
+
+    const vigilance = await VigilanceCheck.findOne({ carrierId });
+
+    if (!vigilance) {
+      return res.json({
+        success: true,
+        data: {
+          carrierId,
+          blacklisted: false,
+          message: 'No vigilance record found'
+        }
+      });
+    }
+
+    const isBlacklisted = vigilance.checks.blacklist?.listed === true;
+
+    res.json({
+      success: true,
+      data: {
+        carrierId,
+        blacklisted: isBlacklisted,
+        reason: isBlacklisted ? vigilance.checks.blacklist.reason : null,
+        severity: isBlacklisted ? vigilance.checks.blacklist.severity : null,
+        addedAt: isBlacklisted ? vigilance.checks.blacklist.addedAt : null,
+        overallStatus: vigilance.overallStatus
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error checking blacklist:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
