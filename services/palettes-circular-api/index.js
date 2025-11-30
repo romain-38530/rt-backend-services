@@ -23,6 +23,9 @@ const nacl = require('tweetnacl');
 const naclUtil = require('tweetnacl-util');
 const { v4: uuidv4 } = require('uuid');
 const geolib = require('geolib');
+const cron = require('node-cron');
+const axios = require('axios');
+const sharp = require('sharp');
 
 const app = express();
 app.use(cors());
@@ -308,6 +311,49 @@ const siteQuotaHistorySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Schema Webhook (notifications)
+const webhookSchema = new mongoose.Schema({
+  webhookId: { type: String, required: true, unique: true },
+  companyId: { type: String, required: true },
+  name: String,
+  url: { type: String, required: true },
+  events: [{
+    type: String,
+    enum: [
+      'cheque.emis',
+      'cheque.depose',
+      'cheque.recu',
+      'cheque.litige',
+      'litige.ouvert',
+      'litige.proposition',
+      'litige.resolu',
+      'litige.escalade',
+      'quota.alerte',
+      'quota.reset'
+    ]
+  }],
+  secret: String, // Pour signature HMAC des payloads
+  active: { type: Boolean, default: true },
+  lastTriggeredAt: Date,
+  failureCount: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// Schema Notification Log
+const notificationLogSchema = new mongoose.Schema({
+  notificationId: { type: String, required: true, unique: true },
+  webhookId: String,
+  companyId: String,
+  event: String,
+  payload: mongoose.Schema.Types.Mixed,
+  status: { type: String, enum: ['pending', 'sent', 'failed', 'retrying'], default: 'pending' },
+  httpStatus: Number,
+  response: String,
+  attempts: { type: Number, default: 0 },
+  sentAt: Date,
+  createdAt: { type: Date, default: Date.now }
+});
+
 // Creation des modeles
 const Company = mongoose.model('PalletCompany', companySchema);
 const Site = mongoose.model('PalletSite', siteSchema);
@@ -315,6 +361,8 @@ const PalletLedger = mongoose.model('PalletLedger', palletLedgerSchema);
 const PalletCheque = mongoose.model('PalletCheque', palletChequeSchema);
 const PalletDispute = mongoose.model('PalletDispute', palletDisputeSchema);
 const SiteQuotaHistory = mongoose.model('SiteQuotaHistory', siteQuotaHistorySchema);
+const Webhook = mongoose.model('PalletWebhook', webhookSchema);
+const NotificationLog = mongoose.model('PalletNotificationLog', notificationLogSchema);
 
 // ===========================================
 // MIDDLEWARE AUTHENTIFICATION
@@ -403,6 +451,266 @@ const isWithinGeofence = (userLat, userLon, siteLat, siteLon, radiusMeters = 500
     { latitude: siteLat, longitude: siteLon }
   );
   return distance <= radiusMeters;
+};
+
+// ===========================================
+// UTILITAIRES PHOTOS (validation & compression)
+// ===========================================
+
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_PHOTO_DIMENSION = 2048; // pixels
+
+/**
+ * Valider et compresser une photo base64
+ * @param {string} base64Data - Image en base64 (avec ou sans préfixe data:)
+ * @returns {Promise<{valid: boolean, compressed: string, error?: string}>}
+ */
+const validateAndCompressPhoto = async (base64Data) => {
+  try {
+    // Extraire le contenu base64 pur
+    let pureBase64 = base64Data;
+    let mimeType = 'image/jpeg';
+
+    if (base64Data.startsWith('data:')) {
+      const matches = base64Data.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        pureBase64 = matches[2];
+      }
+    }
+
+    // Vérifier le type MIME
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(mimeType)) {
+      return { valid: false, compressed: null, error: 'Type image non supporté. Utilisez JPEG, PNG ou WebP.' };
+    }
+
+    // Décoder le base64
+    const buffer = Buffer.from(pureBase64, 'base64');
+
+    // Vérifier la taille
+    if (buffer.length > MAX_PHOTO_SIZE) {
+      return { valid: false, compressed: null, error: `Image trop volumineuse. Maximum ${MAX_PHOTO_SIZE / 1024 / 1024}MB.` };
+    }
+
+    // Compresser avec sharp
+    const image = sharp(buffer);
+    const metadata = await image.metadata();
+
+    let processedImage = image;
+
+    // Redimensionner si nécessaire
+    if (metadata.width > MAX_PHOTO_DIMENSION || metadata.height > MAX_PHOTO_DIMENSION) {
+      processedImage = processedImage.resize(MAX_PHOTO_DIMENSION, MAX_PHOTO_DIMENSION, {
+        fit: 'inside',
+        withoutEnlargement: true
+      });
+    }
+
+    // Compresser en JPEG qualité 80%
+    const compressedBuffer = await processedImage
+      .jpeg({ quality: 80, progressive: true })
+      .toBuffer();
+
+    const compressedBase64 = `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`;
+
+    return {
+      valid: true,
+      compressed: compressedBase64,
+      originalSize: buffer.length,
+      compressedSize: compressedBuffer.length,
+      compressionRatio: Math.round((1 - compressedBuffer.length / buffer.length) * 100)
+    };
+  } catch (error) {
+    return { valid: false, compressed: null, error: `Erreur traitement image: ${error.message}` };
+  }
+};
+
+// ===========================================
+// SYSTEME DE NOTIFICATIONS (Webhooks)
+// ===========================================
+
+/**
+ * Envoyer une notification webhook
+ * @param {string} event - Type d'événement
+ * @param {object} payload - Données à envoyer
+ * @param {string[]} companyIds - IDs des entreprises à notifier
+ */
+const sendNotification = async (event, payload, companyIds) => {
+  try {
+    // Trouver les webhooks actifs pour cet événement
+    const webhooks = await Webhook.find({
+      companyId: { $in: companyIds },
+      events: event,
+      active: true,
+      failureCount: { $lt: 5 } // Désactiver après 5 échecs consécutifs
+    });
+
+    for (const webhook of webhooks) {
+      const notificationId = `NOTIF-${uuidv4().slice(0, 12).toUpperCase()}`;
+
+      // Créer le log
+      const log = new NotificationLog({
+        notificationId,
+        webhookId: webhook.webhookId,
+        companyId: webhook.companyId,
+        event,
+        payload,
+        status: 'pending'
+      });
+      await log.save();
+
+      // Préparer le payload
+      const webhookPayload = {
+        event,
+        timestamp: new Date().toISOString(),
+        data: payload
+      };
+
+      // Envoyer de manière asynchrone (fire and forget avec retry)
+      sendWebhookRequest(webhook, webhookPayload, log).catch(err => {
+        console.error(`Webhook ${webhook.webhookId} error:`, err.message);
+      });
+    }
+  } catch (error) {
+    console.error('Notification error:', error.message);
+  }
+};
+
+/**
+ * Envoyer la requête HTTP au webhook
+ */
+const sendWebhookRequest = async (webhook, payload, log, attempt = 1) => {
+  const maxAttempts = 3;
+  const retryDelays = [1000, 5000, 30000]; // 1s, 5s, 30s
+
+  try {
+    const response = await axios.post(webhook.url, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Webhook-Event': payload.event,
+        'X-Webhook-Signature': webhook.secret ?
+          require('crypto').createHmac('sha256', webhook.secret).update(JSON.stringify(payload)).digest('hex') : undefined
+      },
+      timeout: 10000 // 10 secondes timeout
+    });
+
+    // Succès
+    log.status = 'sent';
+    log.httpStatus = response.status;
+    log.sentAt = new Date();
+    log.attempts = attempt;
+    await log.save();
+
+    // Reset failure count
+    webhook.lastTriggeredAt = new Date();
+    webhook.failureCount = 0;
+    await webhook.save();
+
+  } catch (error) {
+    log.attempts = attempt;
+    log.httpStatus = error.response?.status;
+    log.response = error.message;
+
+    if (attempt < maxAttempts) {
+      log.status = 'retrying';
+      await log.save();
+
+      // Retry après délai
+      await new Promise(resolve => setTimeout(resolve, retryDelays[attempt - 1]));
+      return sendWebhookRequest(webhook, payload, log, attempt + 1);
+    } else {
+      log.status = 'failed';
+      await log.save();
+
+      // Incrémenter failure count
+      webhook.failureCount += 1;
+      await webhook.save();
+    }
+  }
+};
+
+// ===========================================
+// CRON JOBS - TACHES PLANIFIEES
+// ===========================================
+
+/**
+ * Reset des quotas journaliers - tous les jours à minuit
+ */
+const setupCronJobs = () => {
+  // Chaque jour à 00:00
+  cron.schedule('0 0 * * *', async () => {
+    console.log('[CRON] Reset des quotas journaliers...');
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Récupérer tous les sites actifs
+      const sites = await Site.find({ active: true });
+
+      for (const site of sites) {
+        // Sauvegarder l'historique avant reset
+        if (site.quota.currentDaily > 0) {
+          const history = new SiteQuotaHistory({
+            siteId: site.siteId,
+            date: new Date(today.getTime() - 24 * 60 * 60 * 1000), // Hier
+            quotaMax: site.quota.dailyMax,
+            quotaUsed: site.quota.currentDaily
+          });
+          await history.save();
+        }
+
+        // Reset le quota
+        site.quota.currentDaily = 0;
+        site.quota.lastResetDate = today;
+        await site.save();
+      }
+
+      console.log(`[CRON] ${sites.length} sites - quotas réinitialisés`);
+
+      // Notifier les entreprises du reset
+      const companyIds = [...new Set(sites.map(s => s.companyId))];
+      await sendNotification('quota.reset', {
+        message: 'Quotas journaliers réinitialisés',
+        sitesCount: sites.length,
+        resetDate: today.toISOString()
+      }, companyIds);
+
+    } catch (error) {
+      console.error('[CRON] Erreur reset quotas:', error.message);
+    }
+  }, {
+    timezone: 'Europe/Paris'
+  });
+
+  // Vérification des quotas alertes - toutes les heures
+  cron.schedule('0 * * * *', async () => {
+    try {
+      // Trouver les sites à plus de 80% de quota
+      const sites = await Site.find({
+        active: true,
+        $expr: { $gte: ['$quota.currentDaily', { $multiply: ['$quota.dailyMax', 0.8] }] }
+      });
+
+      for (const site of sites) {
+        const percentUsed = Math.round((site.quota.currentDaily / site.quota.dailyMax) * 100);
+
+        await sendNotification('quota.alerte', {
+          siteId: site.siteId,
+          siteName: site.name,
+          quotaUsed: site.quota.currentDaily,
+          quotaMax: site.quota.dailyMax,
+          percentUsed,
+          message: `Attention: quota à ${percentUsed}%`
+        }, [site.companyId]);
+      }
+    } catch (error) {
+      console.error('[CRON] Erreur vérification quotas:', error.message);
+    }
+  });
+
+  console.log('[CRON] Tâches planifiées configurées');
 };
 
 // ===========================================
@@ -873,6 +1181,15 @@ app.post('/api/palettes/cheques', authenticateToken, async (req, res) => {
       { upsert: true }
     );
 
+    // Notification webhook
+    await sendNotification('cheque.emis', {
+      chequeId,
+      transporterId,
+      destinationSiteId,
+      quantity,
+      palletType: palletType || 'EURO_EPAL'
+    }, [transporterId, site.companyId]);
+
     res.status(201).json({
       success: true,
       data: cheque,
@@ -966,6 +1283,15 @@ app.post('/api/palettes/cheques/:chequeId/deposit', authenticateToken, async (re
 
     cheque.updatedAt = new Date();
     await cheque.save();
+
+    // Notification depot
+    const site = await Site.findOne({ siteId: cheque.destinationSiteId });
+    await sendNotification('cheque.depose', {
+      chequeId: cheque.chequeId,
+      transporterId: cheque.transporterId,
+      siteId: cheque.destinationSiteId,
+      quantity: cheque.quantity
+    }, [cheque.transporterId, site?.companyId].filter(Boolean));
 
     res.json({
       success: true,
@@ -1130,7 +1456,26 @@ app.post('/api/palettes/cheques/:chequeId/receive', authenticateToken, async (re
         }]
       });
       await dispute.save();
+
+      // Notification litige
+      await sendNotification('litige.ouvert', {
+        disputeId: dispute.disputeId,
+        chequeId: cheque.chequeId,
+        type: 'quantite_incorrecte',
+        expectedQuantity: cheque.quantity,
+        actualQuantity: receivedQuantity
+      }, [dispute.initiatorId, dispute.respondentId]);
     }
+
+    // Notification reception
+    const siteOwner = await Site.findOne({ siteId: cheque.destinationSiteId });
+    await sendNotification(hasDiscrepancy ? 'cheque.litige' : 'cheque.recu', {
+      chequeId: cheque.chequeId,
+      transporterId: cheque.transporterId,
+      siteId: cheque.destinationSiteId,
+      quantity: receivedQuantity,
+      hasDiscrepancy
+    }, [cheque.transporterId, siteOwner?.companyId].filter(Boolean));
 
     res.json({
       success: true,
@@ -1618,6 +1963,21 @@ app.post('/api/palettes/disputes/:disputeId/validate', authenticateToken, async 
     dispute.updatedAt = new Date();
     await dispute.save();
 
+    // Notifications litige
+    if (dispute.status === 'resolu') {
+      await sendNotification('litige.resolu', {
+        disputeId: dispute.disputeId,
+        chequeId: dispute.chequeId,
+        resolution: dispute.resolution
+      }, [dispute.initiatorId, dispute.respondentId]);
+    } else if (dispute.status === 'escalade') {
+      await sendNotification('litige.escalade', {
+        disputeId: dispute.disputeId,
+        chequeId: dispute.chequeId,
+        reason: 'Resolution refusee par une partie'
+      }, [dispute.initiatorId, dispute.respondentId]);
+    }
+
     res.json({
       success: true,
       data: dispute,
@@ -1766,17 +2126,221 @@ app.get('/api/palettes/export/:type', authenticateToken, async (req, res) => {
 });
 
 // ===========================================
+// ROUTES API - WEBHOOKS & NOTIFICATIONS
+// ===========================================
+
+// Creer un webhook
+app.post('/api/palettes/webhooks', authenticateToken, async (req, res) => {
+  try {
+    const { companyId, name, url, events, secret } = req.body;
+
+    if (!url || !events || events.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'URL et events requis'
+      });
+    }
+
+    const webhook = new Webhook({
+      webhookId: `WH-${uuidv4().slice(0, 8).toUpperCase()}`,
+      companyId: companyId || req.user?.companyId,
+      name: name || 'Webhook',
+      url,
+      events,
+      secret: secret || uuidv4()
+    });
+
+    await webhook.save();
+
+    res.status(201).json({
+      success: true,
+      data: webhook,
+      message: 'Webhook cree avec succes'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Lister les webhooks d'une entreprise
+app.get('/api/palettes/webhooks', authenticateToken, async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    const webhooks = await Webhook.find({
+      companyId: companyId || req.user?.companyId
+    });
+
+    res.json({ success: true, data: webhooks, count: webhooks.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Obtenir un webhook
+app.get('/api/palettes/webhooks/:webhookId', authenticateToken, async (req, res) => {
+  try {
+    const webhook = await Webhook.findOne({ webhookId: req.params.webhookId });
+    if (!webhook) {
+      return res.status(404).json({ success: false, error: 'Webhook non trouve' });
+    }
+    res.json({ success: true, data: webhook });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Mettre a jour un webhook
+app.put('/api/palettes/webhooks/:webhookId', authenticateToken, async (req, res) => {
+  try {
+    const { name, url, events, active } = req.body;
+    const webhook = await Webhook.findOne({ webhookId: req.params.webhookId });
+
+    if (!webhook) {
+      return res.status(404).json({ success: false, error: 'Webhook non trouve' });
+    }
+
+    if (name !== undefined) webhook.name = name;
+    if (url !== undefined) webhook.url = url;
+    if (events !== undefined) webhook.events = events;
+    if (active !== undefined) webhook.active = active;
+
+    await webhook.save();
+
+    res.json({ success: true, data: webhook, message: 'Webhook mis a jour' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Supprimer un webhook
+app.delete('/api/palettes/webhooks/:webhookId', authenticateToken, async (req, res) => {
+  try {
+    const result = await Webhook.deleteOne({ webhookId: req.params.webhookId });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Webhook non trouve' });
+    }
+    res.json({ success: true, message: 'Webhook supprime' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Tester un webhook
+app.post('/api/palettes/webhooks/:webhookId/test', authenticateToken, async (req, res) => {
+  try {
+    const webhook = await Webhook.findOne({ webhookId: req.params.webhookId });
+    if (!webhook) {
+      return res.status(404).json({ success: false, error: 'Webhook non trouve' });
+    }
+
+    const testPayload = {
+      event: 'test',
+      timestamp: new Date().toISOString(),
+      data: { message: 'Test webhook notification', webhookId: webhook.webhookId }
+    };
+
+    try {
+      const response = await axios.post(webhook.url, testPayload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Webhook-Event': 'test'
+        },
+        timeout: 10000
+      });
+
+      res.json({
+        success: true,
+        data: {
+          status: response.status,
+          statusText: response.statusText
+        },
+        message: 'Test webhook envoye avec succes'
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: `Echec du test: ${error.message}`,
+        details: {
+          status: error.response?.status,
+          statusText: error.response?.statusText
+        }
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Historique des notifications
+app.get('/api/palettes/notifications', authenticateToken, async (req, res) => {
+  try {
+    const { companyId, webhookId, status, event, limit = 50 } = req.query;
+    const filter = {};
+
+    if (companyId) filter.companyId = companyId;
+    if (webhookId) filter.webhookId = webhookId;
+    if (status) filter.status = status;
+    if (event) filter.event = event;
+
+    const notifications = await NotificationLog.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    res.json({ success: true, data: notifications, count: notifications.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ===========================================
+// ROUTE API - VALIDATION PHOTOS
+// ===========================================
+
+// Valider et compresser une photo
+app.post('/api/palettes/photos/validate', authenticateToken, async (req, res) => {
+  try {
+    const { photo } = req.body;
+
+    if (!photo) {
+      return res.status(400).json({ success: false, error: 'Photo requise (base64)' });
+    }
+
+    const result = await validateAndCompressPhoto(photo);
+
+    if (!result.valid) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        compressed: result.compressed,
+        originalSize: result.originalSize,
+        compressedSize: result.compressedSize,
+        compressionRatio: `${result.compressionRatio}%`
+      },
+      message: 'Photo validee et compressee'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ===========================================
 // CONNEXION MONGODB & DEMARRAGE SERVEUR
 // ===========================================
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('MongoDB connecte - Palettes Circular API');
 
+    // Demarrer les taches planifiees
+    setupCronJobs();
+
     app.listen(PORT, () => {
       console.log(`
 ========================================
   Module Economie Circulaire Palettes
-  RT Technologie - API v1.0.0
+  RT Technologie - API v1.1.0
 ========================================
   Port: ${PORT}
   MongoDB: ${MONGODB_URI}
@@ -1792,6 +2356,12 @@ mongoose.connect(MONGODB_URI)
   - GET  /api/palettes/ledger/:companyId
   - POST /api/palettes/disputes
   - GET  /api/palettes/stats
+  - POST /api/palettes/webhooks
+  - POST /api/palettes/photos/validate
+
+  Cron Jobs:
+  - 00:00 Reset quotas journaliers
+  - *:00  Alerte quotas (>80%)
 ========================================
       `);
     });
