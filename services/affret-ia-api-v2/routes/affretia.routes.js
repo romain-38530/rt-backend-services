@@ -2,16 +2,17 @@
  * Routes AFFRET.IA API v2
  * Toutes les routes pour le module d'affretement intelligent
  *
- * Endpoints:
+ * Endpoints (38 total):
  * - Session Management: /trigger, /session/:id, /sessions
  * - Analyse IA: /analyze
  * - Diffusion: /broadcast, /bourse
- * - Propositions: /response, /proposals
- * - Selection: /select, /ranking
+ * - Propositions: /response, /proposals, /proposals/:id/history
+ * - Selection: /select, /ranking, /decision
+ * - Assignation: /assign
  * - Vigilance: /vigilance
  * - Tracking IA: /tracking (3 niveaux: Basic/Intermediate/Premium)
  * - Blacklist: /blacklist
- * - Stats: /stats
+ * - Stats & Reporting: /stats, /campaigns/:id
  */
 
 const express = require('express');
@@ -100,6 +101,12 @@ router.put('/proposals/:proposalId/reject', affretiaController.rejectProposal);
  */
 router.post('/proposals/:proposalId/negotiate', affretiaController.negotiateProposal);
 
+/**
+ * GET /api/v1/affretia/proposals/:proposalId/history
+ * Obtenir l'historique de negociation d'une proposition
+ */
+router.get('/proposals/:proposalId/history', affretiaController.getProposalHistory);
+
 // ==================== SELECTION ====================
 
 /**
@@ -113,6 +120,12 @@ router.post('/select', affretiaController.selectBestCarrier);
  * Classement des propositions
  */
 router.get('/ranking/:sessionId', affretiaController.getRanking);
+
+/**
+ * GET /api/v1/affretia/decision/:sessionId
+ * Obtenir la decision/recommandation IA pour une session
+ */
+router.get('/decision/:sessionId', affretiaController.getDecision);
 
 // ==================== ASSIGNATION ====================
 
@@ -149,6 +162,12 @@ router.get('/stats', affretiaController.getStats);
  * Statistiques par organisation
  */
 router.get('/stats/:organizationId', affretiaController.getOrganizationStats);
+
+/**
+ * GET /api/v1/affretia/campaigns/:campaignId
+ * Obtenir les details d'une campagne de diffusion
+ */
+router.get('/campaigns/:campaignId', affretiaController.getCampaign);
 
 // ==================== TRACKING IA ====================
 

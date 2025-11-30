@@ -745,6 +745,45 @@ exports.negotiateProposal = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/v1/affretia/proposals/:proposalId/history
+ * Obtenir l'historique de negociation d'une proposition
+ */
+exports.getProposalHistory = async (req, res) => {
+  try {
+    const { proposalId } = req.params;
+
+    const proposal = await CarrierProposal.findById(proposalId);
+
+    if (!proposal) {
+      return res.status(404).json({
+        success: false,
+        error: 'Proposal not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        proposalId: proposal._id,
+        sessionId: proposal.sessionId,
+        carrierId: proposal.carrierId,
+        carrierName: proposal.carrierName,
+        initialPrice: proposal.proposedPrice,
+        currentStatus: proposal.status,
+        negotiationHistory: proposal.negotiationHistory || [],
+        totalRounds: proposal.negotiationHistory?.length || 0,
+        submittedAt: proposal.submittedAt,
+        lastUpdatedAt: proposal.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting proposal history:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // ==================== SELECTION ====================
 
 /**
@@ -849,6 +888,98 @@ exports.getRanking = async (req, res) => {
 
   } catch (error) {
     console.error('[AFFRETIA CONTROLLER] Error getting ranking:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/decision/:sessionId
+ * Obtenir la decision/recommandation IA pour une session
+ */
+exports.getDecision = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const session = await AffretSession.findOne({ sessionId });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Recuperer les propositions classees
+    const ranking = await CarrierProposal.getRanking(sessionId);
+    const bestProposal = ranking[0] || null;
+
+    // Generer la recommandation IA
+    let recommendation = null;
+    let confidence = 0;
+    let reasoning = [];
+
+    if (bestProposal) {
+      const priceVariation = session.analysis?.estimatedPrice
+        ? ((bestProposal.proposedPrice - session.analysis.estimatedPrice) / session.analysis.estimatedPrice) * 100
+        : 0;
+
+      // Calculer la confiance
+      if (bestProposal.scores.overall >= 80) {
+        confidence = 95;
+        recommendation = 'accept';
+        reasoning.push('Score global excellent (>80)');
+      } else if (bestProposal.scores.overall >= 60) {
+        confidence = 75;
+        recommendation = 'accept';
+        reasoning.push('Score global satisfaisant (60-80)');
+      } else if (bestProposal.scores.overall >= 40) {
+        confidence = 50;
+        recommendation = 'negotiate';
+        reasoning.push('Score moyen, negociation recommandee');
+      } else {
+        confidence = 30;
+        recommendation = 'reject';
+        reasoning.push('Score insuffisant (<40)');
+      }
+
+      // Ajuster selon le prix
+      if (priceVariation <= 0) {
+        confidence += 5;
+        reasoning.push('Prix inferieur ou egal a l\'estimation');
+      } else if (priceVariation <= 15) {
+        reasoning.push(`Prix +${priceVariation.toFixed(1)}% vs estimation (acceptable)`);
+      } else {
+        confidence -= 10;
+        reasoning.push(`Prix +${priceVariation.toFixed(1)}% vs estimation (eleve)`);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        sessionId,
+        status: session.status,
+        recommendation,
+        confidence: Math.min(100, Math.max(0, confidence)),
+        reasoning,
+        analysis: {
+          complexity: session.analysis?.complexity,
+          estimatedPrice: session.analysis?.estimatedPrice,
+          shortlistCount: session.analysis?.shortlist?.length || 0
+        },
+        bestCandidate: bestProposal ? {
+          carrierId: bestProposal.carrierId,
+          carrierName: bestProposal.carrierName,
+          proposedPrice: bestProposal.proposedPrice,
+          scores: bestProposal.scores
+        } : null,
+        totalProposals: ranking.length,
+        currentSelection: session.selection || null
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting decision:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -1160,6 +1291,70 @@ exports.getOrganizationStats = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+/**
+ * GET /api/v1/affretia/campaigns/:campaignId
+ * Obtenir les details d'une campagne de diffusion
+ */
+exports.getCampaign = async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    const campaign = await BroadcastCampaign.findOne({ campaignId });
+
+    if (!campaign) {
+      // Essayer de trouver par sessionId si ce n'est pas un campaignId
+      const campaignBySession = await BroadcastCampaign.findOne({ sessionId: campaignId });
+      if (!campaignBySession) {
+        return res.status(404).json({
+          success: false,
+          error: 'Campaign not found'
+        });
+      }
+      // Utiliser la campagne trouvee par sessionId
+      return res.json({
+        success: true,
+        data: formatCampaignResponse(campaignBySession)
+      });
+    }
+
+    res.json({
+      success: true,
+      data: formatCampaignResponse(campaign)
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting campaign:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Helper function pour formater la reponse de campagne
+function formatCampaignResponse(campaign) {
+  return {
+    campaignId: campaign.campaignId,
+    sessionId: campaign.sessionId,
+    status: campaign.status,
+    channels: campaign.channels.map(c => ({
+      type: c.type,
+      enabled: c.enabled
+    })),
+    recipients: {
+      total: campaign.recipients.length,
+      sent: campaign.recipients.filter(r => r.sent).length,
+      delivered: campaign.recipients.filter(r => r.delivered).length,
+      opened: campaign.recipients.filter(r => r.opened).length,
+      responded: campaign.recipients.filter(r => r.responded).length
+    },
+    stats: campaign.stats,
+    engagementRate: campaign.getEngagementRate ? campaign.getEngagementRate() : 0,
+    openRate: campaign.getOpenRate ? campaign.getOpenRate() : 0,
+    boursePublication: campaign.boursePublication || null,
+    reminders: campaign.reminders || [],
+    createdAt: campaign.createdAt,
+    completedAt: campaign.completedAt
+  };
+}
 
 // ==================== TRACKING IA ====================
 
