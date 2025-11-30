@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for i in {1..8})",
+      "Bash(do echo \"=== Check $i/8 ===\")",
+      "Bash(aws elasticbeanstalk describe-environment-health:*)",
+      "Bash(done)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

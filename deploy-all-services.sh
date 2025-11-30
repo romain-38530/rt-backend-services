@@ -1,65 +1,77 @@
 #!/bin/bash
+# Script maître pour déployer tous les services séquentiellement
 
-EB_CLI="C:/Users/rtard/AppData/Roaming/Python/Python314/Scripts/eb.exe"
+echo "========================================================"
+echo "🚀 DÉPLOIEMENT DE TOUS LES SERVICES MANQUANTS"
+echo "========================================================"
+echo ""
+echo "Services à déployer:"
+echo "  1. tracking-api"
+echo "  2. appointments-api"
+echo "  3. documents-api"
+echo "  4. scoring-api"
+echo "  5. affret-ia-api-v2"
+echo "  6. websocket-api"
+echo ""
+echo "Temps estimé: 5-10 minutes par service (~30-60 min total)"
+echo ""
 
-SERVICES=(
-  "authz:Authentication:rt-auth"
-  "orders:Orders:rt-orders"
-  "planning:Planning:rt-planning"
-  "ecmr:eCMR:rt-ecmr"
-  "palettes:Palettes:rt-palettes"
-)
+# Initialiser le fichier DEPLOYED_URLS.txt
+> DEPLOYED_URLS.txt
 
-CORS_ORIGINS="http://localhost:3000,https://main.dbg6okncuyyiw.amplifyapp.com,https://main.d1tb834u144p4r.amplifyapp.com,https://main.d3b6p09ihn5w7r.amplifyapp.com,https://main.dzvo8973zaqb.amplifyapp.com,https://main.d3hz3xvddrl94o.amplifyapp.com,https://main.d31p7m90ewg4xm.amplifyapp.com"
+# Déployer chaque service
+echo ""
+echo "========================================================"
+echo "Service 1/6: tracking-api"
+echo "========================================================"
+chmod +x deploy-tracking-api.sh
+./deploy-tracking-api.sh
 
-for service_config in "${SERVICES[@]}"; do
-  IFS=':' read -r SERVICE_NAME SERVICE_LABEL DB_NAME <<< "$service_config"
-  
-  echo "========================================"
-  echo "Deploying $SERVICE_LABEL ($SERVICE_NAME)"
-  echo "========================================"
-  
-  SERVICE_DIR="services/${SERVICE_NAME}-eb"
-  cd "$SERVICE_DIR" || continue
-  
-  # Initialize EB if not already done
-  if [ ! -d ".elasticbeanstalk" ]; then
-    echo "Initializing EB for $SERVICE_NAME..."
-    "$EB_CLI" init -p "Node.js 20 running on 64bit Amazon Linux 2023" -r eu-central-1 "rt-${SERVICE_NAME}-api"
-  fi
-  
-  # Check if environment exists
-  ENV_EXISTS=$("$EB_CLI" list 2>&1 | grep -c "rt-${SERVICE_NAME}-api-prod")
-  
-  if [ "$ENV_EXISTS" -eq 0 ]; then
-    echo "Creating environment for $SERVICE_NAME..."
-    "$EB_CLI" create "rt-${SERVICE_NAME}-api-prod" --instance-type t3.micro --single
-    
-    if [ $? -ne 0 ]; then
-      echo "❌ Failed to create environment for $SERVICE_NAME"
-      cd ../..
-      continue
-    fi
-  else
-    echo "Environment already exists, deploying..."
-    "$EB_CLI" deploy
-  fi
-  
-  # Configure environment variables
-  echo "Configuring environment variables..."
-  "$EB_CLI" setenv \
-    MONGODB_URI="mongodb+srv://rt_admin:RtAdmin2024@stagingrt.v2jnoh2.mongodb.net/${DB_NAME}?retryWrites=true&w=majority&appName=StagingRT" \
-    NODE_ENV="production" \
-    CORS_ALLOWED_ORIGINS="$CORS_ORIGINS"
-  
-  echo "✅ $SERVICE_LABEL deployed successfully!"
-  
-  # Get environment URL
-  "$EB_CLI" status | grep CNAME
-  
-  cd ../..
-done
+echo ""
+echo "========================================================"
+echo "Service 2/6: appointments-api"
+echo "========================================================"
+chmod +x deploy-appointments-api.sh
+./deploy-appointments-api.sh
 
-echo "========================================"
-echo "All services deployed!"
-echo "========================================"
+echo ""
+echo "========================================================"
+echo "Service 3/6: documents-api"
+echo "========================================================"
+chmod +x deploy-documents-api.sh
+./deploy-documents-api.sh
+
+echo ""
+echo "========================================================"
+echo "Service 4/6: scoring-api"
+echo "========================================================"
+chmod +x deploy-scoring-api.sh
+./deploy-scoring-api.sh
+
+echo ""
+echo "========================================================"
+echo "Service 5/6: affret-ia-api-v2"
+echo "========================================================"
+chmod +x deploy-affret-ia-api.sh
+./deploy-affret-ia-api.sh
+
+echo ""
+echo "========================================================"
+echo "Service 6/6: websocket-api"
+echo "========================================================"
+chmod +x deploy-websocket-api.sh
+./deploy-websocket-api.sh
+
+# Afficher le résumé
+echo ""
+echo "========================================================"
+echo "🎉 DÉPLOIEMENT TERMINÉ"
+echo "========================================================"
+echo ""
+
+if [ -f "DEPLOYED_URLS.txt" ] && [ -s "DEPLOYED_URLS.txt" ]; then
+  echo "📝 URLs des services déployés:"
+  echo ""
+  cat DEPLOYED_URLS.txt
+  echo ""
+fi

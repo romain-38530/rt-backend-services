@@ -1,0 +1,22 @@
+{
+  "needId": "STM-TEST-001",
+  "needDetails": {
+    "storageType": "LONG_TERM",
+    "volume": {
+      "value": 500,
+      "unit": "M2"
+    },
+    "location": {
+      "country": "France",
+      "region": "Île-de-France"
+    },
+    "constraints": {
+      "temperature": "AMBIENT",
+      "certifications": ["ISO_9001"]
+    }
+  },
+  "companyContext": {
+    "name": "Test Distribution SA",
+    "industry": "Distribution"
+  }
+}

@@ -1,0 +1,86 @@
+================================================================
+RT BACKEND SERVICES - URLS FOR TESTING
+Date: 2025-11-27
+Status: All 6 services operational
+================================================================
+
+COPY-PASTE READY URLS:
+================================================================
+
+TRACKING API:
+http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com
+http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com/health
+
+APPOINTMENTS API:
+http://rt-appointments-api-prod.eba-b5rcxvcw.eu-central-1.elasticbeanstalk.com
+http://rt-appointments-api-prod.eba-b5rcxvcw.eu-central-1.elasticbeanstalk.com/health
+
+DOCUMENTS API:
+http://rt-documents-api-prod.eba-xscabiv8.eu-central-1.elasticbeanstalk.com
+http://rt-documents-api-prod.eba-xscabiv8.eu-central-1.elasticbeanstalk.com/health
+
+SCORING API:
+http://rt-scoring-api-prod.eba-ygb5kqyw.eu-central-1.elasticbeanstalk.com
+http://rt-scoring-api-prod.eba-ygb5kqyw.eu-central-1.elasticbeanstalk.com/health
+
+AFFRET IA API V2:
+http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com
+http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com/health
+
+WEBSOCKET API:
+http://rt-websocket-api-prod.eba-nedjyqk3.eu-central-1.elasticbeanstalk.com
+http://rt-websocket-api-prod.eba-nedjyqk3.eu-central-1.elasticbeanstalk.com/health
+ws://rt-websocket-api-prod.eba-nedjyqk3.eu-central-1.elasticbeanstalk.com
+
+================================================================
+CURL COMMANDS FOR QUICK TESTING:
+================================================================
+
+# Test all health endpoints
+curl http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-appointments-api-prod.eba-b5rcxvcw.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-documents-api-prod.eba-xscabiv8.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-scoring-api-prod.eba-ygb5kqyw.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-websocket-api-prod.eba-nedjyqk3.eu-central-1.elasticbeanstalk.com/health
+
+# Test with JSON formatting
+curl http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com/health | jq .
+curl http://rt-appointments-api-prod.eba-b5rcxvcw.eu-central-1.elasticbeanstalk.com/health | jq .
+curl http://rt-documents-api-prod.eba-xscabiv8.eu-central-1.elasticbeanstalk.com/health | jq .
+curl http://rt-scoring-api-prod.eba-ygb5kqyw.eu-central-1.elasticbeanstalk.com/health | jq .
+curl http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com/health | jq .
+curl http://rt-websocket-api-prod.eba-nedjyqk3.eu-central-1.elasticbeanstalk.com/health | jq .
+
+================================================================
+ENVIRONMENT VARIABLES FOR AMPLIFY.YML:
+================================================================
+
+NEXT_PUBLIC_TRACKING_API_URL: 'http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com'
+NEXT_PUBLIC_APPOINTMENTS_API_URL: 'http://rt-appointments-api-prod.eba-b5rcxvcw.eu-central-1.elasticbeanstalk.com'
+NEXT_PUBLIC_DOCUMENTS_API_URL: 'http://rt-documents-api-prod.eba-xscabiv8.eu-central-1.elasticbeanstalk.com'
+NEXT_PUBLIC_SCORING_API_URL: 'http://rt-scoring-api-prod.eba-ygb5kqyw.eu-central-1.elasticbeanstalk.com'
+NEXT_PUBLIC_AFFRET_API_URL: 'http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com'
+NEXT_PUBLIC_WS_URL: 'ws://rt-websocket-api-prod.eba-nedjyqk3.eu-central-1.elasticbeanstalk.com'
+
+================================================================
+AWS CLI COMMANDS:
+================================================================
+
+# Check all environment status
+aws elasticbeanstalk describe-environments --region eu-central-1 \
+  --query "Environments[?Status=='Ready'].[ApplicationName,EnvironmentName,Health,CNAME]" \
+  --output table
+
+# Check specific environment
+aws elasticbeanstalk describe-environments --region eu-central-1 \
+  --environment-names rt-tracking-api-prod --output json
+
+# View logs
+cd services/[service-name]
+eb logs [environment-name]
+
+# Update environment variables
+eb setenv NODE_ENV=production PORT=3012
+
+================================================================

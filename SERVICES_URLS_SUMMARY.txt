@@ -1,0 +1,85 @@
+===============================================================
+RT BACKEND SERVICES - DEPLOYMENT SUMMARY
+Date: 2025-11-27
+Status: ALL 6 SERVICES DEPLOYED SUCCESSFULLY ✅
+===============================================================
+
+SERVICE URLS (All Health: Green, Status: Ready)
+---------------------------------------------------------------
+
+1. TRACKING API (Port 3012)
+   http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com
+   Health endpoint: /health
+   Status: MongoDB connected, Websocket disconnected, TomTom false
+
+2. APPOINTMENTS API (Port 3013)
+   http://rt-appointments-api-prod.eba-b5rcxvcw.eu-central-1.elasticbeanstalk.com
+   Health endpoint: /health
+   Status: Healthy
+
+3. DOCUMENTS API (Port 3014)
+   http://rt-documents-api-prod.eba-xscabiv8.eu-central-1.elasticbeanstalk.com
+   Health endpoint: /health
+   Status: Healthy (S3 and Textract not configured yet)
+
+4. SCORING API (Port 3016)
+   http://rt-scoring-api-prod.eba-ygb5kqyw.eu-central-1.elasticbeanstalk.com
+   Health endpoint: /health
+   Status: Healthy
+
+5. AFFRET IA API V2 (Port 3017) - NEWLY DEPLOYED
+   http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com
+   Health endpoint: /health
+   Status: Healthy (Version 2.0.0)
+   Note: New CNAME to avoid conflict with old environment
+
+6. WEBSOCKET API (Port 3010)
+   http://rt-websocket-api-prod.eba-nedjyqk3.eu-central-1.elasticbeanstalk.com
+   Health endpoint: /health
+   Status: Healthy, MongoDB connected, 0 active connections
+
+===============================================================
+FRONTEND CONFIGURATION (amplify.yml)
+===============================================================
+
+Environment variables updated:
+- NEXT_PUBLIC_TRACKING_API_URL
+- NEXT_PUBLIC_APPOINTMENTS_API_URL
+- NEXT_PUBLIC_DOCUMENTS_API_URL
+- NEXT_PUBLIC_SCORING_API_URL
+- NEXT_PUBLIC_AFFRET_API_URL
+- NEXT_PUBLIC_WS_URL
+
+Next step: Commit amplify.yml changes and trigger frontend rebuild
+
+===============================================================
+AWS CONFIGURATION
+===============================================================
+
+Region: eu-central-1
+Instance Type: t3.micro (all services)
+Platform: Node.js 20 on Amazon Linux 2023
+Deployment Mode: Single instance (non load-balanced)
+Elastic IP Quota: 25 (approved)
+Current EIP Usage: 6/25
+
+MongoDB: mongodb+srv://rt_admin:RtAdmin2024@stagingrt.v2jnoh2.mongodb.net
+
+===============================================================
+QUICK TEST COMMANDS
+===============================================================
+
+# Test all health endpoints
+curl http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-appointments-api-prod.eba-b5rcxvcw.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-documents-api-prod.eba-xscabiv8.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-scoring-api-prod.eba-ygb5kqyw.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com/health
+curl http://rt-websocket-api-prod.eba-nedjyqk3.eu-central-1.elasticbeanstalk.com/health
+
+# Check AWS status
+aws elasticbeanstalk describe-environments --region eu-central-1 \
+  --query "Environments[?Status=='Ready'].[ApplicationName,EnvironmentName,Health]" \
+  --output table
+
+===============================================================

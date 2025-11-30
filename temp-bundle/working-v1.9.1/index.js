@@ -25,7 +25,8 @@ const { createPlanningRoutes } = require('./planning-routes');
 const { PlanningWebSocketService } = require('./planning-websocket');
 const { createChatbotRoutes } = require('./chatbot-routes');
 const { TicketingService } = require('./ticketing-service');
-const { configureStorageMarketRoutes } = require('./storage-market-routes');
+// TEST: Inline constants - NO require() of external models file
+const { configureStorageMarketRoutes } = require('./storage-market-routes-inline');
 
 const app = express();
 const PORT = process.env.PORT || 8080;

@@ -8,7 +8,9 @@
  */
 
 const express = require('express');
-const { StorageMarketAIEnhancement } = require('./storage-market-ai-enhancement');
+// Lazy require pour éviter le chargement au démarrage
+let StorageMarketAIEnhancement = null;
+
 const {
   StorageTypes,
   VolumeUnits,
@@ -23,10 +25,14 @@ const {
   DefaultConfig
 } = require('./storage-market-models');
 
-// Instance du service IA (lazy initialization)
+// Instance du service IA (lazy initialization + lazy require)
 let storageMarketAI = null;
 function getStorageMarketAI() {
   if (!storageMarketAI) {
+    if (!StorageMarketAIEnhancement) {
+      const module = require('./storage-market-ai-enhancement');
+      StorageMarketAIEnhancement = module.StorageMarketAIEnhancement;
+    }
     storageMarketAI = new StorageMarketAIEnhancement();
   }
   return storageMarketAI;
