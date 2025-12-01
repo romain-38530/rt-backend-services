@@ -40,8 +40,7 @@ app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json());
 
-const PORT = process.env.PORT || 3400;
-const WS_PORT = process.env.WS_PORT || 3401;
+const PORT = process.env.PORT || 8080;
 
 // ============================================
 // SCHEMAS MONGOOSE
@@ -62,15 +61,15 @@ const CarrierScoreSchema = new mongoose.Schema({
   carrierName: { type: String },
   score: { type: Number, min: 0, max: 100, default: 50 },
   scoreDetails: {
-    slotRespect: { value: Number, weight: 15, score: Number }, // Respect creneaux
-    documentDelay: { value: Number, weight: 10, score: Number }, // Delai depot docs
-    unjustifiedDelays: { value: Number, weight: 15, score: Number }, // Retards non justifies
-    responseTime: { value: Number, weight: 10, score: Number }, // Temps reponse commandes
-    vigilanceCompliance: { value: Number, weight: 15, score: Number }, // Conformite vigilance
-    cancellationRate: { value: Number, weight: 10, score: Number }, // Taux annulations/no-show
-    trackingQuality: { value: Number, weight: 10, score: Number }, // Qualite communication Tracking
-    premiumAdoption: { value: Number, weight: 5, score: Number }, // Adoption module Premium
-    overallReliability: { value: Number, weight: 10, score: Number } // Fiabilite globale
+    slotRespect: { value: Number, weight: { type: Number, default: 15 }, score: Number }, // Respect creneaux
+    documentDelay: { value: Number, weight: { type: Number, default: 10 }, score: Number }, // Delai depot docs
+    unjustifiedDelays: { value: Number, weight: { type: Number, default: 15 }, score: Number }, // Retards non justifies
+    responseTime: { value: Number, weight: { type: Number, default: 10 }, score: Number }, // Temps reponse commandes
+    vigilanceCompliance: { value: Number, weight: { type: Number, default: 15 }, score: Number }, // Conformite vigilance
+    cancellationRate: { value: Number, weight: { type: Number, default: 10 }, score: Number }, // Taux annulations/no-show
+    trackingQuality: { value: Number, weight: { type: Number, default: 10 }, score: Number }, // Qualite communication Tracking
+    premiumAdoption: { value: Number, weight: { type: Number, default: 5 }, score: Number }, // Adoption module Premium
+    overallReliability: { value: Number, weight: { type: Number, default: 10 }, score: Number } // Fiabilite globale
   },
   ranking: {
     global: Number,
@@ -132,10 +131,10 @@ const CarrierScore = mongoose.model('CarrierScore', CarrierScoreSchema);
 const Alert = mongoose.model('Alert', AlertSchema);
 
 // ============================================
-// WEBSOCKET SERVER
+// WEBSOCKET SERVER (attached to main HTTP server)
 // ============================================
 
-const wss = new WebSocketServer({ port: WS_PORT });
+const wss = new WebSocketServer({ server });
 const wsClients = new Map();
 
 wss.on('connection', (ws, req) => {
@@ -746,7 +745,7 @@ app.get('/kpi/live', async (req, res) => {
     res.json({
       success: true,
       data: operational,
-      wsEndpoint: `ws://localhost:${WS_PORT}`,
+      wsEndpoint: `ws://${req.headers.host}`,
       timestamp: new Date()
     });
   } catch (error) {
@@ -1197,7 +1196,7 @@ async function startServer() {
     // Start server
     server.listen(PORT, () => {
       console.log(`KPI API running on port ${PORT}`);
-      console.log(`WebSocket server running on port ${WS_PORT}`);
+      console.log(`WebSocket server running on same port ${PORT}`);
       console.log('Available endpoints:');
       console.log('  GET /kpi/global');
       console.log('  GET /kpi/live');
@@ -1220,7 +1219,7 @@ async function startServer() {
     // Start without MongoDB for development
     server.listen(PORT, () => {
       console.log(`KPI API running on port ${PORT} (without MongoDB)`);
-      console.log(`WebSocket server running on port ${WS_PORT}`);
+      console.log(`WebSocket server running on same port ${PORT}`);
     });
   }
 }
