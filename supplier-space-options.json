@@ -1,0 +1,12 @@
+[
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "MONGODB_URI",
+    "Value": "mongodb+srv://rt_admin:RtAdmin2024@stagingrt.v2jnoh2.mongodb.net/rt-supplier-space?retryWrites=true&w=majority"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "CORS_ALLOWED_ORIGINS",
+    "Value": "*"
+  }
+]
