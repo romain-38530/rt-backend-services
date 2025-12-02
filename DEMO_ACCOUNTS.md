@@ -1,19 +1,22 @@
 # SYMPHONI.A - Comptes de Démonstration
 
 > **Mot de passe universel : `Demo2024!`**
+> **Dernière mise à jour : 02/12/2024**
+> **Statut : ✅ COMPTES CRÉÉS ET OPÉRATIONNELS**
 
 ---
 
 ## 1. PORTAIL INDUSTRIEL (Clients Principaux)
 
 **URL Production :** http://rt-auth-api-prod.eba-g2psqhq5.eu-central-1.elasticbeanstalk.com
+**Portail :** `industry`
 
-| Email | Entreprise | Rôle | Description |
-|-------|------------|------|-------------|
-| `demo@agrofrance.fr` | AgroFrance Industries | Admin | Industriel agroalimentaire - 500 expéditions/jour |
-| `logistique@agrofrance.fr` | AgroFrance Industries | Logistics Manager | Responsable logistique |
-| `demo@pharmalog.fr` | PharmaLog SA | Admin | Industrie pharmaceutique - Température contrôlée |
-| `demo@autoparts.fr` | AutoParts Distribution | Admin | Distribution pièces automobiles - Just-in-time |
+| Email | Nom | Entreprise | Statut |
+|-------|-----|------------|--------|
+| `demo@agrofrance.fr` | Jean Dupont | AgroFrance Industries | ✅ Créé |
+| `logistique@agrofrance.fr` | Marie Martin | AgroFrance Logistique | ✅ Créé |
+| `demo@pharmalog.fr` | Pierre Bernard | PharmaLog SA | ✅ Créé |
+| `demo@autoparts.fr` | Sophie Leroy | AutoParts Distribution | ✅ Créé |
 
 ### Scénarios de démo Industriel :
 - Créer une commande de transport
@@ -26,13 +29,14 @@
 ## 2. ESPACE FOURNISSEUR (Expéditeurs)
 
 **URL Production :** http://rt-supplier-space-prod.eba-ka46t2mz.eu-central-1.elasticbeanstalk.com
+**Portail :** `supplier`
 
-| Email | Entreprise | Contact | Localisation |
-|-------|------------|---------|--------------|
-| `expedition@usine-lyon.fr` | Usine Lyon Production | Paul Moreau | Lyon (69) |
-| `logistique@entrepot-marseille.fr` | Entrepôt Marseille Sud | Lucie Blanc | Marseille (13) |
-| `expedition@pharma-bordeaux.fr` | Pharma Bordeaux Lab | Thomas Petit | Bordeaux (33) |
-| `stock@fournisseur-paris.fr` | Stock Express Paris | Emma Rousseau | Roissy (95) |
+| Email | Nom | Entreprise | Statut |
+|-------|-----|------------|--------|
+| `expedition@usine-lyon.fr` | Paul Moreau | Usine Lyon Production | ✅ Créé |
+| `logistique@entrepot-marseille.fr` | Lucie Blanc | Entrepôt Marseille Sud | ✅ Créé |
+| `expedition@pharma-bordeaux.fr` | Thomas Petit | Pharma Bordeaux Lab | ⏳ Invitation envoyée |
+| `stock@fournisseur-paris.fr` | Emma Rousseau | Stock Express Paris | ⏳ Invitation envoyée |
 
 ### Scénarios de démo Fournisseur :
 - Voir les commandes à préparer
@@ -65,13 +69,14 @@
 
 ## 4. TRANSPORTEURS
 
-**URL Production :** http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com
+**URL Production :** http://rt-auth-api-prod.eba-g2psqhq5.eu-central-1.elasticbeanstalk.com
+**Portail :** `transporter`
 
-| Email | Entreprise | Contact | Flotte | Spécialités |
-|-------|------------|---------|--------|-------------|
-| `dispatch@transport-express.fr` | Transport Express France | Jacques Martin | 150 véhicules | Frigo, Express, Palettes |
-| `planning@frigoroute.fr` | FrigoRoute International | Hans Schmidt | 80 véhicules | Frigo, International, Pharma |
-| `exploitation@rapido-log.fr` | Rapido Logistique | Ahmed Benali | 200 véhicules | Express, Messagerie, Palettes |
+| Email | Nom | Entreprise | Statut |
+|-------|-----|------------|--------|
+| `dispatch@transport-express.fr` | Jacques Martin | Transport Express France | ✅ Créé |
+| `planning@frigoroute.fr` | Hans Schmidt | FrigoRoute International | ✅ Créé |
+| `exploitation@rapido-log.fr` | Ahmed Benali | Rapido Logistique | ✅ Créé |
 
 ### Scénarios de démo Transporteur :
 - Voir les missions assignées
@@ -134,17 +139,22 @@ curl http://rt-recipient-space-prod.eba-xir23y3r.eu-central-1.elasticbeanstalk.c
 
 ### Login Test
 ```bash
-# Industriel
-curl -X POST http://rt-auth-api-prod.eba-g2psqhq5.eu-central-1.elasticbeanstalk.com/api/v1/auth/login \
+# Industriel (via auth-api)
+curl -X POST http://rt-auth-api-prod.eba-g2psqhq5.eu-central-1.elasticbeanstalk.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"demo@agrofrance.fr","password":"Demo2024!"}'
 
-# Fournisseur
+# Transporteur (via auth-api)
+curl -X POST http://rt-auth-api-prod.eba-g2psqhq5.eu-central-1.elasticbeanstalk.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"dispatch@transport-express.fr","password":"Demo2024!"}'
+
+# Fournisseur (via supplier-space-api)
 curl -X POST http://rt-supplier-space-prod.eba-ka46t2mz.eu-central-1.elasticbeanstalk.com/api/v1/supplier/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"expedition@usine-lyon.fr","password":"Demo2024!"}'
 
-# Destinataire
+# Destinataire (via recipient-space-api)
 curl -X POST http://rt-recipient-space-prod.eba-xir23y3r.eu-central-1.elasticbeanstalk.com/api/v1/recipient/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"reception@rungis-client.fr","password":"Demo2024!"}'
@@ -172,5 +182,28 @@ node scripts/seed-demo-users.js
 
 ---
 
-*Document généré le 01/12/2024*
+*Document mis à jour le 02/12/2024*
 *SYMPHONI.A - Comptes de démonstration*
+
+---
+
+## 8. RÉSUMÉ DES COMPTES CRÉÉS
+
+### Comptes opérationnels (auth-api)
+| Portail | Email | Statut |
+|---------|-------|--------|
+| industry | demo@agrofrance.fr | ✅ |
+| industry | logistique@agrofrance.fr | ✅ |
+| industry | demo@pharmalog.fr | ✅ |
+| industry | demo@autoparts.fr | ✅ |
+| transporter | dispatch@transport-express.fr | ✅ |
+| transporter | planning@frigoroute.fr | ✅ |
+| transporter | exploitation@rapido-log.fr | ✅ |
+
+### Comptes fournisseurs (supplier-space-api)
+| Email | Statut |
+|-------|--------|
+| expedition@usine-lyon.fr | ✅ |
+| logistique@entrepot-marseille.fr | ✅ |
+
+**Total : 9 comptes actifs et opérationnels**
