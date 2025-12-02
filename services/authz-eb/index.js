@@ -289,6 +289,8 @@ app.use(helmet());
 // CORS configuration - Allow Amplify domains and main domains
 const allowedOrigins = [
   'https://main.df8cnylp3pqka.amplifyapp.com',
+  'https://www.symphonia-controltower.com',
+  'https://symphonia-controltower.com',
   'https://www.rt-technologie.com',
   'https://rttechnologie.com',
   'http://localhost:3000', // Local development
