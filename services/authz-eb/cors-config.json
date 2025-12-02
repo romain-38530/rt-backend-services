@@ -1,0 +1,7 @@
+[
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "CORS_ALLOWED_ORIGINS",
+    "Value": "https://www.symphonia-controltower.com,https://symphonia-controltower.com"
+  }
+]
