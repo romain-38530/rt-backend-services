@@ -2,9 +2,13 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb');
 const fetch = require('node-fetch');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { setupCarrierRoutes } = require('./carriers');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-secret-key-2024-change-in-production';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -231,6 +235,122 @@ async function tryAPILayer(countryCode, vatNumber, timeout) {
   }
 }
 
+// INSEE SIRENE API enrichment for French companies
+// Using recherche-entreprises.api.gouv.fr (free, no auth required)
+async function enrichWithINSEE(siren) {
+  const timeout = 8000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    // API Recherche Entreprises (gratuite, sans authentification)
+    const response = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${siren}&mtm_campaign=rt-symphonia`, {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'RT-VAT-Validation/2.0.0'
+      }
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`INSEE API returned status ${response.status} for SIREN ${siren}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    // Trouver l'entreprise correspondante
+    const results = data.results || [];
+    const entreprise = results.find(r => r.siren === siren) || results[0];
+
+    if (!entreprise) {
+      console.log(`INSEE API: No entreprise found for SIREN ${siren}`);
+      return null;
+    }
+
+    // Mapping des catégories juridiques
+    const categoriesJuridiques = {
+      '1000': 'Entrepreneur individuel',
+      '5498': 'EURL',
+      '5499': 'SARL',
+      '5505': 'SA à conseil d\'administration',
+      '5510': 'SA à directoire',
+      '5710': 'SAS',
+      '5720': 'SASU',
+      '5800': 'Société européenne',
+      '6540': 'SCI',
+      '6541': 'SCI de construction-vente',
+      '6542': 'SCI d\'attribution',
+      '6543': 'SCI d\'investissement',
+      '6544': 'SCPI',
+      '6599': 'Autres sociétés civiles'
+    };
+
+    // Récupérer le siège social
+    const siege = entreprise.siege || {};
+    const siret = siege.siret || null;
+
+    const categorieJuridique = entreprise.nature_juridique;
+    const formeJuridique = categoriesJuridiques[categorieJuridique] ||
+      entreprise.nature_juridique_libelle ||
+      (categorieJuridique?.startsWith('54') ? 'SARL' :
+       categorieJuridique?.startsWith('57') ? 'SAS' :
+       categorieJuridique?.startsWith('55') ? 'SA' : null);
+
+    console.log(`INSEE enrichment success for SIREN ${siren}: ${formeJuridique}, SIRET: ${siret}`);
+
+    return {
+      siren: entreprise.siren,
+      siret: siret,
+      formeJuridique: formeJuridique,
+      categorieJuridique: categorieJuridique,
+      dateCreation: entreprise.date_creation,
+      trancheEffectifs: entreprise.tranche_effectif_salarie,
+      denominationUsuelle: entreprise.nom_raison_sociale,
+      activitePrincipale: siege.activite_principale,
+      economieSocialeETSolidaire: entreprise.economie_sociale_solidaire
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.log(`INSEE enrichment failed for SIREN ${siren}: ${error.message}`);
+    return null;
+  }
+}
+
+// Parse address to extract postal code and city
+function parseAddress(address) {
+  if (!address) return { address: '', postalCode: '', city: '' };
+
+  // Format typique: "123 RUE EXEMPLE\n75001 PARIS"
+  const lines = address.split('\n');
+  if (lines.length >= 2) {
+    const lastLine = lines[lines.length - 1];
+    const match = lastLine.match(/^(\d{5})\s+(.+)$/);
+    if (match) {
+      return {
+        address: lines.slice(0, -1).join(', '),
+        postalCode: match[1],
+        city: match[2]
+      };
+    }
+  }
+
+  // Essayer de trouver le code postal dans la chaîne
+  const cpMatch = address.match(/(\d{5})\s+([A-Z\s\-]+)$/);
+  if (cpMatch) {
+    const idx = address.indexOf(cpMatch[0]);
+    return {
+      address: address.substring(0, idx).trim().replace(/\n/g, ', '),
+      postalCode: cpMatch[1],
+      city: cpMatch[2].trim()
+    };
+  }
+
+  return { address: address.replace(/\n/g, ', '), postalCode: '', city: '' };
+}
+
 // Main validation function with fallback system
 async function validateVATWithVIES(countryCode, vatNumber) {
   const cacheKey = `${countryCode}${vatNumber}`;
@@ -291,10 +411,16 @@ const allowedOrigins = [
   'https://main.df8cnylp3pqka.amplifyapp.com',
   'https://www.symphonia-controltower.com',
   'https://symphonia-controltower.com',
+  'https://industrie.symphonia-controltower.com',
+  'https://fournisseur.symphonia-controltower.com',
+  'https://destinataire.symphonia-controltower.com',
+  'https://transporteur.symphonia-controltower.com',
   'https://www.rt-technologie.com',
   'https://rttechnologie.com',
   'http://localhost:3000', // Local development
-  'http://localhost:3001'
+  'http://localhost:3001',
+  'http://localhost:5173', // Vite dev server
+  'http://localhost:5174'
 ];
 
 app.use(cors({
@@ -368,12 +494,13 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT Authentication API with VAT Validation & Carrier Management',
-    version: '3.0.0',
+    version: '3.1.0',
     features: [
       'Express',
       'MongoDB',
       'CORS',
       'Helmet',
+      'User Authentication (JWT)',
       'VAT Validation (Multi-API Fallback: VIES -> AbstractAPI -> APILayer)',
       'Price Calculation',
       'Carrier Management System (SYMPHONI.A)',
@@ -384,6 +511,9 @@ app.get('/', (req, res) => {
     endpoints: [
       'GET /health',
       'GET /',
+      'POST /api/auth/register',
+      'POST /api/auth/login',
+      'GET /api/auth/me',
       'POST /api/vat/validate-format',
       'POST /api/vat/validate',
       'POST /api/vat/calculate-price',
@@ -400,6 +530,171 @@ app.get('/', (req, res) => {
     ]
   });
 });
+
+// ==================== AUTHENTICATION ROUTES ====================
+
+// Register new user
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name, portal, companyName, phone } = req.body;
+
+    if (!email || !password || !portal) {
+      return res.status(400).json({ message: 'Email, password, and portal are required' });
+    }
+
+    // Validate portal value
+    const validPortals = ['industry', 'transporter', 'recipient', 'supplier', 'forwarder', 'logistician', 'backoffice'];
+    if (!validPortals.includes(portal)) {
+      return res.status(400).json({
+        message: `Invalid portal. Must be one of: ${validPortals.join(', ')}`
+      });
+    }
+
+    if (!mongoConnected || !db) {
+      return res.status(503).json({ message: 'Database not connected' });
+    }
+
+    // Check if user already exists
+    const existingUser = await db.collection('users').findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new user
+    const newUser = {
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      name: name || null,
+      portal,
+      role: 'user',
+      companyName: companyName || null,
+      phone: phone || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('users').insertOne(newUser);
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: result.insertedId, email: newUser.email, role: newUser.role, portal: newUser.portal },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      message: 'User created successfully',
+      token,
+      user: {
+        id: result.insertedId,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role,
+        portal: newUser.portal
+      }
+    });
+
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({ message: error.message || 'Internal server error' });
+  }
+});
+
+// Login user
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    if (!mongoConnected || !db) {
+      return res.status(503).json({ message: 'Database not connected' });
+    }
+
+    // Find user by email
+    const user = await db.collection('users').findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Check password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, email: user.email, role: user.role, portal: user.portal },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        portal: user.portal,
+        companyName: user.companyName
+      }
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: error.message || 'Internal server error' });
+  }
+});
+
+// Get current user
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+
+    if (!mongoConnected || !db) {
+      return res.status(503).json({ message: 'Database not connected' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(decoded.userId) },
+      { projection: { password: 0 } }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        portal: user.portal,
+        companyName: user.companyName
+      }
+    });
+
+  } catch (error) {
+    console.error('Auth error:', error);
+    res.status(401).json({ message: 'Invalid token' });
+  }
+});
+
+// ==================== END AUTHENTICATION ROUTES ====================
 
 // VAT validation endpoints
 app.post('/api/vat/validate-format', (req, res) => {
@@ -485,7 +780,8 @@ app.post('/api/vat/validate', async (req, res) => {
 
     const viesResult = await validateVATWithVIES(parsed.countryCode, parsed.vatNumber);
 
-    res.json({
+    // Préparer la réponse de base
+    const response = {
       success: true,
       valid: viesResult.valid,
       countryCode: viesResult.countryCode,
@@ -496,7 +792,38 @@ app.post('/api/vat/validate', async (req, res) => {
       source: viesResult.source,
       errorCode: viesResult.errorCode,
       errorMessage: viesResult.errorMessage
-    });
+    };
+
+    // Pour les entreprises françaises valides, enrichir avec l'API INSEE
+    if (viesResult.valid && parsed.countryCode === 'FR') {
+      try {
+        // Le SIREN est composé des 9 derniers chiffres du numéro de TVA (après les 2 chiffres de clé)
+        const siren = parsed.vatNumber.substring(2); // Enlever les 2 premiers chiffres (clé)
+
+        const inseeData = await enrichWithINSEE(siren);
+
+        if (inseeData) {
+          response.siren = inseeData.siren;
+          response.siret = inseeData.siret;
+          response.legalForm = inseeData.formeJuridique;
+          response.categorieJuridique = inseeData.categorieJuridique;
+          response.dateCreation = inseeData.dateCreation;
+          response.activitePrincipale = inseeData.activitePrincipale;
+        }
+
+        // Parser l'adresse pour extraire code postal et ville
+        const parsedAddr = parseAddress(viesResult.address);
+        response.streetAddress = parsedAddr.address;
+        response.postalCode = parsedAddr.postalCode;
+        response.city = parsedAddr.city;
+
+      } catch (enrichError) {
+        console.log('INSEE enrichment error:', enrichError.message);
+        // Continue sans enrichissement
+      }
+    }
+
+    res.json(response);
 
   } catch (error) {
     res.status(500).json({
