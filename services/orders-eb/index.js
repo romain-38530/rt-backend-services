@@ -76,14 +76,149 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT Orders API',
-    version: '1.0.0',
-    features: ['Express', 'MongoDB', 'CORS', 'Helmet'],
+    version: '2.0.0',
+    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'CRUD Orders'],
     endpoints: [
       'GET /health',
-      'GET /'
+      'GET /',
+      'GET /api/v1/orders',
+      'GET /api/v1/orders/:id',
+      'POST /api/v1/orders',
+      'PUT /api/v1/orders/:id',
+      'DELETE /api/v1/orders/:id'
     ]
   });
 });
+
+// ==================== ORDERS CRUD ====================
+
+// Get all orders
+app.get('/api/v1/orders', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const orders = await db.collection('orders').find({}).sort({ createdAt: -1 }).toArray();
+    res.json({ success: true, count: orders.length, data: orders });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single order
+app.get('/api/v1/orders/:id', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const { ObjectId } = require('mongodb');
+    let order;
+
+    // Try finding by ObjectId first, then by reference
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: req.params.id });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json({ success: true, data: order });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create order
+app.post('/api/v1/orders', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const order = {
+      ...req.body,
+      reference: req.body.reference || `CMD-${Date.now()}`,
+      status: req.body.status || 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('orders').insertOne(order);
+    const createdOrder = await db.collection('orders').findOne({ _id: result.insertedId });
+
+    res.status(201).json({
+      success: true,
+      message: 'Order created successfully',
+      data: createdOrder
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update order
+app.put('/api/v1/orders/:id', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const { ObjectId } = require('mongodb');
+    const updateData = {
+      ...req.body,
+      updatedAt: new Date()
+    };
+    delete updateData._id; // Prevent updating _id
+
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $set: updateData },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $set: updateData },
+        { returnDocument: 'after' }
+      );
+    }
+
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json({ success: true, message: 'Order updated', data: result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Delete order
+app.delete('/api/v1/orders/:id', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const { ObjectId } = require('mongodb');
+    let result;
+
+    try {
+      result = await db.collection('orders').deleteOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      result = await db.collection('orders').deleteOne({ reference: req.params.id });
+    }
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json({ success: true, message: 'Order deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== END ORDERS CRUD ====================
 
 // Start server
 async function startServer() {
