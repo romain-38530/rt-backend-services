@@ -594,6 +594,116 @@ function createStripeRoutes(mongoClient, mongoConnected) {
   });
 
   /**
+   * POST /api/setup/create-session
+   * Créer une session Stripe pour enregistrer une carte bancaire (sans paiement)
+   * ENDPOINT PUBLIC - Pour l'onboarding
+   *
+   * Body: {
+   *   requestId: "xxx",                      // ID de la demande d'onboarding
+   *   email: "client@example.com",
+   *   successUrl: "/finalize-payment/success",
+   *   cancelUrl: "/finalize-payment"
+   * }
+   */
+  router.post('/create-session', checkMongoDB, async (req, res) => {
+    try {
+      const { requestId, email, successUrl, cancelUrl } = req.body;
+
+      if (!requestId || !email) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'MISSING_PARAMS',
+            message: 'requestId and email are required'
+          }
+        });
+      }
+
+      const db = mongoClient.db();
+
+      // Vérifier que la demande d'onboarding existe
+      const onboardingRequest = await db.collection('onboarding_requests').findOne({
+        _id: new ObjectId(requestId),
+        email: email.toLowerCase()
+      });
+
+      if (!onboardingRequest) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'REQUEST_NOT_FOUND',
+            message: 'Onboarding request not found'
+          }
+        });
+      }
+
+      // Créer ou récupérer le Stripe Customer
+      let stripeCustomerId = onboardingRequest.stripeCustomerId;
+
+      if (!stripeCustomerId) {
+        const customer = await stripe.customers.create({
+          email: email.toLowerCase(),
+          name: onboardingRequest.companyName,
+          metadata: {
+            requestId,
+            companyName: onboardingRequest.companyName || '',
+            source: 'onboarding'
+          }
+        });
+        stripeCustomerId = customer.id;
+
+        // Sauvegarder le Stripe Customer ID dans la demande
+        await db.collection('onboarding_requests').updateOne(
+          { _id: new ObjectId(requestId) },
+          { $set: { stripeCustomerId, updatedAt: new Date() } }
+        );
+      }
+
+      // Créer la session de checkout en mode "setup"
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        mode: 'setup',
+        success_url: successUrl || `${FRONTEND_URL}/finalize-payment/success?requestId=${requestId}`,
+        cancel_url: cancelUrl || `${FRONTEND_URL}/finalize-payment?requestId=${requestId}&email=${encodeURIComponent(email)}&cancelled=true`,
+        metadata: {
+          requestId,
+          type: 'card_setup',
+          companyName: onboardingRequest.companyName
+        }
+      });
+
+      // Enregistrer la session dans la DB
+      await db.collection('setup_sessions').insertOne({
+        sessionId: session.id,
+        requestId,
+        email: email.toLowerCase(),
+        stripeCustomerId,
+        status: 'pending',
+        createdAt: new Date(),
+        expiresAt: new Date(session.expires_at * 1000)
+      });
+
+      console.log('✅ Setup session created for:', email, 'Session:', session.id);
+
+      res.json({
+        success: true,
+        url: session.url,
+        sessionId: session.id
+      });
+    } catch (error) {
+      console.error('Error creating setup session:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'STRIPE_ERROR',
+          message: error.message
+        }
+      });
+    }
+  });
+
+  /**
    * GET /api/stripe/products
    * Liste des produits et prix disponibles (public)
    */
