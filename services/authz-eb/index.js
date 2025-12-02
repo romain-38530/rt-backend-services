@@ -7,6 +7,7 @@ const fetch = require('node-fetch');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { setupCarrierRoutes } = require('./carriers');
+const { sendClientOnboardingConfirmationEmail } = require('./email');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-secret-key-2024-change-in-production';
 
@@ -836,6 +837,42 @@ app.post('/api/vat/validate', async (req, res) => {
   }
 });
 
+// Check if VAT number is already registered
+app.get('/api/vat/check-registered/:vatNumber', async (req, res) => {
+  try {
+    const { vatNumber } = req.params;
+
+    if (!vatNumber || vatNumber.length < 5) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'vatNumber is required' }
+      });
+    }
+
+    if (!mongoConnected || !db) {
+      // Si pas de connexion DB, on ne peut pas vérifier - on laisse passer
+      return res.json({ success: true, registered: false });
+    }
+
+    // Chercher dans onboarding_requests
+    const existing = await db.collection('onboarding_requests').findOne({
+      vatNumber: vatNumber.toUpperCase().replace(/[\s\-\.]/g, '')
+    });
+
+    res.json({
+      success: true,
+      registered: !!existing,
+      message: existing
+        ? `Cette entreprise (TVA: ${vatNumber}) est déjà enregistrée dans notre système.`
+        : null
+    });
+
+  } catch (error) {
+    console.error('Check registered error:', error);
+    res.json({ success: true, registered: false }); // En cas d'erreur, on laisse passer
+  }
+});
+
 // Price calculation with VAT
 app.post('/api/vat/calculate-price', async (req, res) => {
   try {
@@ -934,7 +971,7 @@ app.post('/api/vat/calculate-price', async (req, res) => {
 // Onboarding endpoint
 app.post('/api/onboarding/submit', async (req, res) => {
   try {
-    const { email, companyName, siret, vatNumber, phone, address, subscriptionType, source } = req.body;
+    const { email, companyName, siret, vatNumber, phone, address, subscriptionType, paymentMethod, source } = req.body;
 
     // Validate required fields
     if (!email || typeof email !== 'string') {
@@ -990,6 +1027,7 @@ app.post('/api/onboarding/submit', async (req, res) => {
       phone: phone ? phone.trim() : null,
       address: address || null,
       subscriptionType: subscriptionType || null,
+      paymentMethod: paymentMethod || 'card', // 'card', 'sepa', 'invoice'
       source: source || 'WEB',
       status: 'pending',
       createdAt: new Date(),
@@ -1006,6 +1044,25 @@ app.post('/api/onboarding/submit', async (req, res) => {
       const result = await collection.insertOne(onboardingRequest);
 
       console.log('Onboarding request saved successfully:', result.insertedId);
+
+      // Envoyer l'email de confirmation (non-bloquant)
+      sendClientOnboardingConfirmationEmail(
+        onboardingRequest.email,
+        onboardingRequest.companyName,
+        result.insertedId.toString(),
+        {
+          paymentMethod: onboardingRequest.paymentMethod,
+          subscriptionType: onboardingRequest.subscriptionType
+        }
+      ).then(emailResult => {
+        if (emailResult.success) {
+          console.log('Confirmation email sent to:', onboardingRequest.email);
+        } else {
+          console.warn('Failed to send confirmation email:', emailResult.error);
+        }
+      }).catch(emailError => {
+        console.error('Email sending error:', emailError.message);
+      });
 
       // Return success response
       res.status(201).json({

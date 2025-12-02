@@ -1,0 +1,303 @@
+{
+  "timestamp": "2025-12-02T17:10:31.616519",
+  "total_services": 29,
+  "healthy_count": 29,
+  "unhealthy_count": 0,
+  "login_test": {
+    "success": true,
+    "message": "Login OK",
+    "user": "demo@agrofrance.fr"
+  },
+  "services": [
+    {
+      "name": "Tracking API",
+      "url": "https://d2mn43ccfvt3ub.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "connected",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Planning API",
+      "url": "https://dpw23bg2dclr1.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Appointments API",
+      "url": "https://d28uezz0327lfm.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Planning Sites API",
+      "url": "https://dyb8rmhhukzt6.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Authz API",
+      "url": "https://ddaywxps9n701.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "2.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Orders API",
+      "url": "https://dh9acecfz0wg0.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Auth API",
+      "url": "https://d2swp5s4jfg8ri.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "2.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "TMS Sync API",
+      "url": "https://d1yk7yneclf57m.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Geo Tracking API",
+      "url": "https://du5xhabwwbfp9.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "eCMR API",
+      "url": "https://d28q05cx5hmg9q.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Palettes Circular API",
+      "url": "https://djlfoe9zmrj66.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Palettes API",
+      "url": "https://d2o4ng8nutcmou.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Documents API",
+      "url": "https://d8987l284s9q4.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Affret IA API",
+      "url": "https://d393yiia4ig3bw.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "2.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Scoring API",
+      "url": "https://d1uyscmpcwc65a.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Vigilance API",
+      "url": "https://d23m3oa6ef3tr1.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Billing API",
+      "url": "https://d1ciol606nbfs0.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "eCMR Signature API",
+      "url": "https://d2ehvhc99fi3bj.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Storage Market API",
+      "url": "https://d1ea8wbaf6ws9i.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "connected",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Subscriptions API",
+      "url": "https://d39uizi9hzozo8.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "v2.0.3-ai-api-endpoints",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Subscriptions Pricing API",
+      "url": "https://d35kjzzin322yz.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Supplier Space API",
+      "url": "https://d2wctqqghsi65l.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "WebSocket API",
+      "url": "https://d2aodzk1jwptdr.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "KPI API",
+      "url": "https://d57lw7v3zgfpy.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Notifications API",
+      "url": "https://d2t9age53em7o5.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Chatbot API",
+      "url": "https://de1913kh0ya48.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Recipient Space API",
+      "url": "https://d1evvlmqvhcz4f.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Sales Agents API",
+      "url": "https://d3tr75b4e76icu.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "N/A",
+      "response_time": "OK",
+      "error": null
+    },
+    {
+      "name": "Training API",
+      "url": "https://d39f1h56c4jwz4.cloudfront.net",
+      "healthy": true,
+      "status": "healthy",
+      "version": "1.0.0",
+      "mongodb": "active",
+      "response_time": "OK",
+      "error": null
+    }
+  ]
+}

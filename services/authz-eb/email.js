@@ -446,10 +446,183 @@ async function testSMTPConnection() {
   }
 }
 
+/**
+ * Email de confirmation d'inscription client (Onboarding initial)
+ * @param {string} clientEmail - Email du client
+ * @param {string} companyName - Nom de l'entreprise
+ * @param {string} requestId - ID de la demande MongoDB
+ * @param {Object} options - Options supplémentaires
+ * @param {string} options.paymentMethod - Méthode de paiement ('card', 'sepa', 'invoice')
+ * @param {string} options.subscriptionType - Type d'abonnement
+ */
+async function sendClientOnboardingConfirmationEmail(clientEmail, companyName, requestId, options = {}) {
+  const { paymentMethod } = options;
+  const frontendUrl = process.env.FRONTEND_URL || 'https://main.df8cnylp3pqka.amplifyapp.com';
+
+  // Lien de finalisation de paiement
+  const paymentLink = `${frontendUrl}/finalize-payment?requestId=${requestId}&email=${encodeURIComponent(clientEmail)}`;
+
+  // Section conditionnelle pour le paiement par carte
+  const cardPaymentSection = paymentMethod === 'card' ? `
+          <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 25px; border-radius: 10px; margin: 25px 0; text-align: center;">
+            <h3 style="color: white; margin: 0 0 15px 0;">💳 Finalisez votre inscription</h3>
+            <p style="color: #dbeafe; margin: 0 0 20px 0; font-size: 14px;">
+              Pour activer immédiatement votre compte, veuillez enregistrer vos coordonnées bancaires de manière sécurisée.
+            </p>
+            <a href="${paymentLink}" style="display: inline-block; background: white; color: #1d4ed8; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+              Enregistrer ma carte bancaire
+            </a>
+            <p style="color: #93c5fd; margin: 15px 0 0 0; font-size: 12px;">
+              🔒 Paiement 100% sécurisé via Stripe
+            </p>
+          </div>
+  ` : '';
+
+  // Section pour SEPA
+  const sepaPaymentSection = paymentMethod === 'sepa' ? `
+          <div style="background: #f0fdf4; border: 1px solid #86efac; padding: 20px; border-radius: 10px; margin: 25px 0;">
+            <h3 style="color: #166534; margin: 0 0 10px 0;">🏦 Paiement par prélèvement SEPA</h3>
+            <p style="color: #15803d; margin: 0; font-size: 14px;">
+              Vous recevrez un email séparé avec le mandat SEPA à signer électroniquement.
+            </p>
+          </div>
+  ` : '';
+
+  // Section pour facture
+  const invoicePaymentSection = paymentMethod === 'invoice' ? `
+          <div style="background: #fefce8; border: 1px solid #fde047; padding: 20px; border-radius: 10px; margin: 25px 0;">
+            <h3 style="color: #854d0e; margin: 0 0 10px 0;">📄 Paiement sur facture</h3>
+            <p style="color: #a16207; margin: 0; font-size: 14px;">
+              Votre première facture vous sera envoyée après activation de votre compte. Délai de paiement : 30 jours.
+            </p>
+          </div>
+  ` : '';
+
+  const subject = paymentMethod === 'card'
+    ? '💳 SYMPHONI.A - Finalisez votre inscription (Action requise)'
+    : '✅ Inscription SYMPHONI.A - Votre compte est en cours de création';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #f97316 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .logo { max-width: 200px; margin-bottom: 15px; }
+        .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+        .info-box { background: #fff7ed; border: 1px solid #fed7aa; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; }
+        .steps { background: white; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .step { display: flex; align-items: center; margin: 15px 0; }
+        .step-number { background: #f97316; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 15px; flex-shrink: 0; }
+        .id-box { background: #f3f4f6; border: 1px solid #d1d5db; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <!-- Logo SYMPHONI.A -->
+          <div style="margin-bottom: 15px;">
+            <svg width="180" height="40" viewBox="0 0 180 40" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#fde68a;stop-opacity:1" />
+                </linearGradient>
+              </defs>
+              <text x="0" y="30" font-family="'Segoe UI', Arial, sans-serif" font-size="28" font-weight="bold" fill="url(#logoGrad)">SYMPHONI.A</text>
+            </svg>
+          </div>
+          <p style="font-size: 14px; margin: 0; opacity: 0.9;">Control Tower - Gestion Transport Intelligente</p>
+        </div>
+        <div class="content">
+          <h2 style="color: #1f2937; margin-top: 0;">Merci pour votre inscription !</h2>
+
+          <p>Bonjour,</p>
+          <p>Nous avons bien reçu votre demande d'inscription pour <strong>${companyName}</strong>.</p>
+
+          ${cardPaymentSection}
+          ${sepaPaymentSection}
+          ${invoicePaymentSection}
+
+          <div class="info-box">
+            <strong>📋 ${paymentMethod === 'card' ? 'Étapes restantes' : 'Prochaines étapes'} :</strong>
+            <div class="steps" style="background: transparent; padding: 10px 0; margin: 10px 0 0 0;">
+              ${paymentMethod === 'card' ? `
+              <div class="step">
+                <div class="step-number" style="background: #3b82f6;">1</div>
+                <div><strong>Enregistrez votre carte bancaire</strong> (lien ci-dessus)</div>
+              </div>
+              <div class="step">
+                <div class="step-number">2</div>
+                <div>Activation immédiate de votre compte</div>
+              </div>
+              <div class="step">
+                <div class="step-number">3</div>
+                <div>Réception de vos identifiants par email</div>
+              </div>
+              ` : `
+              <div class="step">
+                <div class="step-number">1</div>
+                <div>Notre équipe va examiner votre dossier</div>
+              </div>
+              <div class="step">
+                <div class="step-number">2</div>
+                <div>Nous vérifierons les informations fournies</div>
+              </div>
+              <div class="step">
+                <div class="step-number">3</div>
+                <div>Vous recevrez vos identifiants de connexion par email</div>
+              </div>
+              <div class="step">
+                <div class="step-number">4</div>
+                <div>Vous pourrez alors accéder à la plateforme</div>
+              </div>
+              `}
+            </div>
+          </div>
+
+          <p style="color: #6b7280; font-size: 14px;">
+            Le délai de traitement est généralement de <strong>24 à 48 heures ouvrées</strong>.
+          </p>
+
+          <div class="id-box">
+            <p style="margin: 0 0 5px 0; color: #6b7280; font-size: 12px;">Référence de votre demande :</p>
+            <p style="margin: 0; color: #1f2937; font-size: 16px; font-weight: bold; font-family: monospace;">${requestId}</p>
+          </div>
+
+          <p style="color: #6b7280; font-size: 14px;">
+            Si vous avez des questions, n'hésitez pas à nous contacter.
+          </p>
+        </div>
+        <div class="footer">
+          <p style="margin: 0;">© 2024 SYMPHONI.A - Control Tower</p>
+          <p style="margin: 5px 0 0 0;">Cet email a été envoyé automatiquement, merci de ne pas y répondre.</p>
+          <p style="margin: 10px 0 0 0;">
+            <a href="${frontendUrl}" style="color: #f97316; text-decoration: none;">symphonia-controltower.com</a>
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({
+    to: clientEmail,
+    subject,
+    html
+  });
+}
+
 module.exports = {
   sendEmail,
   sendCarrierInvitationEmail,
   sendOnboardingSuccessEmail,
+  sendClientOnboardingConfirmationEmail,
   sendVigilanceAlertEmail,
   sendCarrierBlockedEmail,
   sendCarrierUnblockedEmail,

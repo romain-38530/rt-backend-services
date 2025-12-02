@@ -1,0 +1,45 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      nodemailer:
+        specifier: ^6.10.1
+        version: 6.10.1
+    devDependencies:
+      ovh:
+        specifier: ^2.0.3
+        version: 2.0.3
+
+packages:
+
+  async@0.9.2:
+    resolution: {integrity: sha512-l6ToIJIotphWahxxHyzK9bnLR6kM4jJIIgLShZeqLY7iboHoGkdgFl7W2/Ivi4SkMJYGKqW8vSuk0uKUj6qsSw==}
+
+  bluebird@3.7.2:
+    resolution: {integrity: sha512-XpNj6GDQzdfW+r2Wnn7xiSAd7TM3jzkxGXBGTtWKuSXv1xUV+azxAm8jdWZN06QTQk+2N2XB9jRDkvbmQmcRtg==}
+
+  nodemailer@6.10.1:
+    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+    engines: {node: '>=6.0.0'}
+
+  ovh@2.0.3:
+    resolution: {integrity: sha512-K2XpfSYza7PHVDqAP6BNk92X3f+BvaNd6eSgMqguLTaUz/DYzOyHsbGFu7lyHTkIUUb9qamvJ9FC6OTzk7tj3Q==}
+
+snapshots:
+
+  async@0.9.2: {}
+
+  bluebird@3.7.2: {}
+
+  nodemailer@6.10.1: {}
+
+  ovh@2.0.3:
+    dependencies:
+      async: 0.9.2
+      bluebird: 3.7.2

@@ -7,17 +7,17 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "express": "^4.18.2",
     "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.3.0",
     "node-fetch": "^2.7.0",
-    "zod": "^3.22.4",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^6.9.7"
+    "nodemailer": "^6.10.1",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "ovh": "^3.0.1"
+    "ovh": "^2.0.3"
   }
 }
