@@ -7,13 +7,25 @@
  * ============================================================================
  */
 
-const Anthropic = require('@anthropic-ai/sdk');
+// Chargement optionnel du SDK Anthropic
+let Anthropic = null;
+try {
+  Anthropic = require('@anthropic-ai/sdk');
+} catch (e) {
+  console.warn('⚠️ @anthropic-ai/sdk package not available - Claude AI will be disabled');
+}
 
 class ClaudeIntegrationService {
   constructor() {
     this.apiKey = process.env.ANTHROPIC_API_KEY;
     this.model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022';
     this.maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '4096');
+
+    if (!Anthropic) {
+      console.warn('⚠️ Anthropic SDK not installed - Claude AI disabled');
+      this.enabled = false;
+      return;
+    }
 
     if (!this.apiKey) {
       console.warn('⚠️ ANTHROPIC_API_KEY not configured - Claude AI disabled');

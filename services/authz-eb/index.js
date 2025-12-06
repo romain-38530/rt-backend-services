@@ -439,6 +439,11 @@ app.use(cors({
       return callback(null, true);
     }
 
+    // Check if origin matches *.symphonia-controltower.com pattern
+    if (origin.match(/^https:\/\/.*\.symphonia-controltower\.com$/) || origin === 'https://symphonia-controltower.com') {
+      return callback(null, true);
+    }
+
     // Also check environment variable for additional origins
     const envOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(',') || [];
     if (envOrigins.includes(origin)) {
@@ -644,9 +649,16 @@ app.post('/api/auth/login', async (req, res) => {
         id: user._id,
         email: user.email,
         name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         role: user.role,
         portal: user.portal,
-        companyName: user.companyName
+        companyName: user.companyName,
+        organization: user.organization,
+        modules: user.modules || {},
+        subscription: user.subscription || null,
+        accountType: user.accountType,
+        accountStatus: user.accountStatus
       }
     });
 
@@ -683,9 +695,16 @@ app.get('/api/auth/me', async (req, res) => {
         id: user._id,
         email: user.email,
         name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         role: user.role,
         portal: user.portal,
-        companyName: user.companyName
+        companyName: user.companyName,
+        organization: user.organization,
+        modules: user.modules || {},
+        subscription: user.subscription || null,
+        accountType: user.accountType,
+        accountStatus: user.accountStatus
       }
     });
 

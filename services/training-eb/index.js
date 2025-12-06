@@ -35,7 +35,7 @@ async function connectMongoDB() {
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ALLOWED_ORIGINS?.split(',') || true,
+  origin: ['https://industrie.symphonia-controltower.com', 'https://transporteur.symphonia-controltower.com', 'http://localhost:3000'],
   credentials: true
 }));
 app.use(express.json());

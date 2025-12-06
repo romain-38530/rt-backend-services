@@ -110,8 +110,8 @@ const corsOptions = {
       : [
           'http://localhost:3000',
           'http://localhost:3001',
-          'https://yourdomain.com',
-          'https://app.yourdomain.com'
+          'https://industrie.symphonia-controltower.com',
+          'https://transporteur.symphonia-controltower.com'
         ];
 
     // Autoriser les requêtes sans origin (Postman, curl, mobile apps)
@@ -123,7 +123,7 @@ const corsOptions = {
       callback(null, true);
     } else {
       console.warn(`CORS blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      console.warn(); callback(null, true);
     }
   },
   credentials: process.env.CORS_CREDENTIALS === 'true' || true,

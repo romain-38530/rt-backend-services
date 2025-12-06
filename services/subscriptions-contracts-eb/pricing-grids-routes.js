@@ -1,20 +1,43 @@
 // Pricing Grids Routes - API REST pour gestion des grilles tarifaires
-// RT Backend Services - Version 1.0.0
+// RT Backend Services - Version 2.0.0
+// Support LTL/FTL/Messagerie + Import Excel
 
 const express = require('express');
-const { ObjectId } = require('mongodb');
+const multer = require('multer');
+const XLSX = require('xlsx');
 const {
   TransportTypes,
   PricingCalculationTypes,
   GridStatus,
   GeographicZones,
+  FrenchDepartments,
   pricingOptionsConfig,
   calculatePrice,
-  validateConditions,
   isGridActive,
   findApplicableGrids,
   generateGridId
 } = require('./pricing-grids-models');
+
+// Configuration multer pour upload de fichiers
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv'
+    ];
+    if (allowedTypes.includes(file.mimetype) ||
+        file.originalname.endsWith('.xlsx') ||
+        file.originalname.endsWith('.xls') ||
+        file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only Excel files (.xlsx, .xls) and CSV files are allowed'));
+    }
+  }
+});
 
 function createPricingGridsRoutes(mongoClient, mongoConnected) {
   const router = express.Router();
@@ -48,6 +71,11 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
         description,
         transportType,
         calculationType,
+        // Nouvelles structures par type
+        ltlPricing,
+        ftlPricing,
+        messageriePricing,
+        // Legacy
         basePricing,
         zonesPricing = [],
         weightTiers = [],
@@ -62,12 +90,12 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
       } = req.body;
 
       // Validation des champs requis
-      if (!carrierId || !industrialId || !name || !transportType || !calculationType || !basePricing || !createdBy) {
+      if (!carrierId || !industrialId || !name || !transportType || !calculationType || !createdBy) {
         return res.status(400).json({
           success: false,
           error: {
             code: 'INVALID_INPUT',
-            message: 'Missing required fields: carrierId, industrialId, name, transportType, calculationType, basePricing, createdBy'
+            message: 'Missing required fields: carrierId, industrialId, name, transportType, calculationType, createdBy'
           }
         });
       }
@@ -94,15 +122,18 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
         });
       }
 
-      // Valider basePricing
-      if (!basePricing.basePrice || !basePricing.minimumPrice) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_BASE_PRICING',
-            message: 'basePricing must include basePrice and minimumPrice'
-          }
-        });
+      // Validation spécifique par type de transport
+      if (transportType === 'LTL' && (!ltlPricing || !ltlPricing.zonePricing || ltlPricing.zonePricing.length === 0)) {
+        // Permettre la création sans ltlPricing pour les grilles vides
+        console.log('Creating LTL grid without pricing data (will be added later)');
+      }
+
+      if (transportType === 'FTL' && (!ftlPricing || !ftlPricing.zonePricing || ftlPricing.zonePricing.length === 0)) {
+        console.log('Creating FTL grid without pricing data (will be added later)');
+      }
+
+      if (transportType === 'MESSAGERIE' && (!messageriePricing || !messageriePricing.departmentPricing || messageriePricing.departmentPricing.length === 0)) {
+        console.log('Creating MESSAGERIE grid without pricing data (will be added later)');
       }
 
       const db = mongoClient.db();
@@ -129,14 +160,19 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
         description: description || '',
         transportType,
         calculationType,
-        basePricing: {
-          basePrice: basePricing.basePrice,
-          pricePerKm: basePricing.pricePerKm || 0,
-          pricePerKg: basePricing.pricePerKg || 0,
-          pricePerM3: basePricing.pricePerM3 || 0,
-          pricePerPallet: basePricing.pricePerPallet || 0,
-          minimumPrice: basePricing.minimumPrice,
-          currency: basePricing.currency || 'EUR'
+        // Nouvelles structures
+        ltlPricing: ltlPricing || { zonePricing: [] },
+        ftlPricing: ftlPricing || { zonePricing: [] },
+        messageriePricing: messageriePricing || { volumetricDivisor: 5000, departmentPricing: [] },
+        // Legacy pour rétrocompatibilité
+        basePricing: basePricing || {
+          basePrice: 0,
+          pricePerKm: 0,
+          pricePerKg: 0,
+          pricePerM3: 0,
+          pricePerPallet: 0,
+          minimumPrice: 0,
+          currency: 'EUR'
         },
         zonesPricing,
         weightTiers,
@@ -156,6 +192,7 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
         },
         version: 1,
         previousVersionId: null,
+        importedFrom: null,
         usage: {
           totalQuotes: 0,
           totalOrders: 0,
@@ -257,6 +294,132 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
     }
   });
 
+  // ==================== ROUTES STATIQUES (AVANT /:gridId) ====================
+  // IMPORTANT: Ces routes DOIVENT être définies AVANT la route /:gridId
+  // sinon Express matche "import", "zones", "departments" comme des gridId
+
+  /**
+   * GET /api/pricing-grids/import/template/:type
+   * Télécharger un template Excel pour import
+   */
+  router.get('/import/template/:type', (req, res) => {
+    const { type } = req.params;
+
+    let templateData;
+    let fileName;
+
+    switch (type.toUpperCase()) {
+      case 'LTL':
+        templateData = [
+          { zoneOrigin: 'IDF', zoneDestination: 'ARA', palletMin: 1, palletMax: 1, pricePerPallet: 150, minimumPrice: 150, transitDays: 2 },
+          { zoneOrigin: 'IDF', zoneDestination: 'ARA', palletMin: 2, palletMax: 5, pricePerPallet: 120, minimumPrice: 150, transitDays: 2 },
+          { zoneOrigin: 'IDF', zoneDestination: 'ARA', palletMin: 6, palletMax: 10, pricePerPallet: 100, minimumPrice: 150, transitDays: 2 },
+          { zoneOrigin: 'IDF', zoneDestination: 'ARA', palletMin: 11, palletMax: 20, pricePerPallet: 85, minimumPrice: 150, transitDays: 2 },
+          { zoneOrigin: 'IDF', zoneDestination: 'ARA', palletMin: 21, palletMax: 33, pricePerPallet: 75, minimumPrice: 150, transitDays: 2 },
+          { zoneOrigin: 'IDF', zoneDestination: 'PAC', palletMin: 1, palletMax: 1, pricePerPallet: 180, minimumPrice: 180, transitDays: 3 },
+        ];
+        fileName = 'template-ltl-groupage.xlsx';
+        break;
+
+      case 'FTL':
+        templateData = [
+          { zoneOrigin: 'IDF', zoneDestination: 'ARA', vehicleType: 'SEMI', flatRate: 1200, pricePerKm: null, minKm: null, minimumPrice: 1200, transitDays: 1 },
+          { zoneOrigin: 'IDF', zoneDestination: 'PAC', vehicleType: 'SEMI', flatRate: 1800, pricePerKm: null, minKm: null, minimumPrice: 1800, transitDays: 2 },
+          { zoneOrigin: 'IDF', zoneDestination: 'BRE', vehicleType: 'PORTEUR', flatRate: null, pricePerKm: 1.5, minKm: 200, minimumPrice: 300, transitDays: 1 },
+        ];
+        fileName = 'template-ftl-complet.xlsx';
+        break;
+
+      case 'MESSAGERIE':
+        templateData = [
+          { departmentOrigin: '75', departmentDestination: '13', minKg: 0, maxKg: 30, price: 15.50, minimumPrice: 10, transitDays: 2 },
+          { departmentOrigin: '75', departmentDestination: '13', minKg: 30, maxKg: 100, price: 25.00, minimumPrice: 10, transitDays: 2 },
+          { departmentOrigin: '75', departmentDestination: '13', minKg: 100, maxKg: 300, price: 45.00, minimumPrice: 10, transitDays: 2 },
+          { departmentOrigin: '75', departmentDestination: '69', minKg: 0, maxKg: 30, price: 12.00, minimumPrice: 8, transitDays: 1 },
+          { departmentOrigin: '75', departmentDestination: '69', minKg: 30, maxKg: 100, price: 22.00, minimumPrice: 8, transitDays: 1 },
+        ];
+        fileName = 'template-messagerie.xlsx';
+        break;
+
+      default:
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_TYPE',
+            message: 'Type must be LTL, FTL, or MESSAGERIE'
+          }
+        });
+    }
+
+    // Créer le fichier Excel
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Tarifs');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    res.send(buffer);
+  });
+
+  /**
+   * GET /api/pricing-grids/zones/list
+   * Liste toutes les zones géographiques disponibles
+   */
+  router.get('/zones/list', (req, res) => {
+    res.json({
+      success: true,
+      data: GeographicZones
+    });
+  });
+
+  /**
+   * GET /api/pricing-grids/departments/list
+   * Liste tous les départements français
+   */
+  router.get('/departments/list', (req, res) => {
+    res.json({
+      success: true,
+      data: FrenchDepartments
+    });
+  });
+
+  /**
+   * GET /api/pricing-grids/options/list
+   * Liste toutes les options tarifaires disponibles
+   */
+  router.get('/options/list', (req, res) => {
+    res.json({
+      success: true,
+      data: pricingOptionsConfig
+    });
+  });
+
+  /**
+   * GET /api/pricing-grids/types/transport
+   * Liste tous les types de transport disponibles
+   */
+  router.get('/types/transport', (req, res) => {
+    res.json({
+      success: true,
+      data: TransportTypes
+    });
+  });
+
+  /**
+   * GET /api/pricing-grids/types/calculation
+   * Liste tous les types de calcul disponibles
+   */
+  router.get('/types/calculation', (req, res) => {
+    res.json({
+      success: true,
+      data: PricingCalculationTypes
+    });
+  });
+
+  // ==================== FIN ROUTES STATIQUES ====================
+
   /**
    * GET /api/pricing-grids/:gridId
    * Récupérer une grille tarifaire spécifique
@@ -350,7 +513,9 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
 
       const now = new Date();
       const allowedFields = [
-        'name', 'description', 'basePricing', 'zonesPricing',
+        'name', 'description',
+        'ltlPricing', 'ftlPricing', 'messageriePricing',
+        'basePricing', 'zonesPricing',
         'weightTiers', 'volumeTiers', 'options', 'timeModifiers',
         'conditions', 'validFrom', 'validUntil', 'autoRenew'
       ];
@@ -639,12 +804,19 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
         carrierId,
         industrialId,
         transportType,
-        distance,
-        weight,
-        volume,
+        // LTL params
         pallets,
         zoneOrigin,
         zoneDestination,
+        // FTL params
+        vehicleType,
+        distance,
+        // Messagerie params
+        weight,
+        dimensions,
+        departmentOrigin,
+        departmentDestination,
+        // Options
         options = [],
         isWeekend = false,
         isNight = false,
@@ -688,12 +860,15 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
 
       // Filtrer les grilles applicables
       const parameters = {
-        distance,
-        weight,
-        volume,
         pallets,
         zoneOrigin,
         zoneDestination,
+        vehicleType,
+        distance,
+        weight,
+        dimensions,
+        departmentOrigin,
+        departmentDestination,
         options,
         isWeekend,
         isNight,
@@ -722,7 +897,17 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
           transportType: grid.transportType,
           calculation: result
         };
-      });
+      }).filter(c => c.calculation.valid);
+
+      if (calculations.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'CALCULATION_FAILED',
+            message: 'Could not calculate price for any applicable grid'
+          }
+        });
+      }
 
       // Trier par prix croissant
       calculations.sort((a, b) => a.calculation.price - b.calculation.price);
@@ -748,62 +933,182 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
     }
   });
 
-  /**
-   * GET /api/pricing-grids/zones/list
-   * Liste toutes les zones géographiques disponibles
-   */
-  router.get('/zones/list', checkMongoDB, async (req, res) => {
-    try {
-      res.json({
-        success: true,
-        data: GeographicZones
-      });
-    } catch (error) {
-      console.error('Error fetching zones:', error);
-      res.status(500).json({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: error.message
-        }
-      });
-    }
-  });
+  // ==================== IMPORT EXCEL ====================
 
   /**
-   * GET /api/pricing-grids/options/list
-   * Liste toutes les options tarifaires disponibles
+   * POST /api/pricing-grids/import/excel
+   * Importer une grille tarifaire depuis un fichier Excel
    */
-  router.get('/options/list', checkMongoDB, async (req, res) => {
+  router.post('/import/excel', checkMongoDB, upload.single('file'), async (req, res) => {
     try {
-      res.json({
-        success: true,
-        data: pricingOptionsConfig
-      });
-    } catch (error) {
-      console.error('Error fetching options:', error);
-      res.status(500).json({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: error.message
-        }
-      });
-    }
-  });
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'NO_FILE',
+            message: 'No file uploaded'
+          }
+        });
+      }
 
-  /**
-   * GET /api/pricing-grids/types/transport
-   * Liste tous les types de transport disponibles
-   */
-  router.get('/types/transport', checkMongoDB, async (req, res) => {
-    try {
-      res.json({
+      const {
+        carrierId,
+        industrialId,
+        gridName,
+        transportType,
+        importedBy
+      } = req.body;
+
+      if (!carrierId || !industrialId || !gridName || !transportType || !importedBy) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'carrierId, industrialId, gridName, transportType and importedBy are required'
+          }
+        });
+      }
+
+      // Valider le type de transport
+      if (!['LTL', 'FTL', 'MESSAGERIE'].includes(transportType)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_TRANSPORT_TYPE',
+            message: 'Transport type must be LTL, FTL, or MESSAGERIE for Excel import'
+          }
+        });
+      }
+
+      const db = mongoClient.db();
+
+      // Vérifier que le transporteur existe
+      const carrier = await db.collection('carriers').findOne({ carrierId });
+      if (!carrier) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'CARRIER_NOT_FOUND',
+            message: 'Carrier not found'
+          }
+        });
+      }
+
+      // Lire le fichier Excel
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet);
+
+      if (data.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'EMPTY_FILE',
+            message: 'Excel file is empty or has no valid data'
+          }
+        });
+      }
+
+      // Traiter selon le type de transport
+      let pricing;
+      let calculationType;
+
+      switch (transportType) {
+        case 'LTL':
+          pricing = processLTLExcel(data);
+          calculationType = 'PER_PALLET';
+          break;
+        case 'FTL':
+          pricing = processFTLExcel(data);
+          calculationType = data[0].pricePerKm ? 'PER_KM' : 'FLAT_RATE';
+          break;
+        case 'MESSAGERIE':
+          pricing = processMessagerieExcel(data);
+          calculationType = 'PER_WEIGHT';
+          break;
+      }
+
+      if (pricing.errors && pricing.errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERRORS',
+            message: 'Errors found in Excel file',
+            details: pricing.errors
+          }
+        });
+      }
+
+      // Créer la grille
+      const now = new Date();
+      const gridId = generateGridId();
+
+      const newGrid = {
+        gridId,
+        carrierId,
+        industrialId,
+        name: gridName,
+        description: `Imported from ${req.file.originalname}`,
+        transportType,
+        calculationType,
+        ltlPricing: transportType === 'LTL' ? pricing.data : { zonePricing: [] },
+        ftlPricing: transportType === 'FTL' ? pricing.data : { zonePricing: [] },
+        messageriePricing: transportType === 'MESSAGERIE' ? pricing.data : { volumetricDivisor: 5000, departmentPricing: [] },
+        basePricing: {
+          basePrice: 0,
+          minimumPrice: 0,
+          currency: 'EUR'
+        },
+        options: { enabledOptions: [], optionsModifiers: {} },
+        timeModifiers: {},
+        conditions: {},
+        validFrom: now,
+        validUntil: null,
+        autoRenew: false,
+        status: GridStatus.DRAFT,
+        approval: {
+          required: false,
+          approvedBy: null,
+          approvedAt: null,
+          rejectionReason: null
+        },
+        version: 1,
+        importedFrom: {
+          type: 'EXCEL',
+          fileName: req.file.originalname,
+          importedAt: now,
+          importedBy
+        },
+        usage: {
+          totalQuotes: 0,
+          totalOrders: 0,
+          totalRevenue: 0,
+          lastUsedAt: null
+        },
+        createdBy: importedBy,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      const result = await db.collection('pricing_grids').insertOne(newGrid);
+
+      res.status(201).json({
         success: true,
-        data: TransportTypes
+        data: {
+          ...newGrid,
+          _id: result.insertedId
+        },
+        importStats: {
+          fileName: req.file.originalname,
+          rowsProcessed: data.length,
+          zonesCreated: pricing.stats?.zones || 0,
+          tiersCreated: pricing.stats?.tiers || 0
+        },
+        message: `Pricing grid imported successfully from ${req.file.originalname}`
       });
     } catch (error) {
-      console.error('Error fetching transport types:', error);
+      console.error('Error importing Excel:', error);
       res.status(500).json({
         success: false,
         error: {
@@ -815,6 +1120,168 @@ function createPricingGridsRoutes(mongoClient, mongoConnected) {
   });
 
   return router;
+}
+
+// ==================== FONCTIONS DE TRAITEMENT EXCEL ====================
+
+/**
+ * Traiter un fichier Excel LTL (groupage palette)
+ */
+function processLTLExcel(data) {
+  const errors = [];
+  const zonePricing = {};
+  let tiersCount = 0;
+
+  data.forEach((row, index) => {
+    const rowNum = index + 2;
+
+    if (!row.zoneOrigin || !row.zoneDestination) {
+      errors.push(`Ligne ${rowNum}: zoneOrigin et zoneDestination requis`);
+      return;
+    }
+
+    if (!row.palletMin || !row.palletMax || !row.pricePerPallet) {
+      errors.push(`Ligne ${rowNum}: palletMin, palletMax et pricePerPallet requis`);
+      return;
+    }
+
+    const key = `${row.zoneOrigin}->${row.zoneDestination}`;
+
+    if (!zonePricing[key]) {
+      zonePricing[key] = {
+        zoneOrigin: row.zoneOrigin,
+        zoneDestination: row.zoneDestination,
+        palletTiers: [],
+        minimumPrice: row.minimumPrice || 0,
+        transitDays: row.transitDays || 2
+      };
+    }
+
+    zonePricing[key].palletTiers.push({
+      min: parseInt(row.palletMin),
+      max: parseInt(row.palletMax),
+      pricePerPallet: parseFloat(row.pricePerPallet)
+    });
+    tiersCount++;
+  });
+
+  if (errors.length > 0) {
+    return { errors };
+  }
+
+  return {
+    data: {
+      zonePricing: Object.values(zonePricing)
+    },
+    stats: {
+      zones: Object.keys(zonePricing).length,
+      tiers: tiersCount
+    }
+  };
+}
+
+/**
+ * Traiter un fichier Excel FTL (lot complet)
+ */
+function processFTLExcel(data) {
+  const errors = [];
+  const zonePricing = [];
+
+  data.forEach((row, index) => {
+    const rowNum = index + 2;
+
+    if (!row.zoneOrigin || !row.zoneDestination) {
+      errors.push(`Ligne ${rowNum}: zoneOrigin et zoneDestination requis`);
+      return;
+    }
+
+    if (!row.flatRate && !row.pricePerKm) {
+      errors.push(`Ligne ${rowNum}: flatRate ou pricePerKm requis`);
+      return;
+    }
+
+    zonePricing.push({
+      zoneOrigin: row.zoneOrigin,
+      zoneDestination: row.zoneDestination,
+      vehicleType: row.vehicleType || 'SEMI',
+      flatRate: row.flatRate ? parseFloat(row.flatRate) : null,
+      pricePerKm: row.pricePerKm ? parseFloat(row.pricePerKm) : null,
+      minKm: row.minKm ? parseInt(row.minKm) : 0,
+      minimumPrice: row.minimumPrice ? parseFloat(row.minimumPrice) : 0,
+      transitDays: row.transitDays || 1
+    });
+  });
+
+  if (errors.length > 0) {
+    return { errors };
+  }
+
+  return {
+    data: {
+      zonePricing
+    },
+    stats: {
+      zones: zonePricing.length,
+      tiers: zonePricing.length
+    }
+  };
+}
+
+/**
+ * Traiter un fichier Excel Messagerie (département/poids)
+ */
+function processMessagerieExcel(data) {
+  const errors = [];
+  const departmentPricing = {};
+  let tiersCount = 0;
+
+  data.forEach((row, index) => {
+    const rowNum = index + 2;
+
+    if (!row.departmentOrigin || !row.departmentDestination) {
+      errors.push(`Ligne ${rowNum}: departmentOrigin et departmentDestination requis`);
+      return;
+    }
+
+    if (row.minKg === undefined || row.maxKg === undefined || !row.price) {
+      errors.push(`Ligne ${rowNum}: minKg, maxKg et price requis`);
+      return;
+    }
+
+    const key = `${row.departmentOrigin}->${row.departmentDestination}`;
+
+    if (!departmentPricing[key]) {
+      departmentPricing[key] = {
+        departmentOrigin: String(row.departmentOrigin),
+        departmentDestination: String(row.departmentDestination),
+        weightTiers: [],
+        minimumPrice: row.minimumPrice || 0,
+        transitDays: row.transitDays || 2
+      };
+    }
+
+    departmentPricing[key].weightTiers.push({
+      minKg: parseFloat(row.minKg),
+      maxKg: parseFloat(row.maxKg),
+      price: parseFloat(row.price)
+    });
+    tiersCount++;
+  });
+
+  if (errors.length > 0) {
+    return { errors };
+  }
+
+  return {
+    data: {
+      volumetricDivisor: 5000,
+      departmentPricing: Object.values(departmentPricing)
+    },
+    stats: {
+      zones: Object.keys(departmentPricing).length,
+      tiers: tiersCount
+    }
+  };
 }
 
 module.exports = createPricingGridsRoutes;

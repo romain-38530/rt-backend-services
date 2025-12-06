@@ -9,6 +9,7 @@ const {
   generateCMRNumber,
   createEmptyECMR
 } = require('./ecmr-models');
+const { generateECMRPdf } = require('./ecmr-pdf');
 
 function createECMRRoutes(mongoClient, mongoConnected) {
   const router = express.Router();
@@ -59,6 +60,57 @@ function createECMRRoutes(mongoClient, mongoConnected) {
       });
     } catch (error) {
       console.error('Error fetching e-CMR list:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error.message
+        }
+      });
+    }
+  });
+
+  // GET /api/ecmr/:id/pdf - Télécharger le PDF de l'e-CMR
+  router.get('/:id/pdf', checkMongoDB, async (req, res) => {
+    try {
+      const db = mongoClient.db();
+
+      const ecmr = await db.collection('ecmr').findOne({
+        _id: new ObjectId(req.params.id),
+        type: 'ECMR'
+      });
+
+      if (!ecmr) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'e-CMR not found'
+          }
+        });
+      }
+
+      // Générer le PDF
+      const pdfBuffer = await generateECMRPdf(ecmr, {
+        baseUrl: process.env.API_BASE_URL || 'https://dgze8l03lwl5h.cloudfront.net',
+        includeQRCode: true
+      });
+
+      // Envoyer le PDF
+      const filename = `eCMR-${ecmr.cmrNumber || ecmr._id}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.send(pdfBuffer);
+
+      // Mettre à jour le flag pdfGenerated
+      await db.collection('ecmr').updateOne(
+        { _id: ecmr._id },
+        { $set: { 'metadata.pdfGenerated': true, 'metadata.lastPdfGeneratedAt': new Date() } }
+      );
+
+    } catch (error) {
+      console.error('Error generating e-CMR PDF:', error);
       res.status(500).json({
         success: false,
         error: {
