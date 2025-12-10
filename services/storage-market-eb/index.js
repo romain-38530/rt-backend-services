@@ -40,6 +40,14 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Route alias: /api/v1/storage-market/* -> /api/storage-market/*
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/v1/storage-market')) {
+    req.url = req.originalUrl.replace('/api/v1/storage-market', '/api/storage-market');
+  }
+  next();
+});
+
 // Health check
 app.get('/health', async (req, res) => {
   const health = {
@@ -83,6 +91,18 @@ app.get('/', (req, res) => {
 });
 
 // ==================== STORAGE MARKET NEEDS ROUTES ====================
+
+// API Health check (under /api/storage-market/*)
+app.get('/api/storage-market/health', (req, res) => {
+  res.json({
+    success: true,
+    service: 'RT SYMPHONI.A - Storage Market',
+    version: '2.0.0',
+    status: 'healthy',
+    mongodb: mongoConnected ? 'connected' : 'not connected',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // GET - List all storage needs
 app.get('/api/storage-market/needs', async (req, res) => {

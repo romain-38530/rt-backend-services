@@ -49,6 +49,151 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Route alias: /api/v1/chatbot/* -> /api/chatbot/*
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/v1/chatbot')) {
+    req.url = req.originalUrl.replace('/api/v1/chatbot', '/api/chatbot');
+  }
+  next();
+});
+
+// ========== Chatbot API Routes ==========
+
+// Health check for chatbot API
+app.get('/api/chatbot/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    service: 'chatbot-api',
+    timestamp: new Date().toISOString(),
+    mongodb: mongoConnected ? 'connected' : 'not connected'
+  });
+});
+
+// Get conversations for user
+app.get('/api/chatbot/conversations', async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const userId = req.headers['x-user-id'] || 'anonymous';
+    const conversations = await db.collection('conversations')
+      .find({ userId })
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .toArray();
+
+    res.json({ data: conversations });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
+
+// Create new conversation
+app.post('/api/chatbot/conversations', async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const userId = req.headers['x-user-id'] || 'anonymous';
+    const { title } = req.body;
+
+    const conversation = {
+      userId,
+      title: title || 'Nouvelle conversation',
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('conversations').insertOne(conversation);
+    conversation._id = result.insertedId;
+
+    res.status(201).json({ data: conversation });
+  } catch (error) {
+    console.error('Error creating conversation:', error);
+    res.status(500).json({ error: 'Failed to create conversation' });
+  }
+});
+
+// Get messages for conversation
+app.get('/api/chatbot/conversations/:conversationId/messages', async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const { conversationId } = req.params;
+    const messages = await db.collection('messages')
+      .find({ conversationId })
+      .sort({ createdAt: 1 })
+      .toArray();
+
+    res.json({ data: messages });
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Send message
+app.post('/api/chatbot/messages', async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const { conversationId, content, role } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    const message = {
+      conversationId: conversationId || null,
+      content,
+      role: role || 'user',
+      createdAt: new Date()
+    };
+
+    const result = await db.collection('messages').insertOne(message);
+    message._id = result.insertedId;
+
+    // Update conversation timestamp
+    if (conversationId) {
+      await db.collection('conversations').updateOne(
+        { _id: conversationId },
+        { $set: { updatedAt: new Date() } }
+      );
+    }
+
+    // TODO: Generate AI response here
+    const aiResponse = {
+      conversationId: conversationId || null,
+      content: 'Je suis l\'assistant SYMPHONI.A. Je suis en cours de configuration.',
+      role: 'assistant',
+      createdAt: new Date()
+    };
+
+    await db.collection('messages').insertOne(aiResponse);
+
+    res.status(201).json({
+      data: {
+        userMessage: message,
+        assistantMessage: aiResponse
+      }
+    });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Alias routes for /api/v1/chatbot/*
+app.get('/api/v1/chatbot/health', (req, res) => res.redirect(307, '/api/chatbot/health'));
+
 // Health check
 app.get('/health', async (req, res) => {
   const health = {

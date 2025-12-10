@@ -80,10 +80,25 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   );
 }
 
+// Route alias: /api/v1/tracking/* -> /api/v1/tracking/*
+// (No rewrite needed - routes are already at /api/v1/tracking/*)
+
 // ==================== ROUTES ====================
 
 // Health check
 app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    service: 'tracking-api',
+    version: '1.0.0',
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    websocket: websocket?.connected ? 'connected' : 'disconnected',
+    tomtom: !!process.env.TOMTOM_API_KEY
+  });
+});
+
+// API v1 Health check
+app.get('/api/v1/tracking/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'tracking-api',

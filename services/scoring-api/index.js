@@ -273,6 +273,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'scoring-api', version: '1.0.0' });
 });
 
+// API v1 Health check
+app.get('/api/v1/scoring/health', (req, res) => {
+  res.json({ status: 'healthy', service: 'scoring-api', version: '1.0.0' });
+});
+
 // POST /api/v1/scoring/calculate - Calculer et enregistrer un score
 app.post('/api/v1/scoring/calculate', async (req, res) => {
   try {

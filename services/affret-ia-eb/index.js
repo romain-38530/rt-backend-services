@@ -40,6 +40,67 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Route alias: /api/v1/affret-ia/* -> /api/affret-ia/*
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/v1/affret-ia')) {
+    req.url = req.originalUrl.replace('/api/v1/affret-ia', '/api/affret-ia');
+  }
+  next();
+});
+
+// ========== Affret-IA API Routes ==========
+
+// Health check for affret-ia API
+app.get('/api/affret-ia/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    service: 'affret-ia-api',
+    timestamp: new Date().toISOString(),
+    mongodb: mongoConnected ? 'connected' : 'not connected'
+  });
+});
+
+// Get transport needs list
+app.get('/api/affret-ia/needs', async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+    const needs = await db.collection('transport_needs').find({}).limit(100).toArray();
+    res.json({ success: true, data: needs });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch transport needs' });
+  }
+});
+
+// Create transport need
+app.post('/api/affret-ia/needs', async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+    const need = { ...req.body, createdAt: new Date(), status: 'pending' };
+    const result = await db.collection('transport_needs').insertOne(need);
+    need._id = result.insertedId;
+    res.status(201).json({ success: true, data: need });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create transport need' });
+  }
+});
+
+// Get transport offers
+app.get('/api/affret-ia/offers', async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+    const offers = await db.collection('transport_offers').find({}).limit(100).toArray();
+    res.json({ success: true, data: offers });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch transport offers' });
+  }
+});
+
 // Health check
 app.get('/health', async (req, res) => {
   const health = {

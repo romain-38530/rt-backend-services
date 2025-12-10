@@ -29,6 +29,18 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// Route alias: /api/v1/billing/* -> /api/billing/*
+app.use('/api/v1/billing', (req, res, next) => {
+  req.url = '/api/billing' + req.url;
+  next('route');
+});
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/v1/billing')) {
+    req.url = req.originalUrl.replace('/api/v1/billing', '/api/billing');
+  }
+  next();
+});
+
 // Multer pour upload fichiers
 const upload = multer({
   storage: multer.memoryStorage(),

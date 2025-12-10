@@ -40,6 +40,14 @@ app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json());
 
+// Route alias: /api/v1/kpi/* -> /kpi/*
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/v1/kpi')) {
+    req.url = req.originalUrl.replace('/api/v1/kpi', '/kpi');
+  }
+  next();
+});
+
 const PORT = process.env.PORT || 8080;
 
 // ============================================
