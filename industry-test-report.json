@@ -1,0 +1,358 @@
+[
+  {
+    "name": "Login/Auth",
+    "apiUrl": "ddaywxps9n701.cloudfront.net",
+    "health": "OK",
+    "cors": "OK",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 371
+      },
+      {
+        "method": "GET",
+        "path": "/",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 942
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/auth/login",
+        "status": "OK",
+        "statusCode": 204,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 0
+      }
+    ],
+    "problems": []
+  },
+  {
+    "name": "Orders",
+    "apiUrl": "dh9acecfz0wg0.cloudfront.net",
+    "health": "OK",
+    "cors": "OK",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 243
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/orders",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 2919
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/v1/orders",
+        "status": "OK",
+        "statusCode": 204,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 0
+      }
+    ],
+    "problems": []
+  },
+  {
+    "name": "Affret IA",
+    "apiUrl": "d393yiia4ig3bw.cloudfront.net",
+    "health": "OK",
+    "cors": "OK",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "*",
+        "bodyLength": 67
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/affretia",
+        "status": "OK",
+        "statusCode": 404,
+        "cors": "*",
+        "bodyLength": 154
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/v1/affretia",
+        "status": "OK",
+        "statusCode": 204,
+        "cors": "*",
+        "bodyLength": 0
+      }
+    ],
+    "problems": [
+      "GET /api/v1/affretia: HTTP 404"
+    ]
+  },
+  {
+    "name": "Storage Market",
+    "apiUrl": "d1ea8wbaf6ws9i.cloudfront.net",
+    "health": "OK",
+    "cors": "OK",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 157
+      },
+      {
+        "method": "GET",
+        "path": "/api/storage-offers",
+        "status": "OK",
+        "statusCode": 404,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 89
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/storage-offers",
+        "status": "OK",
+        "statusCode": 204,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 0
+      }
+    ],
+    "problems": [
+      "GET /api/storage-offers: HTTP 404"
+    ]
+  },
+  {
+    "name": "Pricing Grids",
+    "apiUrl": "d39uizi9hzozo8.cloudfront.net",
+    "health": "FAIL",
+    "cors": "FAIL",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "FAIL",
+        "statusCode": 500,
+        "cors": "MISSING",
+        "bodyLength": 83
+      },
+      {
+        "method": "GET",
+        "path": "/api/pricing-grids",
+        "status": "FAIL",
+        "statusCode": 500,
+        "cors": "MISSING",
+        "bodyLength": 83
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/pricing-grids",
+        "status": "FAIL",
+        "statusCode": 500,
+        "cors": "MISSING",
+        "bodyLength": 83
+      }
+    ],
+    "problems": [
+      "Missing CORS headers",
+      "Health check returned 500",
+      "GET /health: HTTP 500",
+      "GET /api/pricing-grids: HTTP 500",
+      "OPTIONS /api/pricing-grids: HTTP 500"
+    ]
+  },
+  {
+    "name": "Chatbot",
+    "apiUrl": "de1913kh0ya48.cloudfront.net",
+    "health": "OK",
+    "cors": "FAIL",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "MISSING",
+        "bodyLength": 244
+      },
+      {
+        "method": "GET",
+        "path": "/api/chatbot",
+        "status": "OK",
+        "statusCode": 404,
+        "cors": "MISSING",
+        "bodyLength": 150
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/chatbot",
+        "status": "OK",
+        "statusCode": 204,
+        "cors": "MISSING",
+        "bodyLength": 0
+      }
+    ],
+    "problems": [
+      "Missing CORS headers",
+      "GET /api/chatbot: HTTP 404"
+    ]
+  },
+  {
+    "name": "Training",
+    "apiUrl": "d39f1h56c4jwz4.cloudfront.net",
+    "health": "OK",
+    "cors": "FAIL",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "MISSING",
+        "bodyLength": 245
+      },
+      {
+        "method": "GET",
+        "path": "/api/training",
+        "status": "OK",
+        "statusCode": 404,
+        "cors": "MISSING",
+        "bodyLength": 151
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/training",
+        "status": "OK",
+        "statusCode": 204,
+        "cors": "MISSING",
+        "bodyLength": 0
+      }
+    ],
+    "problems": [
+      "Missing CORS headers",
+      "GET /api/training: HTTP 404"
+    ]
+  },
+  {
+    "name": "Transporteurs",
+    "apiUrl": "d39uizi9hzozo8.cloudfront.net",
+    "health": "FAIL",
+    "cors": "FAIL",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "FAIL",
+        "statusCode": 500,
+        "cors": "MISSING",
+        "bodyLength": 83
+      },
+      {
+        "method": "GET",
+        "path": "/api/carriers",
+        "status": "FAIL",
+        "statusCode": 500,
+        "cors": "MISSING",
+        "bodyLength": 83
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/carriers",
+        "status": "FAIL",
+        "statusCode": 500,
+        "cors": "MISSING",
+        "bodyLength": 83
+      }
+    ],
+    "problems": [
+      "Missing CORS headers",
+      "Health check returned 500",
+      "GET /health: HTTP 500",
+      "GET /api/carriers: HTTP 500",
+      "OPTIONS /api/carriers: HTTP 500"
+    ]
+  },
+  {
+    "name": "Facturation/Billing",
+    "apiUrl": "d1ciol606nbfs0.cloudfront.net",
+    "health": "OK",
+    "cors": "OK",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "*",
+        "bodyLength": 101
+      },
+      {
+        "method": "GET",
+        "path": "/api/invoices",
+        "status": "OK",
+        "statusCode": 404,
+        "cors": "*",
+        "bodyLength": 151
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/invoices",
+        "status": "OK",
+        "statusCode": 204,
+        "cors": "*",
+        "bodyLength": 0
+      }
+    ],
+    "problems": [
+      "GET /api/invoices: HTTP 404"
+    ]
+  },
+  {
+    "name": "Palettes Europe",
+    "apiUrl": "d2o4ng8nutcmou.cloudfront.net",
+    "health": "OK",
+    "cors": "OK",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "status": "OK",
+        "statusCode": 200,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 245
+      },
+      {
+        "method": "GET",
+        "path": "/api/palettes",
+        "status": "OK",
+        "statusCode": 404,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 151
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/palettes",
+        "status": "OK",
+        "statusCode": 204,
+        "cors": "https://industrie.symphonia-controltower.com",
+        "bodyLength": 0
+      }
+    ],
+    "problems": [
+      "GET /api/palettes: HTTP 404"
+    ]
+  }
+]

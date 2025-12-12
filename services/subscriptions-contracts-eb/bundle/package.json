@@ -1,0 +1,53 @@
+{
+  "name": "rt-subscriptions-contracts-api",
+  "version": "2.1.0",
+  "description": "RT SYMPHONI.A v2.1.0 - Subscriptions & Contracts API + Pricing Grids LTL/FTL/Messagerie + Excel Import",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "mongodb": "^6.3.0",
+    "multer": "^1.4.5-lts.1",
+    "xlsx": "^0.18.5",
+    "pdfkit": "^0.15.0",
+    "qrcode": "^1.5.3",
+    "@aws-sdk/client-s3": "^3.490.0",
+    "@aws-sdk/client-glacier": "^3.490.0",
+    "jsonwebtoken": "^9.0.2",
+    "bcrypt": "^5.1.1",
+    "stripe": "^14.10.0",
+    "nodemailer": "^6.9.8",
+    "mailgun.js": "^9.4.1",
+    "form-data": "^4.0.0",
+    "axios": "^1.6.2",
+    "ovh": "^2.0.3",
+    "twilio": "^4.23.0",
+    "node-fetch": "^2.7.0",
+    "ws": "^8.16.0"
+  },
+  "keywords": [
+    "transport",
+    "logistics",
+    "tms",
+    "symphonia",
+    "affretia",
+    "freight",
+    "chatbot",
+    "helpbot",
+    "ticketing",
+    "support",
+    "claude",
+    "ai"
+  ],
+  "author": "RT SYMPHONI.A",
+  "license": "ISC",
+  "type": "commonjs"
+}
