@@ -49,6 +49,16 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// URL rewriting middleware for /api/v1/* routes
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/v1/orders/')) {
+    req.url = req.url.replace('/api/v1/orders', '');
+  } else if (req.url.startsWith('/api/v1/')) {
+    req.url = req.url.replace('/api/v1/', '/');
+  }
+  next();
+});
+
 // Health check
 app.get('/health', async (req, res) => {
   const health = {

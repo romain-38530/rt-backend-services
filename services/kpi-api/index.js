@@ -50,6 +50,25 @@ app.use((req, res, next) => {
 
 const PORT = process.env.PORT || 8080;
 
+// Health check routes
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    service: 'kpi-api',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/kpi/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    service: 'kpi-api',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // ============================================
 // SCHEMAS MONGOOSE
 // ============================================

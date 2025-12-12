@@ -459,6 +459,19 @@ app.use(cors({
 
 app.use(express.json());
 
+// URL rewriting middleware for /api/v1/* routes
+app.use((req, res, next) => {
+  // Rewrite /api/v1/authz/* to /* and /api/v1/auth/* to /*
+  if (req.url.startsWith('/api/v1/authz/')) {
+    req.url = req.url.replace('/api/v1/authz', '');
+  } else if (req.url.startsWith('/api/v1/auth/')) {
+    req.url = req.url.replace('/api/v1/auth', '');
+  } else if (req.url.startsWith('/api/v1/')) {
+    req.url = req.url.replace('/api/v1/', '/');
+  }
+  next();
+});
+
 // Health check
 app.get('/health', async (req, res) => {
   const health = {

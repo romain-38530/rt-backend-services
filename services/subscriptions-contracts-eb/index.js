@@ -82,6 +82,16 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 5. Input Sanitization - Prevent XSS
 app.use(security.sanitizeInput);
 
+// 5.5. URL rewriting middleware for /api/v1/* routes
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/v1/subscriptions/')) {
+    req.url = req.url.replace('/api/v1/subscriptions', '');
+  } else if (req.url.startsWith('/api/v1/')) {
+    req.url = req.url.replace('/api/v1/', '/');
+  }
+  next();
+});
+
 // 6. General Rate Limiter - 100 req/15min (applied to all /api/* routes)
 app.use('/api/', security.generalLimiter);
 
