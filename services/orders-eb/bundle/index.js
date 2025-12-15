@@ -3,9 +3,112 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { MongoClient, ObjectId } = require('mongodb');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Helper: Geocode an address using OpenStreetMap Nominatim (free, no API key)
+async function geocodeAddress(address) {
+  if (!address) return null;
+
+  // Build full address string
+  let fullAddress = '';
+  if (typeof address === 'string') {
+    fullAddress = address;
+  } else {
+    const parts = [];
+    if (address.street) parts.push(address.street);
+    if (address.address) parts.push(address.address);
+    if (address.city) parts.push(address.city);
+    if (address.postalCode) parts.push(address.postalCode);
+    if (address.country) parts.push(address.country);
+    fullAddress = parts.join(', ');
+  }
+
+  if (!fullAddress || fullAddress.trim() === '') return null;
+
+  return new Promise((resolve) => {
+    const encodedAddress = encodeURIComponent(fullAddress);
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1`;
+
+    const options = {
+      headers: {
+        'User-Agent': 'RT-SYMPHONIA-Backend/1.0'
+      }
+    };
+
+    https.get(url, options, (response) => {
+      let data = '';
+      response.on('data', chunk => data += chunk);
+      response.on('end', () => {
+        try {
+          const results = JSON.parse(data);
+          if (results && results.length > 0) {
+            resolve({
+              latitude: parseFloat(results[0].lat),
+              longitude: parseFloat(results[0].lon),
+              displayName: results[0].display_name
+            });
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
+          console.error('Geocoding parse error:', e.message);
+          resolve(null);
+        }
+      });
+    }).on('error', (e) => {
+      console.error('Geocoding error:', e.message);
+      resolve(null);
+    });
+  });
+}
+
+// Helper: Geocode order addresses (pickup and delivery)
+async function geocodeOrderAddresses(order) {
+  const updates = {};
+
+  // Geocode pickup address if no coordinates
+  const pickupAddr = order.pickupAddress || order.pickup;
+  if (pickupAddr && (!pickupAddr.latitude || !pickupAddr.longitude)) {
+    const pickupCoords = await geocodeAddress(pickupAddr);
+    if (pickupCoords) {
+      if (order.pickupAddress) {
+        updates['pickupAddress.latitude'] = pickupCoords.latitude;
+        updates['pickupAddress.longitude'] = pickupCoords.longitude;
+      } else if (order.pickup) {
+        updates['pickup.coordinates'] = {
+          latitude: pickupCoords.latitude,
+          longitude: pickupCoords.longitude
+        };
+      }
+      console.log(`✓ Geocoded pickup: ${pickupCoords.latitude}, ${pickupCoords.longitude}`);
+    }
+    // Small delay to respect Nominatim rate limits (1 req/sec)
+    await new Promise(r => setTimeout(r, 1100));
+  }
+
+  // Geocode delivery address if no coordinates
+  const deliveryAddr = order.deliveryAddress || order.delivery;
+  if (deliveryAddr && (!deliveryAddr.latitude || !deliveryAddr.longitude)) {
+    const deliveryCoords = await geocodeAddress(deliveryAddr);
+    if (deliveryCoords) {
+      if (order.deliveryAddress) {
+        updates['deliveryAddress.latitude'] = deliveryCoords.latitude;
+        updates['deliveryAddress.longitude'] = deliveryCoords.longitude;
+      } else if (order.delivery) {
+        updates['delivery.coordinates'] = {
+          latitude: deliveryCoords.latitude,
+          longitude: deliveryCoords.longitude
+        };
+      }
+      console.log(`✓ Geocoded delivery: ${deliveryCoords.latitude}, ${deliveryCoords.longitude}`);
+    }
+  }
+
+  return updates;
+}
 
 // Helper: Calculate distance between two coordinates (Haversine formula)
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -166,8 +269,8 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT Orders API',
-    version: '2.0.0',
-    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'CRUD Orders'],
+    version: '2.1.0',
+    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'CRUD Orders', 'Geocoding', 'Tracking'],
     endpoints: [
       'GET /health',
       'GET /',
@@ -175,7 +278,11 @@ app.get('/', (req, res) => {
       'GET /api/v1/orders/:id',
       'POST /api/v1/orders',
       'PUT /api/v1/orders/:id',
-      'DELETE /api/v1/orders/:id'
+      'DELETE /api/v1/orders/:id',
+      'GET /api/v1/orders/:id/tracking',
+      'POST /api/v1/orders/:id/tracking',
+      'POST /api/v1/orders/:id/geocode',
+      'POST /api/v1/orders/batch-geocode'
     ]
   });
 });
@@ -623,6 +730,154 @@ app.delete('/api/orders/:id', async (req, res) => {
 });
 
 // ==================== END ALIAS ROUTES ====================
+
+// ==================== GEOCODING ENDPOINTS ====================
+
+// Geocode a single order (add coordinates to addresses)
+app.post('/api/orders/:id/geocode', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Base de données non connectée' });
+  }
+  try {
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: req.params.id });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Commande non trouvée' });
+    }
+
+    // Geocode addresses
+    const geocodeUpdates = await geocodeOrderAddresses(order);
+
+    if (Object.keys(geocodeUpdates).length === 0) {
+      return res.json({
+        success: true,
+        message: 'Aucune adresse à géocoder (coordonnées déjà présentes ou adresses manquantes)',
+        data: order
+      });
+    }
+
+    // Apply updates
+    geocodeUpdates.updatedAt = new Date();
+
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $set: geocodeUpdates },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $set: geocodeUpdates },
+        { returnDocument: 'after' }
+      );
+    }
+
+    // Enrich the result with distance calculation
+    const enrichedOrder = await enrichOrder(result, db);
+
+    res.json({
+      success: true,
+      message: 'Adresses géocodées avec succès',
+      geocoded: Object.keys(geocodeUpdates).filter(k => k !== 'updatedAt'),
+      data: enrichedOrder
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Batch geocode all orders missing coordinates
+app.post('/api/orders/batch-geocode', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Base de données non connectée' });
+  }
+  try {
+    // Find orders missing coordinates
+    const orders = await db.collection('orders').find({
+      $or: [
+        { 'pickupAddress.latitude': { $exists: false } },
+        { 'pickupAddress.longitude': { $exists: false } },
+        { 'deliveryAddress.latitude': { $exists: false } },
+        { 'deliveryAddress.longitude': { $exists: false } },
+        { 'pickup.coordinates': { $exists: false } },
+        { 'delivery.coordinates': { $exists: false } }
+      ]
+    }).limit(req.body.limit || 10).toArray();
+
+    const results = {
+      total: orders.length,
+      geocoded: 0,
+      failed: 0,
+      details: []
+    };
+
+    for (const order of orders) {
+      try {
+        const geocodeUpdates = await geocodeOrderAddresses(order);
+
+        if (Object.keys(geocodeUpdates).length > 0) {
+          geocodeUpdates.updatedAt = new Date();
+          await db.collection('orders').updateOne(
+            { _id: order._id },
+            { $set: geocodeUpdates }
+          );
+          results.geocoded++;
+          results.details.push({
+            id: order._id.toString(),
+            reference: order.reference,
+            status: 'success',
+            fields: Object.keys(geocodeUpdates).filter(k => k !== 'updatedAt')
+          });
+        } else {
+          results.details.push({
+            id: order._id.toString(),
+            reference: order.reference,
+            status: 'skipped',
+            reason: 'Pas d\'adresse à géocoder'
+          });
+        }
+      } catch (e) {
+        results.failed++;
+        results.details.push({
+          id: order._id.toString(),
+          reference: order.reference,
+          status: 'error',
+          error: e.message
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Géocodage terminé: ${results.geocoded}/${results.total} commandes`,
+      data: results
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Alias routes for geocoding
+app.post('/api/v1/orders/:id/geocode', async (req, res) => {
+  // Forward to main handler
+  req.url = `/api/orders/${req.params.id}/geocode`;
+  app.handle(req, res);
+});
+
+app.post('/api/v1/orders/batch-geocode', async (req, res) => {
+  // Forward to main handler
+  req.url = '/api/orders/batch-geocode';
+  app.handle(req, res);
+});
+
+// ==================== END GEOCODING ENDPOINTS ====================
 
 // ==================== TRACKING ENDPOINTS ====================
 
