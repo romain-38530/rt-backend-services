@@ -12,24 +12,48 @@ const PORT = process.env.PORT || 3000;
 async function geocodeAddress(address) {
   if (!address) return null;
 
-  // Build full address string
-  let fullAddress = '';
+  // Build multiple search queries (from most specific to least)
+  const queries = [];
+
   if (typeof address === 'string') {
-    fullAddress = address;
+    queries.push(address);
   } else {
-    const parts = [];
-    if (address.street) parts.push(address.street);
-    if (address.address) parts.push(address.address);
-    if (address.city) parts.push(address.city);
-    if (address.postalCode) parts.push(address.postalCode);
-    if (address.country) parts.push(address.country);
-    fullAddress = parts.join(', ');
+    // Full address with street
+    const fullParts = [];
+    if (address.street) fullParts.push(address.street);
+    if (address.address) fullParts.push(address.address);
+    if (address.city) fullParts.push(address.city);
+    if (address.postalCode) fullParts.push(address.postalCode);
+    if (address.country) fullParts.push(address.country);
+    if (fullParts.length > 0) queries.push(fullParts.join(', '));
+
+    // City + postal code + country (fallback)
+    const cityParts = [];
+    if (address.city) cityParts.push(address.city);
+    if (address.postalCode) cityParts.push(address.postalCode);
+    if (address.country) cityParts.push(address.country);
+    if (cityParts.length > 0) queries.push(cityParts.join(', '));
   }
 
-  if (!fullAddress || fullAddress.trim() === '') return null;
+  if (queries.length === 0) return null;
 
+  // Try each query until we get a result
+  for (const query of queries) {
+    const result = await geocodeSingleQuery(query);
+    if (result) {
+      return result;
+    }
+    // Rate limit between attempts
+    await new Promise(r => setTimeout(r, 1100));
+  }
+
+  return null;
+}
+
+// Helper: Execute a single geocoding query
+function geocodeSingleQuery(query) {
   return new Promise((resolve) => {
-    const encodedAddress = encodeURIComponent(fullAddress);
+    const encodedAddress = encodeURIComponent(query);
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1`;
 
     const options = {
@@ -45,12 +69,14 @@ async function geocodeAddress(address) {
         try {
           const results = JSON.parse(data);
           if (results && results.length > 0) {
+            console.log(`✓ Geocoded "${query}" -> ${results[0].lat}, ${results[0].lon}`);
             resolve({
               latitude: parseFloat(results[0].lat),
               longitude: parseFloat(results[0].lon),
               displayName: results[0].display_name
             });
           } else {
+            console.log(`✗ No results for "${query}"`);
             resolve(null);
           }
         } catch (e) {
@@ -799,15 +825,18 @@ app.post('/api/orders/batch-geocode', async (req, res) => {
     return res.status(503).json({ error: 'Base de données non connectée' });
   }
   try {
-    // Find orders missing coordinates
+    // Find orders missing ANY coordinates (pickup OR delivery)
+    // More comprehensive query to catch all cases
     const orders = await db.collection('orders').find({
       $or: [
-        { 'pickupAddress.latitude': { $exists: false } },
-        { 'pickupAddress.longitude': { $exists: false } },
-        { 'deliveryAddress.latitude': { $exists: false } },
-        { 'deliveryAddress.longitude': { $exists: false } },
-        { 'pickup.coordinates': { $exists: false } },
-        { 'delivery.coordinates': { $exists: false } }
+        // pickupAddress without latitude
+        { 'pickupAddress': { $exists: true }, 'pickupAddress.latitude': { $exists: false } },
+        // deliveryAddress without latitude
+        { 'deliveryAddress': { $exists: true }, 'deliveryAddress.latitude': { $exists: false } },
+        // pickup structure without coordinates
+        { 'pickup': { $exists: true }, 'pickup.coordinates': { $exists: false } },
+        // delivery structure without coordinates
+        { 'delivery': { $exists: true }, 'delivery.coordinates': { $exists: false } }
       ]
     }).limit(req.body.limit || 10).toArray();
 
