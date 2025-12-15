@@ -2,10 +2,81 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Helper: Calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return Math.round(R * c);
+}
+
+// Helper: Estimate duration based on distance (average 70km/h)
+function estimateDuration(distanceKm) {
+  if (!distanceKm) return null;
+  return Math.round(distanceKm / 70 * 60); // minutes
+}
+
+// Helper: Enrich order with additional data
+async function enrichOrder(order, db) {
+  if (!order) return order;
+
+  const enriched = { ...order };
+
+  // Calculate distance if coordinates available
+  const pickupLat = order.pickupAddress?.latitude || order.pickup?.coordinates?.latitude;
+  const pickupLon = order.pickupAddress?.longitude || order.pickup?.coordinates?.longitude;
+  const deliveryLat = order.deliveryAddress?.latitude || order.delivery?.coordinates?.latitude;
+  const deliveryLon = order.deliveryAddress?.longitude || order.delivery?.coordinates?.longitude;
+
+  if (pickupLat && pickupLon && deliveryLat && deliveryLon) {
+    enriched.distanceKm = calculateDistance(pickupLat, pickupLon, deliveryLat, deliveryLon);
+    enriched.durationMinutes = estimateDuration(enriched.distanceKm);
+  }
+
+  // Try to get industrial name
+  if (order.industrialId && db) {
+    try {
+      const industrial = await db.collection('users').findOne({ _id: new ObjectId(order.industrialId) });
+      if (industrial) {
+        enriched.industrialName = industrial.companyName || industrial.name || industrial.email;
+      }
+    } catch (e) {
+      // Ignore lookup errors
+    }
+  }
+
+  // Try to get carrier name
+  if (order.carrierId && db) {
+    try {
+      const carrier = await db.collection('carriers').findOne({ _id: new ObjectId(order.carrierId) });
+      if (carrier) {
+        enriched.carrierName = carrier.companyName || carrier.name;
+      }
+    } catch (e) {
+      // Try users collection
+      try {
+        const carrier = await db.collection('users').findOne({ _id: new ObjectId(order.carrierId) });
+        if (carrier) {
+          enriched.carrierName = carrier.companyName || carrier.name || carrier.email;
+        }
+      } catch (e2) {
+        // Ignore lookup errors
+      }
+    }
+  }
+
+  return enriched;
+}
 
 // MongoDB connection
 let db = null;
@@ -124,13 +195,12 @@ app.get('/api/v1/orders', async (req, res) => {
   }
 });
 
-// Get single order
+// Get single order (enriched with names and distance)
 app.get('/api/v1/orders/:id', async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     let order;
 
     // Try finding by ObjectId first, then by reference
@@ -143,9 +213,118 @@ app.get('/api/v1/orders/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    res.json({ success: true, data: order });
+
+    // Enrich with additional data
+    const enrichedOrder = await enrichOrder(order, db);
+    res.json({ success: true, data: enrichedOrder });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get order events
+app.get('/api/v1/orders/:id/events', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: req.params.id });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Return events from order or empty array
+    const events = order.events || [];
+    res.json({ success: true, data: events });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add event/comment to order
+app.post('/api/v1/orders/:id/events', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const event = {
+      id: new ObjectId().toString(),
+      type: req.body.type || 'comment',
+      description: req.body.description || req.body.comment,
+      timestamp: new Date().toISOString(),
+      userId: req.body.userId,
+      userName: req.body.userName,
+      data: req.body.data
+    };
+
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $push: { events: event }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $push: { events: event }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    }
+
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.status(201).json({ success: true, data: event });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update pallet tracking
+app.put('/api/v1/orders/:id/pallets', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const palletData = {
+      enabled: true,
+      palletType: req.body.palletType || 'EPAL',
+      expectedQuantity: req.body.expectedQuantity || 0,
+      pickup: req.body.pickup || {},
+      delivery: req.body.delivery || {},
+      balance: (req.body.pickup?.givenBySender || 0) - (req.body.delivery?.receivedByRecipient || 0),
+      settled: req.body.settled || false,
+      updatedAt: new Date()
+    };
+
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { palletTracking: palletData, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $set: { palletTracking: palletData, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    }
+
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -182,7 +361,6 @@ app.put('/api/v1/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     const updateData = {
       ...req.body,
       updatedAt: new Date()
@@ -219,7 +397,6 @@ app.delete('/api/v1/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     let result;
 
     try {
@@ -259,7 +436,6 @@ app.get('/api/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     let order;
     try {
       order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
@@ -269,9 +445,110 @@ app.get('/api/orders/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    res.json({ success: true, data: order });
+    // Enrich with additional data
+    const enrichedOrder = await enrichOrder(order, db);
+    res.json({ success: true, data: enrichedOrder });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get order events (alias)
+app.get('/api/orders/:id/events', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: req.params.id });
+    }
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const events = order.events || [];
+    res.json({ success: true, data: events });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add event/comment (alias)
+app.post('/api/orders/:id/events', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const event = {
+      id: new ObjectId().toString(),
+      type: req.body.type || 'comment',
+      description: req.body.description || req.body.comment,
+      timestamp: new Date().toISOString(),
+      userId: req.body.userId,
+      userName: req.body.userName,
+      data: req.body.data
+    };
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $push: { events: event }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $push: { events: event }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    }
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.status(201).json({ success: true, data: event });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update pallet tracking (alias)
+app.put('/api/orders/:id/pallets', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const palletData = {
+      enabled: true,
+      palletType: req.body.palletType || 'EPAL',
+      expectedQuantity: req.body.expectedQuantity || 0,
+      pickup: req.body.pickup || {},
+      delivery: req.body.delivery || {},
+      balance: (req.body.pickup?.givenBySender || 0) - (req.body.delivery?.receivedByRecipient || 0),
+      settled: req.body.settled || false,
+      updatedAt: new Date()
+    };
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { palletTracking: palletData, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $set: { palletTracking: palletData, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    }
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -300,7 +577,6 @@ app.put('/api/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     const updateData = { ...req.body, updatedAt: new Date() };
     delete updateData._id;
     let result;
@@ -331,7 +607,6 @@ app.delete('/api/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     let result;
     try {
       result = await db.collection('orders').deleteOne({ _id: new ObjectId(req.params.id) });

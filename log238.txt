@@ -1,0 +1,40 @@
+2025-12-07T09:55:02.053Z [INFO]: # Build environment configured with Standard build compute type: 8GiB Memory, 4vCPUs, 128GB Disk Space
+2025-12-07T09:55:02.656Z [INFO]: # Cloning repository: git@github.com:romain-38530/rt-frontend-apps.git
+2025-12-07T09:55:03.658Z [INFO]: 
+2025-12-07T09:55:03.659Z [INFO]: Cloning into 'rt-frontend-apps'...
+2025-12-07T09:55:03.659Z [INFO]: # Checking for Git submodules at: /codebuild/output/src1484464831/src/rt-frontend-apps/.gitmodules
+2025-12-07T09:55:03.671Z [INFO]: # Retrieving environment cache...
+2025-12-07T09:55:03.746Z [INFO]: # Retrieved environment cache
+2025-12-07T09:55:03.746Z [INFO]: ---- Setting Up SSM Secrets ----
+2025-12-07T09:55:03.746Z [INFO]: SSM params {"Path":"/amplify/dbg6okncuyyiw/main/","WithDecryption":true}
+2025-12-07T09:55:03.800Z [WARNING]: !Failed to set up process.env.secrets
+2025-12-07T09:55:04.524Z [INFO]: # No package override configuration found.
+2025-12-07T09:55:04.532Z [INFO]: # Retrieving cache...
+2025-12-07T09:55:04.604Z [INFO]: # Extracting cache...
+2025-12-07T09:55:04.606Z [INFO]: # Extraction completed
+2025-12-07T09:55:04.606Z [INFO]: # Retrieved cache
+2025-12-07T09:55:09.702Z [INFO]: ## Starting Backend Build
+                                 ## Checking for associated backend environment...
+                                 ## No backend environment association found, continuing...
+                                 ## Completed Backend Build
+2025-12-07T09:55:09.707Z [INFO]: {"backendDuration": 0}
+                                 ## Starting Frontend Build
+                                 # Starting phase: preBuild
+                                 # Executing command: npm install -g pnpm@8.15.4
+2025-12-07T09:55:25.786Z [INFO]: added 1 package in 11s
+2025-12-07T09:55:25.792Z [INFO]: 1 package is looking for funding
+                                 run `npm fund` for details
+2025-12-07T09:55:25.793Z [INFO]: # Executing command: cd ../..
+2025-12-07T09:55:25.833Z [INFO]: # Executing command: pnpm install
+2025-12-07T09:55:26.360Z [INFO]: Scope: all 27 workspace projects
+2025-12-07T09:55:26.486Z [INFO]: ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up to date with apps/api-auth/package.json
+                                 Note that in CI environments this setting is true by default. If you still need to run install in such cases, use "pnpm install --no-frozen-lockfile"
+                                 Failure reason:
+                                 specifiers in the lockfile ({"@types/bcryptjs":"^2.4.6","@types/cors":"^2.8.17","@types/express":"^4.17.21","@types/jsonwebtoken":"^9.0.5","@types/node":"^20.10.0","bcryptjs":"^2.4.3","cors":"^2.8.5","dotenv":"^16.3.1","express":"^4.18.2","jsonwebtoken":"^9.0.2","mongoose":"^8.0.0","typescript":"^5.3.3","tsx":"^4.7.0"}) don't match specs in package.json ({"tsx":"^4.7.0","express":"^4.18.2","mongoose":"^8.0.0","bcryptjs":"^2.4.3","jsonwebtoken":"^9.0.2","cors":"^2.8.5","dotenv":"^16.3.1","nodemailer":"^6.9.7","@types/nodemailer":"^6.4.14","@types/express":"^4.17.21","@types/node":"^20.10.0","@types/bcryptjs":"^2.4.6","@types/jsonwebtoken":"^9.0.5","@types/cors":"^2.8.17","typescript":"^5.3.3"})
+2025-12-07T09:55:26.499Z [ERROR]: !!! Build failed
+2025-12-07T09:55:26.499Z [ERROR]: !!! Error: Command failed with exit code 1
+2025-12-07T09:55:26.499Z [INFO]: # Starting environment caching...
+2025-12-07T09:55:26.499Z [INFO]: # Uploading environment cache artifact...
+2025-12-07T09:55:26.589Z [INFO]: # Uploaded environment cache artifact
+2025-12-07T09:55:26.589Z [INFO]: # Environment caching completed
+
