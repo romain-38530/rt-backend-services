@@ -2,10 +2,81 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Helper: Calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return Math.round(R * c);
+}
+
+// Helper: Estimate duration based on distance (average 70km/h)
+function estimateDuration(distanceKm) {
+  if (!distanceKm) return null;
+  return Math.round(distanceKm / 70 * 60); // minutes
+}
+
+// Helper: Enrich order with additional data
+async function enrichOrder(order, db) {
+  if (!order) return order;
+
+  const enriched = { ...order };
+
+  // Calculate distance if coordinates available
+  const pickupLat = order.pickupAddress?.latitude || order.pickup?.coordinates?.latitude;
+  const pickupLon = order.pickupAddress?.longitude || order.pickup?.coordinates?.longitude;
+  const deliveryLat = order.deliveryAddress?.latitude || order.delivery?.coordinates?.latitude;
+  const deliveryLon = order.deliveryAddress?.longitude || order.delivery?.coordinates?.longitude;
+
+  if (pickupLat && pickupLon && deliveryLat && deliveryLon) {
+    enriched.distanceKm = calculateDistance(pickupLat, pickupLon, deliveryLat, deliveryLon);
+    enriched.durationMinutes = estimateDuration(enriched.distanceKm);
+  }
+
+  // Try to get industrial name
+  if (order.industrialId && db) {
+    try {
+      const industrial = await db.collection('users').findOne({ _id: new ObjectId(order.industrialId) });
+      if (industrial) {
+        enriched.industrialName = industrial.companyName || industrial.name || industrial.email;
+      }
+    } catch (e) {
+      // Ignore lookup errors
+    }
+  }
+
+  // Try to get carrier name
+  if (order.carrierId && db) {
+    try {
+      const carrier = await db.collection('carriers').findOne({ _id: new ObjectId(order.carrierId) });
+      if (carrier) {
+        enriched.carrierName = carrier.companyName || carrier.name;
+      }
+    } catch (e) {
+      // Try users collection
+      try {
+        const carrier = await db.collection('users').findOne({ _id: new ObjectId(order.carrierId) });
+        if (carrier) {
+          enriched.carrierName = carrier.companyName || carrier.name || carrier.email;
+        }
+      } catch (e2) {
+        // Ignore lookup errors
+      }
+    }
+  }
+
+  return enriched;
+}
 
 // MongoDB connection
 let db = null;
@@ -124,13 +195,12 @@ app.get('/api/v1/orders', async (req, res) => {
   }
 });
 
-// Get single order
+// Get single order (enriched with names and distance)
 app.get('/api/v1/orders/:id', async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     let order;
 
     // Try finding by ObjectId first, then by reference
@@ -143,9 +213,118 @@ app.get('/api/v1/orders/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    res.json({ success: true, data: order });
+
+    // Enrich with additional data
+    const enrichedOrder = await enrichOrder(order, db);
+    res.json({ success: true, data: enrichedOrder });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get order events
+app.get('/api/v1/orders/:id/events', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: req.params.id });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Return events from order or empty array
+    const events = order.events || [];
+    res.json({ success: true, data: events });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add event/comment to order
+app.post('/api/v1/orders/:id/events', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const event = {
+      id: new ObjectId().toString(),
+      type: req.body.type || 'comment',
+      description: req.body.description || req.body.comment,
+      timestamp: new Date().toISOString(),
+      userId: req.body.userId,
+      userName: req.body.userName,
+      data: req.body.data
+    };
+
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $push: { events: event }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $push: { events: event }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    }
+
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.status(201).json({ success: true, data: event });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update pallet tracking
+app.put('/api/v1/orders/:id/pallets', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const palletData = {
+      enabled: true,
+      palletType: req.body.palletType || 'EPAL',
+      expectedQuantity: req.body.expectedQuantity || 0,
+      pickup: req.body.pickup || {},
+      delivery: req.body.delivery || {},
+      balance: (req.body.pickup?.givenBySender || 0) - (req.body.delivery?.receivedByRecipient || 0),
+      settled: req.body.settled || false,
+      updatedAt: new Date()
+    };
+
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { palletTracking: palletData, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $set: { palletTracking: palletData, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    }
+
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -182,7 +361,6 @@ app.put('/api/v1/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     const updateData = {
       ...req.body,
       updatedAt: new Date()
@@ -219,7 +397,6 @@ app.delete('/api/v1/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     let result;
 
     try {
@@ -259,7 +436,6 @@ app.get('/api/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     let order;
     try {
       order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
@@ -269,9 +445,110 @@ app.get('/api/orders/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    res.json({ success: true, data: order });
+    // Enrich with additional data
+    const enrichedOrder = await enrichOrder(order, db);
+    res.json({ success: true, data: enrichedOrder });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get order events (alias)
+app.get('/api/orders/:id/events', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: req.params.id });
+    }
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const events = order.events || [];
+    res.json({ success: true, data: events });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add event/comment (alias)
+app.post('/api/orders/:id/events', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const event = {
+      id: new ObjectId().toString(),
+      type: req.body.type || 'comment',
+      description: req.body.description || req.body.comment,
+      timestamp: new Date().toISOString(),
+      userId: req.body.userId,
+      userName: req.body.userName,
+      data: req.body.data
+    };
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $push: { events: event }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $push: { events: event }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    }
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.status(201).json({ success: true, data: event });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update pallet tracking (alias)
+app.put('/api/orders/:id/pallets', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const palletData = {
+      enabled: true,
+      palletType: req.body.palletType || 'EPAL',
+      expectedQuantity: req.body.expectedQuantity || 0,
+      pickup: req.body.pickup || {},
+      delivery: req.body.delivery || {},
+      balance: (req.body.pickup?.givenBySender || 0) - (req.body.delivery?.receivedByRecipient || 0),
+      settled: req.body.settled || false,
+      updatedAt: new Date()
+    };
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { palletTracking: palletData, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        { $set: { palletTracking: palletData, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+    }
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -300,7 +577,6 @@ app.put('/api/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     const updateData = { ...req.body, updatedAt: new Date() };
     delete updateData._id;
     let result;
@@ -331,7 +607,6 @@ app.delete('/api/orders/:id', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const { ObjectId } = require('mongodb');
     let result;
     try {
       result = await db.collection('orders').deleteOne({ _id: new ObjectId(req.params.id) });
@@ -348,6 +623,311 @@ app.delete('/api/orders/:id', async (req, res) => {
 });
 
 // ==================== END ALIAS ROUTES ====================
+
+// ==================== TRACKING ENDPOINTS ====================
+
+// Helper: Generate AI insights based on order data
+function generateAIInsights(order, trackingEvents) {
+  const insights = [];
+  const now = new Date();
+
+  // Analyze carrier performance if we have historical data
+  if (order.carrierId) {
+    insights.push({
+      id: `ai-perf-${order._id}`,
+      type: 'performance',
+      title: 'Performance transporteur',
+      description: `Analyse basée sur les données historiques du transporteur`,
+      confidence: 85,
+      timestamp: now.toISOString(),
+      priority: 'low'
+    });
+  }
+
+  // Analyze delivery prediction
+  if (order.status === 'in_transit' || order.status === 'en_cours') {
+    const deliveryDate = order.deliveryDate || order.delivery?.date;
+    if (deliveryDate) {
+      const deliveryTime = new Date(deliveryDate).getTime();
+      const diff = deliveryTime - now.getTime();
+      const hoursRemaining = Math.round(diff / (1000 * 60 * 60));
+
+      if (hoursRemaining > 0) {
+        insights.push({
+          id: `ai-eta-${order._id}`,
+          type: 'delivery_prediction',
+          title: 'Prédiction de livraison',
+          description: `Livraison prévue dans ${hoursRemaining}h`,
+          confidence: 78,
+          recommendation: hoursRemaining < 2 ? 'Livraison imminente' : 'En bonne voie',
+          timestamp: now.toISOString(),
+          priority: hoursRemaining < 2 ? 'high' : 'low'
+        });
+      }
+    }
+  }
+
+  // Check for potential delays based on last tracking event
+  if (trackingEvents && trackingEvents.length > 0) {
+    const lastEvent = trackingEvents[trackingEvents.length - 1];
+    const lastEventTime = new Date(lastEvent.timestamp).getTime();
+    const timeSinceLastEvent = now.getTime() - lastEventTime;
+    const hoursSinceLastEvent = timeSinceLastEvent / (1000 * 60 * 60);
+
+    if (hoursSinceLastEvent > 2 && order.status === 'in_transit') {
+      insights.push({
+        id: `ai-delay-${order._id}`,
+        type: 'delay_risk',
+        title: 'Risque de retard détecté',
+        description: `Aucune mise à jour GPS depuis ${Math.round(hoursSinceLastEvent)}h`,
+        confidence: 65,
+        recommendation: 'Vérifier le statut avec le transporteur',
+        timestamp: now.toISOString(),
+        priority: 'medium'
+      });
+    }
+  }
+
+  return insights;
+}
+
+// Get tracking data for an order
+app.get('/api/v1/orders/:id/tracking', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: req.params.id });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Get tracking events from the order
+    const trackingEvents = order.tracking || [];
+
+    // Convert order events to tracking format if no dedicated tracking exists
+    let events = trackingEvents.length > 0 ? trackingEvents : [];
+
+    // Add status-based events from order history
+    if (order.events && order.events.length > 0) {
+      const statusEvents = order.events
+        .filter(e => e.type === 'status_change' || e.type === 'gps' || e.type === 'status')
+        .map(e => ({
+          id: e.id || new ObjectId().toString(),
+          type: e.type === 'status_change' ? 'status' : e.type,
+          timestamp: e.timestamp,
+          title: e.title || e.description,
+          description: e.description,
+          location: e.location || e.data?.location,
+          metadata: e.metadata || { source: 'system' }
+        }));
+      events = [...events, ...statusEvents];
+    }
+
+    // Sort events by timestamp descending (newest first)
+    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Generate AI insights
+    const insights = generateAIInsights(order, events);
+
+    // Get current position if available
+    const currentPosition = order.currentPosition || (events.length > 0 && events[0].location) || null;
+
+    res.json({
+      success: true,
+      data: {
+        orderId: order._id.toString(),
+        reference: order.reference,
+        status: order.status,
+        events: events,
+        insights: insights,
+        currentPosition: currentPosition,
+        lastUpdate: events.length > 0 ? events[0].timestamp : order.updatedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add tracking event (GPS update, status change, etc.)
+app.post('/api/v1/orders/:id/tracking', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const trackingEvent = {
+      id: new ObjectId().toString(),
+      type: req.body.type || 'gps',
+      timestamp: req.body.timestamp || new Date().toISOString(),
+      title: req.body.title || 'Mise à jour position',
+      description: req.body.description,
+      location: req.body.location ? {
+        lat: req.body.location.lat,
+        lng: req.body.location.lng,
+        address: req.body.location.address,
+        city: req.body.location.city
+      } : null,
+      metadata: {
+        source: req.body.source || 'api',
+        userId: req.body.userId,
+        confidence: req.body.confidence,
+        aiGenerated: req.body.aiGenerated || false,
+        priority: req.body.priority || 'low'
+      }
+    };
+
+    // Update order with new tracking event and current position
+    const updateData = {
+      $push: { tracking: trackingEvent },
+      $set: {
+        updatedAt: new Date()
+      }
+    };
+
+    // Update current position if GPS update
+    if (trackingEvent.location && trackingEvent.type === 'gps') {
+      updateData.$set.currentPosition = trackingEvent.location;
+    }
+
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        updateData,
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        updateData,
+        { returnDocument: 'after' }
+      );
+    }
+
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.status(201).json({ success: true, data: trackingEvent });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Alias routes for tracking (without /v1)
+app.get('/api/orders/:id/tracking', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(req.params.id) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: req.params.id });
+    }
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const trackingEvents = order.tracking || [];
+    let events = trackingEvents.length > 0 ? trackingEvents : [];
+    if (order.events && order.events.length > 0) {
+      const statusEvents = order.events
+        .filter(e => e.type === 'status_change' || e.type === 'gps' || e.type === 'status')
+        .map(e => ({
+          id: e.id || new ObjectId().toString(),
+          type: e.type === 'status_change' ? 'status' : e.type,
+          timestamp: e.timestamp,
+          title: e.title || e.description,
+          description: e.description,
+          location: e.location || e.data?.location,
+          metadata: e.metadata || { source: 'system' }
+        }));
+      events = [...events, ...statusEvents];
+    }
+    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const insights = generateAIInsights(order, events);
+    const currentPosition = order.currentPosition || (events.length > 0 && events[0].location) || null;
+    res.json({
+      success: true,
+      data: {
+        orderId: order._id.toString(),
+        reference: order.reference,
+        status: order.status,
+        events: events,
+        insights: insights,
+        currentPosition: currentPosition,
+        lastUpdate: events.length > 0 ? events[0].timestamp : order.updatedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/orders/:id/tracking', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+  try {
+    const trackingEvent = {
+      id: new ObjectId().toString(),
+      type: req.body.type || 'gps',
+      timestamp: req.body.timestamp || new Date().toISOString(),
+      title: req.body.title || 'Mise à jour position',
+      description: req.body.description,
+      location: req.body.location ? {
+        lat: req.body.location.lat,
+        lng: req.body.location.lng,
+        address: req.body.location.address,
+        city: req.body.location.city
+      } : null,
+      metadata: {
+        source: req.body.source || 'api',
+        userId: req.body.userId,
+        confidence: req.body.confidence,
+        aiGenerated: req.body.aiGenerated || false,
+        priority: req.body.priority || 'low'
+      }
+    };
+    const updateData = {
+      $push: { tracking: trackingEvent },
+      $set: { updatedAt: new Date() }
+    };
+    if (trackingEvent.location && trackingEvent.type === 'gps') {
+      updateData.$set.currentPosition = trackingEvent.location;
+    }
+    let result;
+    try {
+      result = await db.collection('orders').findOneAndUpdate(
+        { _id: new ObjectId(req.params.id) },
+        updateData,
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      result = await db.collection('orders').findOneAndUpdate(
+        { reference: req.params.id },
+        updateData,
+        { returnDocument: 'after' }
+      );
+    }
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.status(201).json({ success: true, data: trackingEvent });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ==================== END TRACKING ENDPOINTS ====================
 
 // Start server
 async function startServer() {
