@@ -204,6 +204,30 @@ async function enrichOrder(order, db) {
     }
   }
 
+  // Try to get supplier name
+  if (order.supplierId && db) {
+    try {
+      const supplier = await db.collection('users').findOne({ _id: new ObjectId(order.supplierId) });
+      if (supplier) {
+        enriched.supplierName = supplier.companyName || supplier.name || supplier.email;
+      }
+    } catch (e) {
+      // Ignore lookup errors
+    }
+  }
+
+  // Try to get recipient name
+  if (order.recipientId && db) {
+    try {
+      const recipient = await db.collection('users').findOne({ _id: new ObjectId(order.recipientId) });
+      if (recipient) {
+        enriched.recipientName = recipient.companyName || recipient.name || recipient.email;
+      }
+    } catch (e) {
+      // Ignore lookup errors
+    }
+  }
+
   return enriched;
 }
 
@@ -315,14 +339,18 @@ app.get('/', (req, res) => {
 
 // ==================== ORDERS CRUD ====================
 
-// Get all orders
+// Get all orders (enriched with names)
 app.get('/api/v1/orders', async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
     const orders = await db.collection('orders').find({}).sort({ createdAt: -1 }).toArray();
-    res.json({ success: true, count: orders.length, data: orders });
+    // Enrich all orders with names (in parallel for performance)
+    const enrichedOrders = await Promise.all(
+      orders.map(order => enrichOrder(order, db))
+    );
+    res.json({ success: true, count: enrichedOrders.length, data: enrichedOrders });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -558,7 +586,11 @@ app.get('/api/orders', async (req, res) => {
   }
   try {
     const orders = await db.collection('orders').find({}).sort({ createdAt: -1 }).toArray();
-    res.json({ success: true, count: orders.length, data: orders });
+    // Enrich all orders with names
+    const enrichedOrders = await Promise.all(
+      orders.map(order => enrichOrder(order, db))
+    );
+    res.json({ success: true, count: enrichedOrders.length, data: enrichedOrders });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
