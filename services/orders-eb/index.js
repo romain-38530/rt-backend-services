@@ -339,18 +339,87 @@ app.get('/', (req, res) => {
 
 // ==================== ORDERS CRUD ====================
 
-// Get all orders (enriched with names)
+// Get all orders (enriched with names, with filtering and pagination)
 app.get('/api/v1/orders', async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const orders = await db.collection('orders').find({}).sort({ createdAt: -1 }).toArray();
+    // Build MongoDB query from filters
+    const query = {};
+
+    // Search filter (search in reference, carrierName, industrialName)
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, 'i');
+      query.$or = [
+        { reference: searchRegex },
+        { 'pickupAddress.city': searchRegex },
+        { 'deliveryAddress.city': searchRegex },
+        { carrierName: searchRegex },
+        { industrialName: searchRegex }
+      ];
+    }
+
+    // Status filter (can be single or array)
+    if (req.query.status) {
+      const statuses = Array.isArray(req.query.status) ? req.query.status : [req.query.status];
+      if (statuses.length > 0) {
+        query.status = { $in: statuses };
+      }
+    }
+
+    // Date range filter
+    if (req.query.dateFrom || req.query.dateTo) {
+      query.$and = query.$and || [];
+      if (req.query.dateFrom) {
+        query.$and.push({
+          $or: [
+            { 'dates.pickupDate': { $gte: req.query.dateFrom } },
+            { pickupDate: { $gte: req.query.dateFrom } },
+            { createdAt: { $gte: new Date(req.query.dateFrom) } }
+          ]
+        });
+      }
+      if (req.query.dateTo) {
+        query.$and.push({
+          $or: [
+            { 'dates.pickupDate': { $lte: req.query.dateTo } },
+            { pickupDate: { $lte: req.query.dateTo } },
+            { createdAt: { $lte: new Date(req.query.dateTo) } }
+          ]
+        });
+      }
+    }
+
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    // Get total count
+    const total = await db.collection('orders').countDocuments(query);
+
+    // Get paginated orders
+    const orders = await db.collection('orders')
+      .find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
     // Enrich all orders with names (in parallel for performance)
     const enrichedOrders = await Promise.all(
       orders.map(order => enrichOrder(order, db))
     );
-    res.json({ success: true, count: enrichedOrders.length, data: enrichedOrders });
+
+    res.json({
+      success: true,
+      count: total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      data: enrichedOrders
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -585,12 +654,78 @@ app.get('/api/orders', async (req, res) => {
     return res.status(503).json({ error: 'Database not connected' });
   }
   try {
-    const orders = await db.collection('orders').find({}).sort({ createdAt: -1 }).toArray();
+    // Build MongoDB query from filters
+    const query = {};
+
+    // Search filter
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, 'i');
+      query.$or = [
+        { reference: searchRegex },
+        { 'pickupAddress.city': searchRegex },
+        { 'deliveryAddress.city': searchRegex },
+        { carrierName: searchRegex },
+        { industrialName: searchRegex }
+      ];
+    }
+
+    // Status filter
+    if (req.query.status) {
+      const statuses = Array.isArray(req.query.status) ? req.query.status : [req.query.status];
+      if (statuses.length > 0) {
+        query.status = { $in: statuses };
+      }
+    }
+
+    // Date range filter
+    if (req.query.dateFrom || req.query.dateTo) {
+      query.$and = query.$and || [];
+      if (req.query.dateFrom) {
+        query.$and.push({
+          $or: [
+            { 'dates.pickupDate': { $gte: req.query.dateFrom } },
+            { pickupDate: { $gte: req.query.dateFrom } },
+            { createdAt: { $gte: new Date(req.query.dateFrom) } }
+          ]
+        });
+      }
+      if (req.query.dateTo) {
+        query.$and.push({
+          $or: [
+            { 'dates.pickupDate': { $lte: req.query.dateTo } },
+            { pickupDate: { $lte: req.query.dateTo } },
+            { createdAt: { $lte: new Date(req.query.dateTo) } }
+          ]
+        });
+      }
+    }
+
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const total = await db.collection('orders').countDocuments(query);
+    const orders = await db.collection('orders')
+      .find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
     // Enrich all orders with names
     const enrichedOrders = await Promise.all(
       orders.map(order => enrichOrder(order, db))
     );
-    res.json({ success: true, count: enrichedOrders.length, data: enrichedOrders });
+
+    res.json({
+      success: true,
+      count: total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      data: enrichedOrders
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
