@@ -1413,16 +1413,95 @@ async function addOrderEvent(orderId, event, db) {
 }
 
 // Helper: Check if user has Affret IA subscription
+// Returns: { hasSubscription: boolean, source: string, details: string }
 async function hasAffretIASubscription(userId) {
+  console.log(`[AffretIA] Checking subscription for userId: ${userId}`);
+
+  // 1. First try the subscriptions API
   try {
-    const response = await fetch(`${SUBSCRIPTIONS_API_URL}/subscriptions/user/${userId}/active`);
-    if (!response.ok) return false;
-    const subscription = await response.json();
-    return subscription?.activeModules?.some(m => m.moduleId === 'AFFRET_IA') || false;
+    const apiUrl = `${SUBSCRIPTIONS_API_URL}/subscriptions/user/${userId}/active`;
+    console.log(`[AffretIA] Calling API: ${apiUrl}`);
+
+    const response = await fetch(apiUrl);
+    console.log(`[AffretIA] API response status: ${response.status}`);
+
+    if (response.ok) {
+      const subscription = await response.json();
+      console.log(`[AffretIA] API response:`, JSON.stringify(subscription).substring(0, 200));
+
+      // Check various possible formats for modules
+      const hasModule =
+        subscription?.activeModules?.some(m => m.moduleId === 'AFFRET_IA' || m.id === 'AFFRET_IA') ||
+        subscription?.modules?.some(m => m === 'AFFRET_IA' || m.id === 'AFFRET_IA' || m.moduleId === 'AFFRET_IA') ||
+        subscription?.features?.includes('AFFRET_IA') ||
+        subscription?.plan === 'premium' ||
+        subscription?.plan === 'enterprise';
+
+      if (hasModule) {
+        console.log(`[AffretIA] ✓ Subscription found via API`);
+        return { hasSubscription: true, source: 'api', details: 'Active subscription found' };
+      }
+    }
   } catch (e) {
-    console.error('Error checking Affret IA subscription:', e.message);
-    return false;
+    console.error(`[AffretIA] API error: ${e.message}`);
   }
+
+  // 2. Fallback: Check directly in database (users collection)
+  try {
+    if (authDb) {
+      console.log(`[AffretIA] Checking database fallback...`);
+
+      // Try to find user by various ID formats
+      let user = null;
+      try {
+        user = await authDb.collection('users').findOne({ _id: new ObjectId(userId) });
+      } catch (e) {
+        // userId might not be a valid ObjectId, try as string
+        user = await authDb.collection('users').findOne({
+          $or: [
+            { id: userId },
+            { industrialId: userId },
+            { email: userId }
+          ]
+        });
+      }
+
+      if (user) {
+        console.log(`[AffretIA] Found user: ${user.email || user._id}`);
+
+        // Check user subscription/plan
+        const hasSubscription =
+          user.subscription?.modules?.includes('AFFRET_IA') ||
+          user.subscription?.plan === 'premium' ||
+          user.subscription?.plan === 'enterprise' ||
+          user.organization?.subscription?.modules?.includes('AFFRET_IA') ||
+          user.organization?.plan === 'premium' ||
+          user.features?.includes('AFFRET_IA') ||
+          user.modules?.includes('AFFRET_IA');
+
+        if (hasSubscription) {
+          console.log(`[AffretIA] ✓ Subscription found in database`);
+          return { hasSubscription: true, source: 'database', details: 'Subscription found in user record' };
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`[AffretIA] Database fallback error: ${e.message}`);
+  }
+
+  // 3. Check for test/demo accounts - always allow escalation for testing
+  if (userId && (
+    userId.startsWith('ind_test') ||
+    userId.startsWith('demo') ||
+    userId.includes('test') ||
+    process.env.ALWAYS_ESCALATE_AFFRET_IA === 'true'
+  )) {
+    console.log(`[AffretIA] ✓ Test/demo account or ALWAYS_ESCALATE_AFFRET_IA enabled`);
+    return { hasSubscription: true, source: 'test_mode', details: 'Test account or forced escalation' };
+  }
+
+  console.log(`[AffretIA] ✗ No subscription found for ${userId}`);
+  return { hasSubscription: false, source: 'none', details: 'No active Affret IA subscription' };
 }
 
 // Helper: Get top carriers for an order (simplified scoring)
@@ -1853,50 +1932,80 @@ app.post('/api/orders/:id/carrier-response', async (req, res) => {
         });
 
       } else {
-        // All carriers refused - always escalate to Affret IA
+        // All carriers refused - check subscription for Affret IA escalation
         const userId = order.industrialId || order.createdBy;
-        console.log(`[CarrierRefuse] Order ${order._id}: All carriers refused, escalating to Affret IA`);
+        console.log(`[CarrierRefuse] Order ${order._id}: All carriers refused, checking Affret IA subscription...`);
 
-        // Always escalate to Affret IA - this is the core SYMPHONI.A behavior
-        await db.collection('orders').updateOne(
-          { _id: order._id },
-          {
-            $set: {
-              status: 'affret_ia',
-              updatedAt: new Date()
-            }
-          }
-        );
+        const subscriptionResult = await hasAffretIASubscription(userId);
 
-        // Trigger Affret IA
-        const affretResult = await triggerAffretIA(order, userId);
+        if (subscriptionResult.hasSubscription) {
+          // Escalate to Affret IA
+          console.log(`[CarrierRefuse] Order ${order._id}: Escalating to Affret IA (${subscriptionResult.source})`);
 
-        // Add event
-        await addOrderEvent(order._id.toString(), {
-          type: 'escalated_affret_ia',
-          details: 'Tous les transporteurs ont refuse - Escalade vers Affret IA',
-          affretSessionId: affretResult?.sessionId
-        }, db);
+          await db.collection('orders').updateOne(
+            { _id: order._id },
+            { $set: { status: 'affret_ia', updatedAt: new Date() } }
+          );
 
-        // Send email to industrial about Affret IA escalation
-        const enrichedOrderAffret = await enrichOrder(order, db);
-        if (enrichedOrderAffret.industrialEmail) {
-          emailOrders.sendAffretIAEscalationToIndustrial(
-            enrichedOrderAffret.industrialEmail,
-            enrichedOrderAffret.industrialName || 'Client',
-            { ...order, ...enrichedOrderAffret }
-          ).catch(err => console.error('Email Affret IA escalation failed:', err.message));
-        }
+          const affretResult = await triggerAffretIA(order, userId);
 
-        res.json({
-          success: true,
-          message: 'All carriers refused, escalated to Affret IA',
-          data: {
-            orderId: order._id.toString(),
-            status: 'affret_ia',
+          await addOrderEvent(order._id.toString(), {
+            type: 'escalated_affret_ia',
+            details: `Tous les transporteurs ont refuse - Escalade vers Affret IA (${subscriptionResult.source})`,
             affretSessionId: affretResult?.sessionId
+          }, db);
+
+          const enrichedOrderAffret = await enrichOrder(order, db);
+          if (enrichedOrderAffret.industrialEmail) {
+            emailOrders.sendAffretIAEscalationToIndustrial(
+              enrichedOrderAffret.industrialEmail,
+              enrichedOrderAffret.industrialName || 'Client',
+              { ...order, ...enrichedOrderAffret }
+            ).catch(err => console.error('Email Affret IA escalation failed:', err.message));
           }
-        });
+
+          res.json({
+            success: true,
+            message: 'All carriers refused, escalated to Affret IA',
+            data: {
+              orderId: order._id.toString(),
+              status: 'affret_ia',
+              affretSessionId: affretResult?.sessionId
+            }
+          });
+        } else {
+          // No subscription - fail planification
+          console.log(`[CarrierRefuse] Order ${order._id}: No Affret IA subscription, failing planification`);
+
+          await db.collection('orders').updateOne(
+            { _id: order._id },
+            { $set: { status: 'echec_planification', updatedAt: new Date() } }
+          );
+
+          await addOrderEvent(order._id.toString(), {
+            type: 'dispatch_failed',
+            details: `Tous les transporteurs ont refuse - Pas d'abonnement Affret IA`
+          }, db);
+
+          const enrichedOrderFail = await enrichOrder(order, db);
+          if (enrichedOrderFail.industrialEmail) {
+            emailOrders.sendPlanificationFailedToIndustrial(
+              enrichedOrderFail.industrialEmail,
+              enrichedOrderFail.industrialName || 'Client',
+              { ...order, ...enrichedOrderFail },
+              'Tous les transporteurs ont refuse'
+            ).catch(err => console.error('Email planification failed:', err.message));
+          }
+
+          res.json({
+            success: true,
+            message: 'All carriers refused, planification failed (no Affret IA subscription)',
+            data: {
+              orderId: order._id.toString(),
+              status: 'echec_planification'
+            }
+          });
+        }
       }
     }
 
@@ -2029,39 +2138,71 @@ app.post('/api/orders/check-timeouts', async (req, res) => {
           });
 
         } else {
-          // All carriers exhausted - always escalate to Affret IA
+          // All carriers exhausted - check subscription for Affret IA escalation
           const userId = order.industrialId || order.createdBy;
-          console.log(`[CheckTimeouts] Order ${order._id}: All carriers exhausted, escalating to Affret IA`);
+          console.log(`[CheckTimeouts] Order ${order._id}: All carriers exhausted, checking Affret IA subscription...`);
 
-          // Always escalate to Affret IA - this is the core SYMPHONI.A behavior
-          await db.collection('orders').updateOne(
-            { _id: order._id },
-            { $set: { status: 'affret_ia', updatedAt: now } }
-          );
+          const subscriptionResult = await hasAffretIASubscription(userId);
 
-          const affretResult = await triggerAffretIA(order, userId);
+          if (subscriptionResult.hasSubscription) {
+            console.log(`[CheckTimeouts] Order ${order._id}: Escalating to Affret IA (${subscriptionResult.source})`);
 
-          await addOrderEvent(order._id.toString(), {
-            type: 'escalated_affret_ia',
-            details: 'Tous les transporteurs ont expire - Escalade vers Affret IA',
-            affretSessionId: affretResult?.sessionId
-          }, db);
+            await db.collection('orders').updateOne(
+              { _id: order._id },
+              { $set: { status: 'affret_ia', updatedAt: now } }
+            );
 
-          // Send email to industrial about Affret IA escalation
-          const enrichedOrderAffretTimeout = await enrichOrder(order, db);
-          if (enrichedOrderAffretTimeout.industrialEmail) {
-            emailOrders.sendAffretIAEscalationToIndustrial(
-              enrichedOrderAffretTimeout.industrialEmail,
-              enrichedOrderAffretTimeout.industrialName || 'Client',
-              { ...order, ...enrichedOrderAffretTimeout }
-            ).catch(err => console.error('Email Affret IA escalation (timeout) failed:', err.message));
+            const affretResult = await triggerAffretIA(order, userId);
+
+            await addOrderEvent(order._id.toString(), {
+              type: 'escalated_affret_ia',
+              details: `Tous les transporteurs ont expire - Escalade vers Affret IA (${subscriptionResult.source})`,
+              affretSessionId: affretResult?.sessionId
+            }, db);
+
+            const enrichedOrderAffretTimeout = await enrichOrder(order, db);
+            if (enrichedOrderAffretTimeout.industrialEmail) {
+              emailOrders.sendAffretIAEscalationToIndustrial(
+                enrichedOrderAffretTimeout.industrialEmail,
+                enrichedOrderAffretTimeout.industrialName || 'Client',
+                { ...order, ...enrichedOrderAffretTimeout }
+              ).catch(err => console.error('Email Affret IA escalation (timeout) failed:', err.message));
+            }
+
+            results.push({
+              orderId: order._id.toString(),
+              action: 'escalated_affret_ia',
+              affretSessionId: affretResult?.sessionId
+            });
+          } else {
+            console.log(`[CheckTimeouts] Order ${order._id}: No Affret IA subscription, failing planification`);
+
+            await db.collection('orders').updateOne(
+              { _id: order._id },
+              { $set: { status: 'echec_planification', updatedAt: now } }
+            );
+
+            await addOrderEvent(order._id.toString(), {
+              type: 'dispatch_failed',
+              details: `Tous les transporteurs ont expire - Pas d'abonnement Affret IA`
+            }, db);
+
+            const enrichedOrderFail = await enrichOrder(order, db);
+            if (enrichedOrderFail.industrialEmail) {
+              emailOrders.sendPlanificationFailedToIndustrial(
+                enrichedOrderFail.industrialEmail,
+                enrichedOrderFail.industrialName || 'Client',
+                { ...order, ...enrichedOrderFail },
+                'Tous les transporteurs ont expire'
+              ).catch(err => console.error('Email planification failed:', err.message));
+            }
+
+            results.push({
+              orderId: order._id.toString(),
+              action: 'dispatch_failed',
+              reason: 'No Affret IA subscription'
+            });
           }
-
-          results.push({
-            orderId: order._id.toString(),
-            action: 'escalated_affret_ia',
-            affretSessionId: affretResult?.sessionId
-          });
         }
       } catch (orderError) {
         console.error(`Error processing timeout for order ${order._id}:`, orderError);
@@ -2173,21 +2314,37 @@ app.get('/api/orders/:id/dispatch-status', async (req, res) => {
             await updateCarrierKPI(nextCarrier.carrierId, 'received', null, null);
 
           } else {
-            // All exhausted - always escalate to Affret IA
+            // All exhausted - check subscription for Affret IA escalation
             const userId = order.industrialId || order.createdBy;
-            console.log(`[DispatchStatus] Order ${order._id}: All carriers exhausted, escalating to Affret IA`);
+            console.log(`[DispatchStatus] Order ${order._id}: All carriers exhausted, checking Affret IA subscription...`);
 
-            // Always escalate to Affret IA - this is the core SYMPHONI.A behavior
-            await db.collection('orders').updateOne(
-              { _id: order._id },
-              { $set: { status: 'affret_ia', updatedAt: now } }
-            );
-            const affretResult = await triggerAffretIA(order, userId);
-            await addOrderEvent(order._id.toString(), {
-              type: 'escalated_affret_ia',
-              details: 'Tous les transporteurs ont expire - Escalade vers Affret IA',
-              affretSessionId: affretResult?.sessionId
-            }, db);
+            const subscriptionResult = await hasAffretIASubscription(userId);
+
+            if (subscriptionResult.hasSubscription) {
+              console.log(`[DispatchStatus] Order ${order._id}: Escalating to Affret IA (${subscriptionResult.source})`);
+
+              await db.collection('orders').updateOne(
+                { _id: order._id },
+                { $set: { status: 'affret_ia', updatedAt: now } }
+              );
+              const affretResult = await triggerAffretIA(order, userId);
+              await addOrderEvent(order._id.toString(), {
+                type: 'escalated_affret_ia',
+                details: `Tous les transporteurs ont expire - Escalade vers Affret IA (${subscriptionResult.source})`,
+                affretSessionId: affretResult?.sessionId
+              }, db);
+            } else {
+              console.log(`[DispatchStatus] Order ${order._id}: No Affret IA subscription, failing planification`);
+
+              await db.collection('orders').updateOne(
+                { _id: order._id },
+                { $set: { status: 'echec_planification', updatedAt: now } }
+              );
+              await addOrderEvent(order._id.toString(), {
+                type: 'dispatch_failed',
+                details: `Tous les transporteurs ont expire - Pas d'abonnement Affret IA`
+              }, db);
+            }
           }
 
           // Reload updated order
@@ -2533,33 +2690,62 @@ async function checkTimeoutsInternal() {
           console.log(`[AutoTimeout] Order ${order._id}: Moved to carrier ${nextCarrier.carrierName}`);
 
         } else {
-          // All carriers exhausted - always escalate to Affret IA
+          // All carriers exhausted - check subscription for Affret IA escalation
           const userId = order.industrialId || order.createdBy;
-          console.log(`[AutoTimeout] Order ${order._id}: All carriers exhausted, escalating to Affret IA`);
+          console.log(`[AutoTimeout] Order ${order._id}: All carriers exhausted, checking Affret IA subscription...`);
 
-          // Always escalate to Affret IA - this is the core SYMPHONI.A behavior
-          await db.collection('orders').updateOne(
-            { _id: order._id },
-            { $set: { status: 'affret_ia', updatedAt: now } }
-          );
+          const subscriptionResult = await hasAffretIASubscription(userId);
 
-          const affretResult = await triggerAffretIA(order, userId);
-          await addOrderEvent(order._id.toString(), {
-            type: 'escalated_affret_ia',
-            details: 'Tous les transporteurs ont expire - Escalade vers Affret IA',
-            affretSessionId: affretResult?.sessionId
-          }, db);
+          if (subscriptionResult.hasSubscription) {
+            console.log(`[AutoTimeout] Order ${order._id}: Escalating to Affret IA (${subscriptionResult.source})`);
 
-          const enrichedOrder = await enrichOrder(order, db);
-          if (enrichedOrder.industrialEmail) {
-            emailOrders.sendAffretIAEscalationToIndustrial(
-              enrichedOrder.industrialEmail,
-              enrichedOrder.industrialName || 'Client',
-              { ...order, ...enrichedOrder }
-            ).catch(err => console.error('Email Affret IA escalation failed:', err.message));
+            await db.collection('orders').updateOne(
+              { _id: order._id },
+              { $set: { status: 'affret_ia', updatedAt: now } }
+            );
+
+            const affretResult = await triggerAffretIA(order, userId);
+            await addOrderEvent(order._id.toString(), {
+              type: 'escalated_affret_ia',
+              details: `Tous les transporteurs ont expire - Escalade vers Affret IA (${subscriptionResult.source})`,
+              affretSessionId: affretResult?.sessionId
+            }, db);
+
+            const enrichedOrder = await enrichOrder(order, db);
+            if (enrichedOrder.industrialEmail) {
+              emailOrders.sendAffretIAEscalationToIndustrial(
+                enrichedOrder.industrialEmail,
+                enrichedOrder.industrialName || 'Client',
+                { ...order, ...enrichedOrder }
+              ).catch(err => console.error('Email Affret IA escalation failed:', err.message));
+            }
+
+            console.log(`[AutoTimeout] Order ${order._id}: Escalated to Affret IA successfully`);
+          } else {
+            console.log(`[AutoTimeout] Order ${order._id}: No Affret IA subscription, failing planification`);
+
+            await db.collection('orders').updateOne(
+              { _id: order._id },
+              { $set: { status: 'echec_planification', updatedAt: now } }
+            );
+
+            await addOrderEvent(order._id.toString(), {
+              type: 'dispatch_failed',
+              details: `Tous les transporteurs ont expire - Pas d'abonnement Affret IA`
+            }, db);
+
+            const enrichedOrder = await enrichOrder(order, db);
+            if (enrichedOrder.industrialEmail) {
+              emailOrders.sendPlanificationFailedToIndustrial(
+                enrichedOrder.industrialEmail,
+                enrichedOrder.industrialName || 'Client',
+                { ...order, ...enrichedOrder },
+                'Tous les transporteurs ont expire'
+              ).catch(err => console.error('Email planification failed:', err.message));
+            }
+
+            console.log(`[AutoTimeout] Order ${order._id}: Planification failed (no subscription)`);
           }
-
-          console.log(`[AutoTimeout] Order ${order._id}: Escalated to Affret IA successfully`);
         }
       } catch (orderError) {
         console.error(`[AutoTimeout] Error processing order ${order._id}:`, orderError.message);
