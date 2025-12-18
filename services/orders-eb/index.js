@@ -164,6 +164,9 @@ async function enrichOrder(order, db) {
 
   const enriched = { ...order };
 
+  // Use authDb for user lookups (users are in rt-auth database)
+  const usersDb = authDb || db;
+
   // Calculate distance if coordinates available
   const pickupLat = order.pickupAddress?.latitude || order.pickup?.coordinates?.latitude;
   const pickupLon = order.pickupAddress?.longitude || order.pickup?.coordinates?.longitude;
@@ -175,12 +178,12 @@ async function enrichOrder(order, db) {
     enriched.durationMinutes = estimateDuration(enriched.distanceKm);
   }
 
-  // Try to get industrial name and email
-  if (order.industrialId && db) {
+  // Try to get industrial name and email (from rt-auth)
+  if (order.industrialId && usersDb) {
     try {
-      const industrial = await db.collection('users').findOne({ _id: new ObjectId(order.industrialId) });
+      const industrial = await usersDb.collection('users').findOne({ _id: new ObjectId(order.industrialId) });
       if (industrial) {
-        enriched.industrialName = industrial.companyName || industrial.name || industrial.email;
+        enriched.industrialName = industrial.organization?.name || industrial.companyName || industrial.name || industrial.email;
         enriched.industrialEmail = industrial.email;
       }
     } catch (e) {
@@ -188,44 +191,37 @@ async function enrichOrder(order, db) {
     }
   }
 
-  // Try to get carrier name
-  if (order.carrierId && db) {
+  // Try to get carrier name (from rt-auth)
+  if (order.carrierId && usersDb) {
     try {
-      const carrier = await db.collection('carriers').findOne({ _id: new ObjectId(order.carrierId) });
+      const carrier = await usersDb.collection('users').findOne({ _id: new ObjectId(order.carrierId) });
       if (carrier) {
-        enriched.carrierName = carrier.companyName || carrier.name;
-      }
-    } catch (e) {
-      // Try users collection
-      try {
-        const carrier = await db.collection('users').findOne({ _id: new ObjectId(order.carrierId) });
-        if (carrier) {
-          enriched.carrierName = carrier.companyName || carrier.name || carrier.email;
-        }
-      } catch (e2) {
-        // Ignore lookup errors
-      }
-    }
-  }
-
-  // Try to get supplier name
-  if (order.supplierId && db) {
-    try {
-      const supplier = await db.collection('users').findOne({ _id: new ObjectId(order.supplierId) });
-      if (supplier) {
-        enriched.supplierName = supplier.companyName || supplier.name || supplier.email;
+        enriched.carrierName = carrier.organization?.name || carrier.companyName || carrier.name || carrier.email;
+        enriched.carrierEmail = carrier.email;
       }
     } catch (e) {
       // Ignore lookup errors
     }
   }
 
-  // Try to get recipient name
-  if (order.recipientId && db) {
+  // Try to get supplier name (from rt-auth)
+  if (order.supplierId && usersDb) {
     try {
-      const recipient = await db.collection('users').findOne({ _id: new ObjectId(order.recipientId) });
+      const supplier = await usersDb.collection('users').findOne({ _id: new ObjectId(order.supplierId) });
+      if (supplier) {
+        enriched.supplierName = supplier.organization?.name || supplier.companyName || supplier.name || supplier.email;
+      }
+    } catch (e) {
+      // Ignore lookup errors
+    }
+  }
+
+  // Try to get recipient name (from rt-auth)
+  if (order.recipientId && usersDb) {
+    try {
+      const recipient = await usersDb.collection('users').findOne({ _id: new ObjectId(order.recipientId) });
       if (recipient) {
-        enriched.recipientName = recipient.companyName || recipient.name || recipient.email;
+        enriched.recipientName = recipient.organization?.name || recipient.companyName || recipient.name || recipient.email;
       }
     } catch (e) {
       // Ignore lookup errors
@@ -237,6 +233,7 @@ async function enrichOrder(order, db) {
 
 // MongoDB connection
 let db = null;
+let authDb = null; // Separate connection for auth database (users)
 let mongoClient = null;
 let mongoConnected = false;
 
@@ -249,9 +246,13 @@ async function connectMongoDB() {
   try {
     mongoClient = new MongoClient(process.env.MONGODB_URI);
     await mongoClient.connect();
-    db = mongoClient.db();
+    db = mongoClient.db(); // rt-orders database
+
+    // Also connect to rt-auth database for user queries (transporters, industrials, etc.)
+    authDb = mongoClient.db('rt-auth');
+
     mongoConnected = true;
-    console.log('✓ Connected to MongoDB');
+    console.log('✓ Connected to MongoDB (rt-orders + rt-auth)');
     return true;
   } catch (error) {
     console.error('✗ MongoDB connection failed:', error.message);
@@ -1427,8 +1428,11 @@ async function hasAffretIASubscription(userId) {
 // Helper: Get top carriers for an order (simplified scoring)
 async function getTopCarriers(order, db, limit = AUTO_DISPATCH_MAX_CARRIERS) {
   try {
+    // Use authDb to query users (transporters are in rt-auth database, not rt-orders)
+    const usersDb = authDb || db;
+
     // Get all active transporters - check multiple possible field configurations
-    const carriers = await db.collection('users').find({
+    const carriers = await usersDb.collection('users').find({
       $or: [
         // New format: role='transporter', isActive=true
         { role: 'transporter', isActive: true },
@@ -1439,7 +1443,7 @@ async function getTopCarriers(order, db, limit = AUTO_DISPATCH_MAX_CARRIERS) {
       ]
     }).limit(20).toArray();
 
-    console.log(`[getTopCarriers] Found ${carriers.length} carriers in database`);
+    console.log(`[getTopCarriers] Found ${carriers.length} carriers in database (using ${authDb ? 'rt-auth' : 'rt-orders'})`);
 
     // Simple scoring based on available data
     const scoredCarriers = carriers.map(carrier => {
@@ -2391,6 +2395,103 @@ app.get('/api/v1/orders/carrier/:carrierId/pending-dispatch', async (req, res) =
 });
 
 // ==================== END AUTO-DISPATCH SYSTEM ====================
+
+// ==================== SUPPLIER PORTAL INVITATION ====================
+
+// Helper: Generate random access code (6 alphanumeric chars)
+function generateAccessCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding confusing chars like O, 0, I, 1
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// POST /api/orders/:id/send-supplier-invitation - Send portal invitation to supplier (external sender)
+app.post('/api/orders/:id/send-supplier-invitation', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+
+  try {
+    const orderId = req.params.id;
+    const { email, name } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Get the order
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(orderId) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: orderId });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Generate access code
+    const accessCode = generateAccessCode();
+
+    // Store access code in order
+    await db.collection('orders').updateOne(
+      { _id: order._id },
+      {
+        $set: {
+          supplierAccessCode: accessCode,
+          supplierEmail: email,
+          supplierName: name,
+          supplierInvitedAt: new Date(),
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    // Add event
+    await addOrderEvent(order._id.toString(), {
+      type: 'supplier_invited',
+      details: `Invitation envoyée au fournisseur ${name || email}`,
+      supplierEmail: email,
+      supplierName: name
+    }, db);
+
+    // Send email
+    const enrichedOrder = await enrichOrder(order, db);
+    const emailResult = await emailOrders.sendSupplierPortalInvitation(
+      email,
+      name || 'Fournisseur',
+      { ...order, ...enrichedOrder },
+      accessCode
+    );
+
+    res.json({
+      success: true,
+      message: 'Invitation sent successfully',
+      data: {
+        orderId: order._id.toString(),
+        email,
+        emailSent: emailResult.success,
+        accessCodeGenerated: true
+      }
+    });
+
+  } catch (error) {
+    console.error('Send supplier invitation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Alias with /v1
+app.post('/api/v1/orders/:id/send-supplier-invitation', async (req, res) => {
+  req.url = `/api/orders/${req.params.id}/send-supplier-invitation`;
+  app.handle(req, res);
+});
+
+// ==================== END SUPPLIER PORTAL INVITATION ====================
 
 // Start server
 async function startServer() {

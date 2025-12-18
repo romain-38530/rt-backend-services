@@ -390,6 +390,63 @@ async function sendAutoDispatchStartedToIndustrial(industrialEmail, industrialNa
   });
 }
 
+/**
+ * Email d'invitation au portail fournisseur (expéditeur externe)
+ */
+async function sendSupplierPortalInvitation(supplierEmail, supplierName, order, accessCode) {
+  const supplierPortalUrl = process.env.SUPPLIER_FRONTEND_URL || 'https://fournisseur.symphonia.com';
+
+  const content = `
+    <h2>Bonjour ${supplierName},</h2>
+
+    <p>Vous avez été désigné(e) comme expéditeur pour une commande de transport. Vous pouvez accéder au portail fournisseur pour gérer le rendez-vous de chargement et suivre votre expédition.</p>
+
+    <div class="info-box" style="border-color: #f59e0b;">
+      <h3 style="margin-top: 0; color: #92400e;">📦 Commande <span class="order-ref">${order.reference}</span></h3>
+      <table>
+        <tr>
+          <td class="label">Enlèvement</td>
+          <td class="value">${order.pickupAddress?.city || '-'} - ${order.dates?.pickupDate ? new Date(order.dates.pickupDate).toLocaleDateString('fr-FR') : '-'}</td>
+        </tr>
+        <tr>
+          <td class="label">Livraison</td>
+          <td class="value">${order.deliveryAddress?.city || '-'} - ${order.dates?.deliveryDate ? new Date(order.dates.deliveryDate).toLocaleDateString('fr-FR') : '-'}</td>
+        </tr>
+        <tr>
+          <td class="label">Marchandise</td>
+          <td class="value">${order.goods?.weight || '-'} kg ${order.goods?.palettes ? `- ${order.goods.palettes} palettes` : ''}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="info-box" style="border-color: #10b981; background: #f0fdf4;">
+      <h3 style="margin-top: 0; color: #059669;">🔑 Votre code d'accès</h3>
+      <p style="font-size: 24px; font-family: monospace; text-align: center; color: #059669; font-weight: bold; letter-spacing: 4px;">${accessCode}</p>
+      <p style="font-size: 12px; color: #6b7280; text-align: center; margin-bottom: 0;">Utilisez ce code pour accéder au portail fournisseur</p>
+    </div>
+
+    <p><strong>Sur le portail fournisseur, vous pourrez :</strong></p>
+    <ul>
+      <li>📅 Gérer le rendez-vous de chargement</li>
+      <li>📍 Suivre votre commande en temps réel</li>
+      <li>💬 Communiquer avec le transporteur</li>
+      <li>📄 Consulter les documents de transport</li>
+    </ul>
+
+    <p style="text-align: center;">
+      <a href="${supplierPortalUrl}/access?code=${accessCode}&email=${encodeURIComponent(supplierEmail)}" class="button" style="background: #f59e0b;">
+        Accéder au Portail Fournisseur
+      </a>
+    </p>
+  `;
+
+  return sendEmail({
+    to: supplierEmail,
+    subject: `📦 Invitation Portail Fournisseur - Commande ${order.reference}`,
+    html: baseTemplate(content, '📦 Portail Fournisseur', '#f59e0b')
+  });
+}
+
 module.exports = {
   sendEmail,
   sendDispatchNotificationToCarrier,
@@ -398,5 +455,6 @@ module.exports = {
   sendTimeoutNotificationToIndustrial,
   sendAffretIAEscalationToIndustrial,
   sendPlanificationFailedToIndustrial,
-  sendAutoDispatchStartedToIndustrial
+  sendAutoDispatchStartedToIndustrial,
+  sendSupplierPortalInvitation
 };
