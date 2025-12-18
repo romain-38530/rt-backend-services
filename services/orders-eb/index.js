@@ -2493,6 +2493,186 @@ app.post('/api/v1/orders/:id/send-supplier-invitation', async (req, res) => {
 
 // ==================== END SUPPLIER PORTAL INVITATION ====================
 
+// ==================== AUTO TIMEOUT CHECKER ====================
+// Internal cron to check for timed out carriers every minute
+
+async function checkTimeoutsInternal() {
+  if (!mongoConnected || !db) {
+    return;
+  }
+
+  try {
+    const now = new Date();
+
+    // Find orders in planification_auto with timed out carriers
+    const ordersWithTimeouts = await db.collection('orders').find({
+      status: 'planification_auto',
+      'dispatchChain': {
+        $elemMatch: {
+          status: 'sent',
+          timeoutAt: { $lte: now }
+        }
+      }
+    }).toArray();
+
+    if (ordersWithTimeouts.length === 0) {
+      return;
+    }
+
+    console.log(`[AutoTimeout] Found ${ordersWithTimeouts.length} order(s) with timeouts to process`);
+
+    for (const order of ordersWithTimeouts) {
+      try {
+        const currentIndex = order.currentDispatchIndex || 0;
+        const currentCarrier = order.dispatchChain[currentIndex];
+
+        if (!currentCarrier || currentCarrier.status !== 'sent') continue;
+        if (new Date(currentCarrier.timeoutAt) > now) continue;
+
+        console.log(`[AutoTimeout] Processing timeout for order ${order._id}, carrier ${currentCarrier.carrierName}`);
+
+        // Mark current carrier as timeout
+        await db.collection('orders').updateOne(
+          { _id: order._id },
+          {
+            $set: {
+              [`dispatchChain.${currentIndex}.status`]: 'timeout',
+              [`dispatchChain.${currentIndex}.respondedAt`]: now,
+              [`dispatchChain.${currentIndex}.response`]: 'timeout',
+              [`dispatchChain.${currentIndex}.reason`]: 'Delai de reponse depasse (45 min)',
+              updatedAt: now
+            }
+          }
+        );
+
+        // Add timeout event
+        await addOrderEvent(order._id.toString(), {
+          type: 'carrier_refused',
+          carrierId: currentCarrier.carrierId,
+          carrierName: currentCarrier.carrierName,
+          details: `Timeout - ${currentCarrier.carrierName} n'a pas repondu dans les 45 minutes`,
+          reason: 'Delai de reponse depasse (timeout)'
+        }, db);
+
+        // Update KPI
+        await updateCarrierKPI(currentCarrier.carrierId, 'refused', null, 'timeout');
+
+        // Check for next carrier
+        const nextIndex = currentIndex + 1;
+        if (nextIndex < order.dispatchChain.length) {
+          const nextCarrier = order.dispatchChain[nextIndex];
+          const timeoutSeconds = order.dispatchConfig?.timeoutSeconds || 2700;
+          const nextTimeoutAt = new Date(now.getTime() + timeoutSeconds * 1000);
+
+          await db.collection('orders').updateOne(
+            { _id: order._id },
+            {
+              $set: {
+                currentDispatchIndex: nextIndex,
+                [`dispatchChain.${nextIndex}.status`]: 'sent',
+                [`dispatchChain.${nextIndex}.sentAt`]: now,
+                [`dispatchChain.${nextIndex}.timeoutAt`]: nextTimeoutAt,
+                updatedAt: now
+              }
+            }
+          );
+
+          await addOrderEvent(order._id.toString(), {
+            type: 'sent_to_carrier',
+            carrierId: nextCarrier.carrierId,
+            carrierName: nextCarrier.carrierName,
+            details: `Envoye a ${nextCarrier.carrierName} (score: ${nextCarrier.score}/100)`,
+            score: nextCarrier.score
+          }, db);
+
+          await updateCarrierKPI(nextCarrier.carrierId, 'received', null, null);
+
+          // Send email notifications
+          const enrichedOrder = await enrichOrder(order, db);
+          const timeoutMinutes = Math.floor(timeoutSeconds / 60);
+
+          if (enrichedOrder.industrialEmail) {
+            emailOrders.sendTimeoutNotificationToIndustrial(
+              enrichedOrder.industrialEmail,
+              enrichedOrder.industrialName || 'Client',
+              { ...order, ...enrichedOrder },
+              { name: currentCarrier.carrierName },
+              nextCarrier.carrierName
+            ).catch(err => console.error('Email timeout notification failed:', err.message));
+          }
+
+          if (nextCarrier.carrierEmail) {
+            emailOrders.sendDispatchNotificationToCarrier(
+              nextCarrier.carrierEmail,
+              nextCarrier.carrierName,
+              { ...order, ...enrichedOrder },
+              timeoutMinutes
+            ).catch(err => console.error('Email to next carrier failed:', err.message));
+          }
+
+          console.log(`[AutoTimeout] Order ${order._id}: Moved to carrier ${nextCarrier.carrierName}`);
+
+        } else {
+          // All carriers exhausted - escalate
+          const userId = order.industrialId || order.createdBy;
+          const hasAffret = await hasAffretIASubscription(userId);
+
+          if (hasAffret) {
+            await db.collection('orders').updateOne(
+              { _id: order._id },
+              { $set: { status: 'affret_ia', updatedAt: now } }
+            );
+            const affretResult = await triggerAffretIA(order, userId);
+            await addOrderEvent(order._id.toString(), {
+              type: 'escalated_affret_ia',
+              details: 'Tous les transporteurs ont expire - Escalade vers Affret IA',
+              affretSessionId: affretResult?.sessionId
+            }, db);
+
+            const enrichedOrder = await enrichOrder(order, db);
+            if (enrichedOrder.industrialEmail) {
+              emailOrders.sendAffretIAEscalationToIndustrial(
+                enrichedOrder.industrialEmail,
+                enrichedOrder.industrialName || 'Client',
+                { ...order, ...enrichedOrder }
+              ).catch(err => console.error('Email Affret IA escalation failed:', err.message));
+            }
+
+            console.log(`[AutoTimeout] Order ${order._id}: Escalated to Affret IA`);
+          } else {
+            await db.collection('orders').updateOne(
+              { _id: order._id },
+              { $set: { status: 'echec_planification', updatedAt: now } }
+            );
+            await addOrderEvent(order._id.toString(), {
+              type: 'dispatch_failed',
+              details: 'Tous les transporteurs ont expire - Pas d\'abonnement Affret IA'
+            }, db);
+
+            const enrichedOrder = await enrichOrder(order, db);
+            if (enrichedOrder.industrialEmail) {
+              emailOrders.sendPlanificationFailedToIndustrial(
+                enrichedOrder.industrialEmail,
+                enrichedOrder.industrialName || 'Client',
+                { ...order, ...enrichedOrder },
+                'Tous les transporteurs ont expire'
+              ).catch(err => console.error('Email planning failed notification failed:', err.message));
+            }
+
+            console.log(`[AutoTimeout] Order ${order._id}: Dispatch failed (no Affret IA)`);
+          }
+        }
+      } catch (orderError) {
+        console.error(`[AutoTimeout] Error processing order ${order._id}:`, orderError.message);
+      }
+    }
+  } catch (error) {
+    console.error('[AutoTimeout] Error checking timeouts:', error.message);
+  }
+}
+
+// ==================== END AUTO TIMEOUT CHECKER ====================
+
 // Start server
 async function startServer() {
   await connectMongoDB();
@@ -2501,6 +2681,10 @@ async function startServer() {
     console.log('RT Orders API listening on port ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? 'Connected' : 'Not connected'));
+
+    // Start auto timeout checker - runs every minute
+    setInterval(checkTimeoutsInternal, 60 * 1000);
+    console.log('✓ Auto timeout checker started (runs every 60 seconds)');
   });
 }
 
