@@ -1427,32 +1427,47 @@ async function hasAffretIASubscription(userId) {
 // Helper: Get top carriers for an order (simplified scoring)
 async function getTopCarriers(order, db, limit = AUTO_DISPATCH_MAX_CARRIERS) {
   try {
-    // Get all active carriers
+    // Get all active transporters - check multiple possible field configurations
     const carriers = await db.collection('users').find({
-      role: 'carrier',
-      status: { $in: ['active', 'verified'] }
+      $or: [
+        // New format: role='transporter', isActive=true
+        { role: 'transporter', isActive: true },
+        // Also check for verified transporters
+        { role: 'transporter', isVerified: true },
+        // Legacy format: role='carrier', status='active'/'verified'
+        { role: 'carrier', status: { $in: ['active', 'verified'] } }
+      ]
     }).limit(20).toArray();
+
+    console.log(`[getTopCarriers] Found ${carriers.length} carriers in database`);
 
     // Simple scoring based on available data
     const scoredCarriers = carriers.map(carrier => {
-      let score = 50; // Base score
+      // Get score from organization or use default
+      let score = carrier.organization?.score || carrier.score || 50;
 
       // Bonus for verified status
-      if (carrier.status === 'verified') score += 20;
+      if (carrier.isVerified || carrier.status === 'verified') score += 10;
 
-      // Bonus for having company name
-      if (carrier.companyName) score += 10;
+      // Small random factor for variety
+      score += Math.floor(Math.random() * 10);
 
-      // Random factor for variety (will be replaced by real scoring)
-      score += Math.floor(Math.random() * 20);
+      // Get company name from various possible fields
+      const carrierName = carrier.organization?.name ||
+                          carrier.companyName ||
+                          carrier.name ||
+                          `${carrier.firstName || ''} ${carrier.lastName || ''}`.trim() ||
+                          carrier.email;
 
       return {
         carrierId: carrier._id.toString(),
-        carrierName: carrier.companyName || carrier.name || carrier.email,
+        carrierName: carrierName,
         carrierEmail: carrier.email,
         score: Math.min(100, score)
       };
     });
+
+    console.log(`[getTopCarriers] Scored carriers:`, scoredCarriers.map(c => ({ name: c.carrierName, score: c.score })));
 
     // Sort by score and return top N
     return scoredCarriers
