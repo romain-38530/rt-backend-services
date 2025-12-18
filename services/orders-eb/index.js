@@ -2758,6 +2758,148 @@ async function checkTimeoutsInternal() {
 
 // ==================== END AUTO TIMEOUT CHECKER ====================
 
+// ==================== CARRIER SYNC ENDPOINT ====================
+// Receives carrier data from authz-eb for use in dispatch
+
+app.post('/api/carriers/:carrierId/sync', async (req, res) => {
+  try {
+    const { carrierId } = req.params;
+    const {
+      carrierName,
+      carrierEmail,
+      level,
+      score,
+      scoreDetails,
+      isBlocked,
+      vigilanceStatus
+    } = req.body;
+
+    console.log(`[CarrierSync] Syncing carrier ${carrierId}: score=${score}, level=${level}, blocked=${isBlocked}`);
+
+    // Store or update carrier data in orders database
+    await db.collection('carriers_cache').updateOne(
+      { carrierId },
+      {
+        $set: {
+          carrierId,
+          carrierName,
+          carrierEmail,
+          level,
+          score: score || 0,
+          scoreDetails: scoreDetails || {},
+          isBlocked: isBlocked || false,
+          vigilanceStatus: vigilanceStatus || 'pending',
+          syncedAt: new Date()
+        }
+      },
+      { upsert: true }
+    );
+
+    // Update any active dispatch chains that include this carrier
+    if (isBlocked) {
+      // Mark carrier as unavailable in active dispatches
+      const activeOrders = await db.collection('orders').find({
+        status: 'planification_auto',
+        'dispatchChain.carrierId': carrierId
+      }).toArray();
+
+      for (const order of activeOrders) {
+        const updatedChain = (order.dispatchChain || []).map(entry => {
+          if (entry.carrierId === carrierId && entry.status === 'pending') {
+            return { ...entry, status: 'blocked', blockedReason: 'carrier_blocked' };
+          }
+          return entry;
+        });
+
+        await db.collection('orders').updateOne(
+          { _id: order._id },
+          { $set: { dispatchChain: updatedChain } }
+        );
+
+        console.log(`[CarrierSync] Updated dispatch chain for order ${order._id} - carrier ${carrierId} marked as blocked`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Carrier ${carrierId} synced successfully`,
+      data: { carrierId, score, isBlocked }
+    });
+
+  } catch (error) {
+    console.error('[CarrierSync] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get carrier score for dispatch decisions
+app.get('/api/carriers/:carrierId/score', async (req, res) => {
+  try {
+    const { carrierId } = req.params;
+
+    const cachedCarrier = await db.collection('carriers_cache').findOne({ carrierId });
+
+    if (!cachedCarrier) {
+      return res.status(404).json({ error: 'Carrier not found in cache' });
+    }
+
+    res.json({
+      carrierId,
+      score: cachedCarrier.score,
+      scoreDetails: cachedCarrier.scoreDetails,
+      level: cachedCarrier.level,
+      isBlocked: cachedCarrier.isBlocked,
+      vigilanceStatus: cachedCarrier.vigilanceStatus,
+      syncedAt: cachedCarrier.syncedAt
+    });
+
+  } catch (error) {
+    console.error('[CarrierScore] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get dispatch-ready carriers for an industrial
+app.get('/api/carriers/dispatch-ready/:industrialId', async (req, res) => {
+  try {
+    const { industrialId } = req.params;
+    const { minScore, limit = 10 } = req.query;
+
+    const filter = {
+      isBlocked: false,
+      vigilanceStatus: { $ne: 'blocked' }
+    };
+
+    if (minScore) {
+      filter.score = { $gte: parseInt(minScore) };
+    }
+
+    const carriers = await db.collection('carriers_cache')
+      .find(filter)
+      .sort({ score: -1 })
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({
+      carriers: carriers.map((c, index) => ({
+        rank: index + 1,
+        carrierId: c.carrierId,
+        carrierName: c.carrierName,
+        score: c.score,
+        level: c.level,
+        isAvailable: !c.isBlocked && c.vigilanceStatus !== 'blocked'
+      })),
+      total: carriers.length
+    });
+
+  } catch (error) {
+    console.error('[DispatchReady] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== END CARRIER SYNC ENDPOINT ====================
+
 // Start server
 async function startServer() {
   await connectMongoDB();
