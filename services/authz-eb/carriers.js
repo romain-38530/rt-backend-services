@@ -4,6 +4,154 @@
 
 const { ObjectId } = require('mongodb');
 const fetch = require('node-fetch');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { TextractClient, AnalyzeDocumentCommand, DetectDocumentTextCommand } = require('@aws-sdk/client-textract');
+
+// Configuration S3 pour documents
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'eu-central-1'
+});
+const S3_BUCKET = process.env.S3_DOCUMENTS_BUCKET || 'rt-carrier-documents';
+
+// Configuration Textract pour OCR
+const textractClient = new TextractClient({
+  region: process.env.AWS_REGION || 'eu-central-1'
+});
+
+// Patterns de dates francaises et internationales
+const DATE_PATTERNS = [
+  // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+  /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/g,
+  // YYYY/MM/DD, YYYY-MM-DD
+  /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g,
+  // Mois en lettres: 31 decembre 2025, 31 dec 2025
+  /(\d{1,2})\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|jan|fev|mar|avr|mai|jun|jul|aou|sep|oct|nov|dec)\.?\s+(\d{4})/gi
+];
+
+const MONTH_MAP = {
+  'janvier': '01', 'jan': '01', 'fevrier': '02', 'fev': '02', 'mars': '03', 'mar': '03',
+  'avril': '04', 'avr': '04', 'mai': '05', 'juin': '06', 'jun': '06',
+  'juillet': '07', 'jul': '07', 'aout': '08', 'aou': '08', 'septembre': '09', 'sep': '09',
+  'octobre': '10', 'oct': '10', 'novembre': '11', 'nov': '11', 'decembre': '12', 'dec': '12'
+};
+
+// Mots-cles pour identifier les dates de validite/expiration
+const VALIDITY_KEYWORDS = [
+  'valable', 'validite', 'validité', 'expire', 'expiration', 'echéance', 'echeance',
+  'jusqu\'au', 'jusqu\'a', 'fin de validite', 'date limite', 'valide jusqu',
+  'valid until', 'expiry', 'expiration date', 'valid to', 'expires'
+];
+
+/**
+ * Extraire les dates d'un texte OCR
+ */
+function extractDatesFromText(text) {
+  const dates = [];
+  const normalizedText = text.toLowerCase();
+
+  // Chercher dates avec patterns
+  for (const pattern of DATE_PATTERNS) {
+    const matches = text.matchAll(pattern);
+    for (const match of matches) {
+      let dateStr = match[0];
+      let parsedDate = null;
+
+      // Pattern DD/MM/YYYY
+      if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}$/.test(dateStr)) {
+        const parts = dateStr.split(/[\/\-\.]/);
+        parsedDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      }
+      // Pattern YYYY-MM-DD
+      else if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(dateStr)) {
+        const parts = dateStr.split(/[\/\-]/);
+        parsedDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      }
+      // Pattern avec mois en lettres
+      else if (match[2] && MONTH_MAP[match[2].toLowerCase()]) {
+        const month = MONTH_MAP[match[2].toLowerCase()];
+        parsedDate = new Date(parseInt(match[3]), parseInt(month) - 1, parseInt(match[1]));
+      }
+
+      if (parsedDate && !isNaN(parsedDate.getTime())) {
+        // Verifier si c'est proche d'un mot-cle de validite
+        const matchIndex = match.index || 0;
+        const contextStart = Math.max(0, matchIndex - 100);
+        const contextEnd = Math.min(text.length, matchIndex + dateStr.length + 50);
+        const context = normalizedText.substring(contextStart, contextEnd);
+
+        const isValidityDate = VALIDITY_KEYWORDS.some(kw => context.includes(kw));
+
+        dates.push({
+          raw: dateStr,
+          parsed: parsedDate,
+          isValidityDate,
+          context: text.substring(contextStart, contextEnd).trim()
+        });
+      }
+    }
+  }
+
+  return dates;
+}
+
+/**
+ * Analyser un document avec Textract et extraire les dates
+ */
+async function analyzeDocumentWithTextract(s3Key) {
+  try {
+    // Utiliser DetectDocumentText pour OCR
+    const command = new DetectDocumentTextCommand({
+      Document: {
+        S3Object: {
+          Bucket: S3_BUCKET,
+          Name: s3Key
+        }
+      }
+    });
+
+    const response = await textractClient.send(command);
+
+    // Extraire tout le texte
+    const textBlocks = response.Blocks?.filter(b => b.BlockType === 'LINE') || [];
+    const fullText = textBlocks.map(b => b.Text).join('\n');
+
+    // Extraire les dates
+    const dates = extractDatesFromText(fullText);
+
+    // Trier par pertinence (dates de validite en premier, puis par date future)
+    dates.sort((a, b) => {
+      if (a.isValidityDate && !b.isValidityDate) return -1;
+      if (!a.isValidityDate && b.isValidityDate) return 1;
+      return b.parsed.getTime() - a.parsed.getTime(); // Plus recentes en premier
+    });
+
+    // Trouver la date d'expiration la plus probable
+    const now = new Date();
+    const validityDates = dates.filter(d => d.isValidityDate && d.parsed > now);
+    const futureDates = dates.filter(d => d.parsed > now);
+
+    const suggestedExpiryDate = validityDates[0]?.parsed || futureDates[0]?.parsed || null;
+
+    return {
+      success: true,
+      fullText,
+      dates,
+      suggestedExpiryDate,
+      confidence: validityDates.length > 0 ? 'high' : futureDates.length > 0 ? 'medium' : 'low'
+    };
+
+  } catch (error) {
+    console.error('Textract error:', error);
+    return {
+      success: false,
+      error: error.message,
+      dates: [],
+      suggestedExpiryDate: null,
+      confidence: 'none'
+    };
+  }
+}
 
 // Configuration des APIs externes
 const ORDERS_API_URL = process.env.ORDERS_API_URL || 'http://rt-orders-api-prod-v2.eba-4tprbbqu.eu-central-1.elasticbeanstalk.com';
@@ -1399,6 +1547,326 @@ function setupCarrierRoutes(app, db) {
     }
   });
 
+  // GET /api/carriers/:carrierId/documents/:documentId - Obtenir un document specifique
+  app.get('/api/carriers/:carrierId/documents/:documentId', async (req, res) => {
+    try {
+      const { carrierId, documentId } = req.params;
+
+      const document = await db.collection('carrier_documents').findOne({
+        _id: new ObjectId(documentId),
+        carrierId: new ObjectId(carrierId)
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document non trouve' });
+      }
+
+      // Generer une URL signee pour telecharger le fichier
+      let downloadUrl = document.fileUrl;
+      if (document.s3Key) {
+        try {
+          const command = new GetObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: document.s3Key
+          });
+          downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 heure
+        } catch (e) {
+          console.error('Error generating download URL:', e.message);
+        }
+      }
+
+      res.json({
+        document: {
+          id: document._id.toString(),
+          carrierId: document.carrierId.toString(),
+          type: document.documentType,
+          name: document.fileName,
+          fileUrl: downloadUrl,
+          status: document.status,
+          expiresAt: document.expiryDate,
+          uploadedAt: document.uploadedAt,
+          verifiedAt: document.verifiedAt,
+          rejectionReason: document.rejectionReason
+        }
+      });
+
+    } catch (error) {
+      console.error('Error getting document:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/carriers/:carrierId/documents/upload-url - Generer URL presignee pour upload S3
+  app.post('/api/carriers/:carrierId/documents/upload-url', async (req, res) => {
+    try {
+      const { carrierId } = req.params;
+      const { fileName, contentType, documentType } = req.body;
+
+      if (!fileName || !contentType || !documentType) {
+        return res.status(400).json({ error: 'fileName, contentType et documentType sont requis' });
+      }
+
+      const carrier = await db.collection('carriers').findOne({ _id: new ObjectId(carrierId) });
+      if (!carrier) {
+        return res.status(404).json({ error: 'Transporteur non trouve' });
+      }
+
+      // Generer une cle S3 unique
+      const timestamp = Date.now();
+      const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const s3Key = `carriers/${carrierId}/${documentType}/${timestamp}-${sanitizedFileName}`;
+
+      // Generer URL presignee pour upload
+      const command = new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+        ContentType: contentType
+      });
+
+      const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 }); // 15 minutes
+
+      res.json({
+        uploadUrl,
+        s3Key,
+        expiresIn: 900,
+        bucket: S3_BUCKET
+      });
+
+    } catch (error) {
+      console.error('Error generating upload URL:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/carriers/:carrierId/documents/confirm-upload - Confirmer upload et creer enregistrement
+  app.post('/api/carriers/:carrierId/documents/confirm-upload', async (req, res) => {
+    try {
+      const { carrierId } = req.params;
+      const { s3Key, documentType, fileName, expiresAt, notes } = req.body;
+
+      if (!s3Key || !documentType || !fileName) {
+        return res.status(400).json({ error: 's3Key, documentType et fileName sont requis' });
+      }
+
+      const carrier = await db.collection('carriers').findOne({ _id: new ObjectId(carrierId) });
+      if (!carrier) {
+        return res.status(404).json({ error: 'Transporteur non trouve' });
+      }
+
+      // Creer l'enregistrement du document
+      const document = {
+        carrierId: new ObjectId(carrierId),
+        documentType,
+        fileName,
+        s3Key,
+        fileUrl: `https://${S3_BUCKET}.s3.eu-central-1.amazonaws.com/${s3Key}`,
+        status: DOCUMENT_STATUS.PENDING,
+        expiryDate: expiresAt ? new Date(expiresAt) : null,
+        notes: notes || null,
+        uploadedAt: new Date(),
+        verifiedAt: null,
+        verifiedBy: null
+      };
+
+      const result = await db.collection('carrier_documents').insertOne(document);
+
+      await logCarrierEvent(db, carrierId, CARRIER_EVENTS.DOCUMENT_UPLOADED, {
+        documentId: result.insertedId.toString(),
+        documentType,
+        s3Key
+      });
+
+      res.status(201).json({
+        document: {
+          id: result.insertedId.toString(),
+          carrierId: carrierId,
+          type: documentType,
+          name: fileName,
+          status: DOCUMENT_STATUS.PENDING,
+          expiresAt: document.expiryDate,
+          uploadedAt: document.uploadedAt
+        }
+      });
+
+    } catch (error) {
+      console.error('Error confirming upload:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/carriers/:carrierId/documents/:documentId/analyze - Analyser document avec OCR
+  app.post('/api/carriers/:carrierId/documents/:documentId/analyze', async (req, res) => {
+    try {
+      const { carrierId, documentId } = req.params;
+
+      const document = await db.collection('carrier_documents').findOne({
+        _id: new ObjectId(documentId),
+        carrierId: new ObjectId(carrierId)
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document non trouve' });
+      }
+
+      if (!document.s3Key) {
+        return res.status(400).json({ error: 'Document non stocke sur S3, analyse impossible' });
+      }
+
+      console.log(`[OCR] Analyzing document ${documentId} (${document.documentType}) for carrier ${carrierId}`);
+
+      // Analyser avec Textract
+      const analysis = await analyzeDocumentWithTextract(document.s3Key);
+
+      if (!analysis.success) {
+        return res.status(500).json({
+          error: 'Echec de l\'analyse OCR',
+          details: analysis.error
+        });
+      }
+
+      // Si une date d'expiration est suggeree et qu'il n'y en a pas encore, mettre a jour
+      if (analysis.suggestedExpiryDate && !document.expiryDate) {
+        await db.collection('carrier_documents').updateOne(
+          { _id: new ObjectId(documentId) },
+          {
+            $set: {
+              expiryDate: analysis.suggestedExpiryDate,
+              ocrAnalyzedAt: new Date(),
+              ocrConfidence: analysis.confidence
+            }
+          }
+        );
+
+        // Mettre a jour la vigilance
+        const vigilance = await checkVigilanceStatus(db, carrierId);
+        await db.collection('carriers').updateOne(
+          { _id: new ObjectId(carrierId) },
+          { $set: { vigilanceStatus: vigilance.status, updatedAt: new Date() } }
+        );
+      }
+
+      res.json({
+        success: true,
+        documentId,
+        analysis: {
+          extractedText: analysis.fullText.substring(0, 2000), // Limiter la taille
+          datesFound: analysis.dates.map(d => ({
+            raw: d.raw,
+            parsed: d.parsed,
+            isValidityDate: d.isValidityDate,
+            context: d.context.substring(0, 200)
+          })),
+          suggestedExpiryDate: analysis.suggestedExpiryDate,
+          confidence: analysis.confidence
+        },
+        updated: analysis.suggestedExpiryDate && !document.expiryDate
+      });
+
+    } catch (error) {
+      console.error('Error analyzing document:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/carriers/:carrierId/documents/:documentId/set-expiry - Definir date expiration manuellement
+  app.post('/api/carriers/:carrierId/documents/:documentId/set-expiry', async (req, res) => {
+    try {
+      const { carrierId, documentId } = req.params;
+      const { expiryDate } = req.body;
+
+      if (!expiryDate) {
+        return res.status(400).json({ error: 'expiryDate est requis' });
+      }
+
+      const document = await db.collection('carrier_documents').findOne({
+        _id: new ObjectId(documentId),
+        carrierId: new ObjectId(carrierId)
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document non trouve' });
+      }
+
+      const parsedDate = new Date(expiryDate);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ error: 'Date invalide' });
+      }
+
+      await db.collection('carrier_documents').updateOne(
+        { _id: new ObjectId(documentId) },
+        { $set: { expiryDate: parsedDate, updatedAt: new Date() } }
+      );
+
+      // Mettre a jour la vigilance
+      const vigilance = await checkVigilanceStatus(db, carrierId);
+      await db.collection('carriers').updateOne(
+        { _id: new ObjectId(carrierId) },
+        { $set: { vigilanceStatus: vigilance.status, updatedAt: new Date() } }
+      );
+
+      res.json({
+        success: true,
+        documentId,
+        expiryDate: parsedDate,
+        vigilanceStatus: vigilance.status
+      });
+
+    } catch (error) {
+      console.error('Error setting expiry date:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // DELETE /api/carriers/:carrierId/documents/:documentId - Supprimer un document
+  app.delete('/api/carriers/:carrierId/documents/:documentId', async (req, res) => {
+    try {
+      const { carrierId, documentId } = req.params;
+
+      const document = await db.collection('carrier_documents').findOne({
+        _id: new ObjectId(documentId),
+        carrierId: new ObjectId(carrierId)
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document non trouve' });
+      }
+
+      // Supprimer de S3 si s3Key existe
+      if (document.s3Key) {
+        try {
+          const command = new DeleteObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: document.s3Key
+          });
+          await s3Client.send(command);
+        } catch (e) {
+          console.error('Error deleting from S3:', e.message);
+          // Continue anyway - maybe file doesn't exist
+        }
+      }
+
+      // Supprimer de la base
+      await db.collection('carrier_documents').deleteOne({ _id: new ObjectId(documentId) });
+
+      // Mettre a jour la vigilance
+      const vigilance = await checkVigilanceStatus(db, carrierId);
+      await db.collection('carriers').updateOne(
+        { _id: new ObjectId(carrierId) },
+        { $set: { vigilanceStatus: vigilance.status, updatedAt: new Date() } }
+      );
+
+      res.json({
+        success: true,
+        message: 'Document supprime',
+        documentId
+      });
+
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // POST /api/carriers/:carrierId/documents/:documentId/verify - Verifier document
   app.post('/api/carriers/:carrierId/documents/:documentId/verify', async (req, res) => {
     try {
@@ -1593,6 +2061,188 @@ function setupCarrierRoutes(app, db) {
 
     } catch (error) {
       console.error('Error onboarding carrier:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // =====================================================================
+  // TRACKING PERFORMANCE - Reception donnees du Tracking IA
+  // =====================================================================
+
+  // POST /api/carriers/:carrierId/performance - Recevoir donnees de performance tracking
+  app.post('/api/carriers/:carrierId/performance', async (req, res) => {
+    try {
+      const { carrierId } = req.params;
+      const {
+        orderId,
+        deliveryType,        // 'on_time', 'late', 'early'
+        delayMinutes,        // Retard en minutes (si applicable)
+        damageReported,      // true/false
+        damageDescription,
+        communicationRating, // 1-5
+        incidentType,        // 'none', 'delay', 'damage', 'no_show', 'other'
+        incidentDescription,
+        deliveredAt,
+        expectedAt,
+        geofenceEvents       // Array of geofence events from tracking
+      } = req.body;
+
+      if (!orderId) {
+        return res.status(400).json({ error: 'orderId est requis' });
+      }
+
+      // Verifier que le carrier existe
+      const carrier = await db.collection('carriers').findOne({ _id: new ObjectId(carrierId) });
+      if (!carrier) {
+        return res.status(404).json({ error: 'Transporteur non trouve' });
+      }
+
+      // Enregistrer la performance dans la collection carrier_performance
+      const performanceRecord = {
+        carrierId: new ObjectId(carrierId),
+        orderId,
+        deliveryType: deliveryType || 'on_time',
+        delayMinutes: delayMinutes || 0,
+        wasOnTime: deliveryType === 'on_time' || deliveryType === 'early',
+        damageReported: damageReported || false,
+        damageDescription,
+        communicationRating: communicationRating || null,
+        incidentType: incidentType || 'none',
+        incidentDescription,
+        deliveredAt: deliveredAt ? new Date(deliveredAt) : new Date(),
+        expectedAt: expectedAt ? new Date(expectedAt) : null,
+        geofenceEvents: geofenceEvents || [],
+        recordedAt: new Date(),
+        source: 'tracking-ia'
+      };
+
+      await db.collection('carrier_performance').insertOne(performanceRecord);
+
+      // Calculer les stats agregees pour ce carrier
+      const performanceStats = await db.collection('carrier_performance').aggregate([
+        { $match: { carrierId: new ObjectId(carrierId) } },
+        {
+          $group: {
+            _id: '$carrierId',
+            totalDeliveries: { $sum: 1 },
+            onTimeDeliveries: { $sum: { $cond: ['$wasOnTime', 1, 0] } },
+            lateDeliveries: { $sum: { $cond: [{ $eq: ['$deliveryType', 'late'] }, 1, 0] } },
+            totalDelayMinutes: { $sum: '$delayMinutes' },
+            damageCount: { $sum: { $cond: ['$damageReported', 1, 0] } },
+            avgCommunicationRating: { $avg: '$communicationRating' },
+            incidents: { $sum: { $cond: [{ $ne: ['$incidentType', 'none'] }, 1, 0] } }
+          }
+        }
+      ]).toArray();
+
+      const stats = performanceStats[0] || {
+        totalDeliveries: 0,
+        onTimeDeliveries: 0,
+        damageCount: 0
+      };
+
+      // Calculer les metriques
+      const onTimeRate = stats.totalDeliveries > 0
+        ? Math.round((stats.onTimeDeliveries / stats.totalDeliveries) * 100)
+        : 100;
+      const damageRate = stats.totalDeliveries > 0
+        ? Math.round((stats.damageCount / stats.totalDeliveries) * 100)
+        : 0;
+
+      // Mettre a jour les metriques du carrier
+      await db.collection('carriers').updateOne(
+        { _id: new ObjectId(carrierId) },
+        {
+          $set: {
+            'performanceMetrics.onTimeRate': onTimeRate,
+            'performanceMetrics.damageRate': damageRate,
+            'performanceMetrics.totalDeliveries': stats.totalDeliveries,
+            'performanceMetrics.avgCommunicationRating': stats.avgCommunicationRating || null,
+            'performanceMetrics.incidentCount': stats.incidents,
+            'performanceMetrics.lastUpdated': new Date()
+          }
+        }
+      );
+
+      // Recalculer le score si assez de donnees
+      if (stats.totalDeliveries >= 3) {
+        const newScore = await calculateCarrierScore(db, carrierId);
+        await db.collection('carriers').updateOne(
+          { _id: new ObjectId(carrierId) },
+          { $set: { score: newScore.overall, scoreDetails: newScore.details } }
+        );
+
+        // Sync avec orders
+        const updatedCarrier = await db.collection('carriers').findOne({ _id: new ObjectId(carrierId) });
+        syncCarrierWithOrders(updatedCarrier, newScore);
+      }
+
+      // Logger l'evenement
+      await logCarrierEvent(db, carrierId, CARRIER_EVENTS.SCORE_UPDATED, {
+        orderId,
+        deliveryType,
+        onTimeRate,
+        damageRate,
+        source: 'tracking-ia'
+      });
+
+      console.log(`[TRACKING] Performance recorded for carrier ${carrierId}: ${deliveryType}, onTimeRate=${onTimeRate}%`);
+
+      res.json({
+        success: true,
+        carrierId,
+        orderId,
+        performanceMetrics: {
+          onTimeRate,
+          damageRate,
+          totalDeliveries: stats.totalDeliveries,
+          avgCommunicationRating: stats.avgCommunicationRating
+        }
+      });
+
+    } catch (error) {
+      console.error('Error recording carrier performance:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/carriers/:carrierId/performance - Obtenir l'historique de performance
+  app.get('/api/carriers/:carrierId/performance', async (req, res) => {
+    try {
+      const { carrierId } = req.params;
+      const { limit = 50, startDate, endDate } = req.query;
+
+      const query = { carrierId: new ObjectId(carrierId) };
+      if (startDate || endDate) {
+        query.deliveredAt = {};
+        if (startDate) query.deliveredAt.$gte = new Date(startDate);
+        if (endDate) query.deliveredAt.$lte = new Date(endDate);
+      }
+
+      const records = await db.collection('carrier_performance')
+        .find(query)
+        .sort({ deliveredAt: -1 })
+        .limit(parseInt(limit))
+        .toArray();
+
+      // Obtenir les stats agregees
+      const carrier = await db.collection('carriers').findOne(
+        { _id: new ObjectId(carrierId) },
+        { projection: { performanceMetrics: 1, score: 1, scoreDetails: 1 } }
+      );
+
+      res.json({
+        success: true,
+        carrierId,
+        metrics: carrier?.performanceMetrics || {},
+        score: carrier?.score,
+        scoreDetails: carrier?.scoreDetails,
+        records,
+        count: records.length
+      });
+
+    } catch (error) {
+      console.error('Error fetching carrier performance:', error);
       res.status(500).json({ error: error.message });
     }
   });

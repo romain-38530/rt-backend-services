@@ -6,8 +6,9 @@ const { MongoClient, ObjectId } = require('mongodb');
 const fetch = require('node-fetch');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { setupCarrierRoutes } = require('./carriers');
+const { setupCarrierRoutes, checkAndSendVigilanceAlerts } = require('./carriers');
 const { sendClientOnboardingConfirmationEmail } = require('./email');
+const cron = require('node-cron');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-secret-key-2024-change-in-production';
 
@@ -1153,6 +1154,30 @@ app.post('/api/onboarding/submit', async (req, res) => {
   }
 });
 
+// Manual vigilance check endpoint (for testing/admin)
+app.post('/api/vigilance/run-check', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ success: false, error: 'Database not connected' });
+  }
+
+  try {
+    console.log('[API] Manual vigilance check triggered');
+    const alerts = await checkAndSendVigilanceAlerts(db);
+    res.json({
+      success: true,
+      alertsCount: alerts.length,
+      alerts: alerts.map(a => ({
+        carrierId: a.carrierId,
+        documentType: a.documentType,
+        daysUntilExpiry: a.daysUntilExpiry
+      }))
+    });
+  } catch (error) {
+    console.error('[API] Vigilance check error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Start server
 async function startServer() {
   await connectMongoDB();
@@ -1161,6 +1186,21 @@ async function startServer() {
   if (mongoConnected && db) {
     setupCarrierRoutes(app, db);
     console.log('✓ Carrier management routes configured');
+
+    // Cron job: Alertes de vigilance quotidiennes a 8h00 (heure Paris)
+    // Verifie les documents expirant a J-30, J-15, J-7 et envoie des emails
+    cron.schedule('0 8 * * *', async () => {
+      console.log('[CRON] Running daily vigilance alerts check...');
+      try {
+        const alerts = await checkAndSendVigilanceAlerts(db);
+        console.log(`[CRON] Vigilance check complete: ${alerts.length} alerts sent`);
+      } catch (error) {
+        console.error('[CRON] Error during vigilance check:', error.message);
+      }
+    }, {
+      timezone: 'Europe/Paris'
+    });
+    console.log('✓ Vigilance alerts cron job scheduled (daily at 8:00 AM Paris)');
   }
 
   app.listen(PORT, '0.0.0.0', () => {

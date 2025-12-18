@@ -14,6 +14,30 @@ const geolib = require('geolib');
 const app = express();
 const PORT = process.env.PORT || 3012;
 
+// Configuration API Carriers (authz-eb)
+const CARRIERS_API_URL = process.env.CARRIERS_API_URL || 'https://ddaywxps9n701.cloudfront.net';
+
+// Helper: Push performance data to carriers API
+async function pushCarrierPerformance(carrierId, performanceData) {
+  if (!carrierId) {
+    console.log('[TRACKING] No carrierId provided, skipping performance push');
+    return null;
+  }
+
+  try {
+    const response = await axios.post(
+      `${CARRIERS_API_URL}/api/carriers/${carrierId}/performance`,
+      performanceData,
+      { timeout: 5000 }
+    );
+    console.log(`[TRACKING] Performance pushed to carriers API for carrier ${carrierId}`);
+    return response.data;
+  } catch (error) {
+    console.error(`[TRACKING] Failed to push performance to carriers API:`, error.message);
+    return null;
+  }
+}
+
 app.use(cors());
 app.use(express.json());
 
@@ -458,6 +482,235 @@ app.put('/api/v1/orders/:id/status', async (req, res) => {
   }
 });
 
+// ==================== DELIVERY COMPLETION & CARRIER PERFORMANCE ====================
+
+// POST /api/v1/tracking/:orderId/complete - Completer une livraison avec rapport de performance
+app.post('/api/v1/tracking/:orderId/complete', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const {
+      carrierId,
+      deliveredAt,
+      expectedAt,
+      damageReported,
+      damageDescription,
+      communicationRating,
+      incidentType,
+      incidentDescription,
+      notes
+    } = req.body;
+
+    if (!carrierId) {
+      return res.status(400).json({
+        success: false,
+        error: 'carrierId is required'
+      });
+    }
+
+    // Obtenir les evenements de geofencing pour cet ordre
+    const geofenceEvents = await GeofenceEvent.find({ orderId })
+      .sort({ timestamp: 1 })
+      .lean();
+
+    // Calculer le type de livraison
+    const deliveryTime = deliveredAt ? new Date(deliveredAt) : new Date();
+    const expectedTime = expectedAt ? new Date(expectedAt) : null;
+
+    let deliveryType = 'on_time';
+    let delayMinutes = 0;
+
+    if (expectedTime) {
+      const diffMs = deliveryTime - expectedTime;
+      delayMinutes = Math.round(diffMs / (1000 * 60));
+
+      if (delayMinutes > 15) {
+        deliveryType = 'late';
+      } else if (delayMinutes < -15) {
+        deliveryType = 'early';
+        delayMinutes = 0;
+      } else {
+        deliveryType = 'on_time';
+        delayMinutes = 0;
+      }
+    }
+
+    // Determiner le type d'incident
+    let finalIncidentType = incidentType || 'none';
+    if (damageReported && finalIncidentType === 'none') {
+      finalIncidentType = 'damage';
+    } else if (deliveryType === 'late' && delayMinutes > 60 && finalIncidentType === 'none') {
+      finalIncidentType = 'delay';
+    }
+
+    // Construire les donnees de performance
+    const performanceData = {
+      orderId,
+      deliveryType,
+      delayMinutes: Math.max(0, delayMinutes),
+      damageReported: damageReported || false,
+      damageDescription,
+      communicationRating: communicationRating ? parseInt(communicationRating) : null,
+      incidentType: finalIncidentType,
+      incidentDescription,
+      deliveredAt: deliveryTime.toISOString(),
+      expectedAt: expectedTime ? expectedTime.toISOString() : null,
+      geofenceEvents: geofenceEvents.map(e => ({
+        type: e.type,
+        locationType: e.location?.type,
+        locationName: e.location?.name,
+        timestamp: e.timestamp
+      }))
+    };
+
+    // Push vers l'API carriers
+    const carrierResponse = await pushCarrierPerformance(carrierId, performanceData);
+
+    // Emettre evenement WebSocket
+    emitEvent('order.delivered', {
+      orderId,
+      carrierId,
+      deliveryType,
+      delayMinutes: performanceData.delayMinutes,
+      timestamp: deliveryTime
+    });
+
+    res.json({
+      success: true,
+      orderId,
+      carrierId,
+      performance: {
+        deliveryType,
+        delayMinutes: performanceData.delayMinutes,
+        damageReported: performanceData.damageReported,
+        incidentType: finalIncidentType
+      },
+      carrierMetrics: carrierResponse?.performanceMetrics || null,
+      notes
+    });
+
+  } catch (error) {
+    console.error('[TRACKING] Delivery completion error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/v1/tracking/:orderId/incident - Signaler un incident pendant le transport
+app.post('/api/v1/tracking/:orderId/incident', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const {
+      carrierId,
+      incidentType,  // 'delay', 'damage', 'breakdown', 'accident', 'weather', 'other'
+      description,
+      severity,      // 'low', 'medium', 'high', 'critical'
+      location,
+      estimatedDelay // en minutes
+    } = req.body;
+
+    if (!incidentType) {
+      return res.status(400).json({
+        success: false,
+        error: 'incidentType is required'
+      });
+    }
+
+    // Enregistrer l'incident
+    const incident = {
+      orderId,
+      carrierId,
+      incidentType,
+      description,
+      severity: severity || 'medium',
+      location,
+      estimatedDelay: estimatedDelay || 0,
+      timestamp: new Date(),
+      status: 'open'
+    };
+
+    // Emettre evenement WebSocket
+    emitEvent('tracking.incident', {
+      orderId,
+      carrierId,
+      incidentType,
+      severity: incident.severity,
+      estimatedDelay,
+      timestamp: incident.timestamp
+    });
+
+    // Si retard significatif, notifier via API
+    if (estimatedDelay && estimatedDelay > 30) {
+      emitEvent('tracking.significant-delay', {
+        orderId,
+        carrierId,
+        estimatedDelay,
+        reason: incidentType
+      });
+    }
+
+    res.json({
+      success: true,
+      incident
+    });
+
+  } catch (error) {
+    console.error('[TRACKING] Incident report error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/v1/tracking/:orderId/summary - Resume complet du tracking pour une commande
+app.get('/api/v1/tracking/:orderId/summary', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Obtenir toutes les locations
+    const locations = await Location.find({ orderId })
+      .sort({ timestamp: 1 })
+      .lean();
+
+    // Obtenir tous les evenements de geofencing
+    const geofenceEvents = await GeofenceEvent.find({ orderId })
+      .sort({ timestamp: 1 })
+      .lean();
+
+    // Calculer stats
+    const firstLocation = locations[0];
+    const lastLocation = locations[locations.length - 1];
+    const totalDistance = locations.reduce((acc, loc, i) => {
+      if (i === 0) return 0;
+      const prev = locations[i - 1];
+      return acc + calculateDistance(prev.latitude, prev.longitude, loc.latitude, loc.longitude);
+    }, 0);
+
+    res.json({
+      success: true,
+      orderId,
+      summary: {
+        locationCount: locations.length,
+        geofenceEventCount: geofenceEvents.length,
+        startTime: firstLocation?.timestamp,
+        lastUpdate: lastLocation?.timestamp,
+        totalDistanceMeters: totalDistance,
+        currentPosition: lastLocation ? {
+          latitude: lastLocation.latitude,
+          longitude: lastLocation.longitude,
+          timestamp: lastLocation.timestamp
+        } : null
+      },
+      geofenceEvents: geofenceEvents.map(e => ({
+        type: e.type,
+        location: e.location,
+        timestamp: e.timestamp
+      })),
+      recentLocations: locations.slice(-10)
+    });
+
+  } catch (error) {
+    console.error('[TRACKING] Summary error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== START SERVER ====================
 
 app.listen(PORT, () => {
@@ -474,6 +727,7 @@ app.listen(PORT, () => {
 ║              ✓ Géofencing                                    ║
 ║              ✓ TomTom Integration                            ║
 ║              ✓ ETA Calculation                               ║
+║              ✓ Carrier Performance Sync                      ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
   `);
