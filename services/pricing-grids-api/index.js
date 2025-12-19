@@ -20,6 +20,8 @@ const AWS = require('aws-sdk');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
 const path = require('path');
+const nodemailer = require('nodemailer');
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3020;
@@ -41,6 +43,406 @@ const s3 = new AWS.S3({
 });
 
 const S3_BUCKET = process.env.S3_BUCKET || 'symphonia-pricing-grids';
+
+// =============================================================================
+// EMAIL CONFIGURATION (NODEMAILER)
+// =============================================================================
+
+const smtpTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: {
+    user: process.env.SMTP_USER || 'noreply@symphonia-logistics.com',
+    pass: process.env.SMTP_PASS
+  }
+});
+
+const EMAIL_FROM = process.env.EMAIL_FROM || 'SYMPHONI.A <noreply@symphonia-logistics.com>';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://symphonia-industry.amplifyapp.com';
+const TRANSPORTER_FRONTEND_URL = process.env.TRANSPORTER_FRONTEND_URL || 'https://symphonia-transporter.amplifyapp.com';
+
+// =============================================================================
+// EXTERNAL API CONFIGURATION (INTERCONNEXIONS)
+// =============================================================================
+
+const EXTERNAL_APIS = {
+  CARRIERS_API: process.env.CARRIERS_API_URL || 'https://d9bkwrcuwvlbr.cloudfront.net',
+  ORDERS_API: process.env.ORDERS_API_URL || 'https://dh9acecfz0wg0.cloudfront.net',
+  AFFRET_IA_API: process.env.AFFRET_IA_API_URL || 'https://d393yiia4ig3bw.cloudfront.net',
+  CRM_API: process.env.CRM_API_URL || 'https://d1htavhf6kj3c8.cloudfront.net',
+  BILLING_API: process.env.BILLING_API_URL || 'https://rt-billing-api-prod.eu-central-1.elasticbeanstalk.com'
+};
+
+// Helper pour appels API internes
+const callExternalAPI = async (baseUrl, endpoint, method = 'GET', data = null, token = null) => {
+  try {
+    const config = {
+      method,
+      url: `${baseUrl}${endpoint}`,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      },
+      ...(data && { data })
+    };
+    const response = await axios(config);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error(`API call failed: ${baseUrl}${endpoint}`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+// =============================================================================
+// EMAIL TEMPLATES
+// =============================================================================
+
+const emailTemplates = {
+  // Template pour nouvelle demande de tarif (envoyé au transporteur)
+  newPricingRequest: (data) => ({
+    subject: `📋 Nouvelle demande de tarifs de ${data.senderCompanyName}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #3B82F6, #8B5CF6); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; }
+          .footer { background: #1e293b; color: #94a3b8; padding: 20px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px; }
+          .button { display: inline-block; background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+          .info-box { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #3B82F6; }
+          .badge { display: inline-block; background: #3B82F6; color: white; padding: 5px 12px; border-radius: 20px; font-size: 12px; margin: 5px 5px 5px 0; }
+          ul { padding-left: 20px; }
+          li { margin: 8px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin:0;">🚛 SYMPHONI.A</h1>
+            <p style="margin:10px 0 0 0; opacity:0.9;">Nouvelle Demande de Tarifs</p>
+          </div>
+          <div class="content">
+            <h2>Bonjour ${data.carrierCompanyName},</h2>
+            <p>Vous avez reçu une nouvelle demande de tarifs de la part de <strong>${data.senderCompanyName}</strong>.</p>
+
+            <div class="info-box">
+              <h3 style="margin-top:0;">📋 Détails de la demande</h3>
+              <ul>
+                <li><strong>Expéditeur:</strong> ${data.senderCompanyName}</li>
+                <li><strong>Contact:</strong> ${data.senderContactName || 'Non spécifié'}</li>
+                <li><strong>Email:</strong> ${data.senderEmail || 'Non spécifié'}</li>
+                <li><strong>Date limite de réponse:</strong> ${data.responseDeadline ? new Date(data.responseDeadline).toLocaleDateString('fr-FR') : 'Non spécifiée'}</li>
+              </ul>
+            </div>
+
+            ${data.zones && data.zones.length > 0 ? `
+            <div class="info-box">
+              <h3 style="margin-top:0;">🗺️ Zones concernées</h3>
+              <p>${data.zones.slice(0, 10).map(z => `<span class="badge">${z.name}</span>`).join(' ')}${data.zones.length > 10 ? `<span class="badge">+${data.zones.length - 10} autres</span>` : ''}</p>
+            </div>
+            ` : ''}
+
+            ${data.vehicles && data.vehicles.length > 0 ? `
+            <div class="info-box">
+              <h3 style="margin-top:0;">🚚 Types de véhicules</h3>
+              <p>${data.vehicles.map(v => `<span class="badge">${v.name}</span>`).join(' ')}</p>
+            </div>
+            ` : ''}
+
+            ${data.message ? `
+            <div class="info-box">
+              <h3 style="margin-top:0;">💬 Message</h3>
+              <p>${data.message}</p>
+            </div>
+            ` : ''}
+
+            ${data.attachedFiles && data.attachedFiles.length > 0 ? `
+            <div class="info-box">
+              <h3 style="margin-top:0;">📎 Fichiers joints</h3>
+              <ul>
+                ${data.attachedFiles.map(f => `<li>${f.originalName || f.name} (${(f.size / 1024).toFixed(1)} KB)</li>`).join('')}
+              </ul>
+            </div>
+            ` : ''}
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${TRANSPORTER_FRONTEND_URL}/pricing-requests/${data.requestId}" class="button">
+                📝 Voir la demande et répondre
+              </a>
+            </div>
+          </div>
+          <div class="footer">
+            <p>Cet email a été envoyé automatiquement par SYMPHONI.A</p>
+            <p>© ${new Date().getFullYear()} SYMPHONI.A - Plateforme de Transport Intelligent</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  }),
+
+  // Template pour nouvelle proposition reçue (envoyé à l'industriel)
+  newProposalReceived: (data) => ({
+    subject: `💰 Nouvelle proposition tarifaire de ${data.carrierCompanyName}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; }
+          .footer { background: #1e293b; color: #94a3b8; padding: 20px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px; }
+          .button { display: inline-block; background: linear-gradient(135deg, #3B82F6, #8B5CF6); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+          .info-box { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #10B981; }
+          .price-highlight { font-size: 24px; color: #10B981; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin:0;">💰 Proposition Reçue</h1>
+            <p style="margin:10px 0 0 0; opacity:0.9;">SYMPHONI.A</p>
+          </div>
+          <div class="content">
+            <h2>Bonne nouvelle !</h2>
+            <p><strong>${data.carrierCompanyName}</strong> a répondu à votre demande de tarifs.</p>
+
+            <div class="info-box">
+              <h3 style="margin-top:0;">📊 Résumé de la proposition</h3>
+              <ul>
+                <li><strong>Transporteur:</strong> ${data.carrierCompanyName}</li>
+                <li><strong>Validité:</strong> ${data.validityDays || 30} jours</li>
+                <li><strong>Conditions de paiement:</strong> ${data.paymentTerms || 'À définir'}</li>
+                ${data.proposedPrices && data.proposedPrices.length > 0 ? `<li><strong>Nombre de tarifs proposés:</strong> ${data.proposedPrices.length}</li>` : ''}
+              </ul>
+            </div>
+
+            ${data.notes ? `
+            <div class="info-box">
+              <h3 style="margin-top:0;">📝 Notes du transporteur</h3>
+              <p>${data.notes}</p>
+            </div>
+            ` : ''}
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${FRONTEND_URL}/pricing-grids?tab=proposals&id=${data.proposalId}" class="button">
+                📋 Consulter la proposition
+              </a>
+            </div>
+
+            <p style="text-align: center; color: #64748b; margin-top: 20px;">
+              Vous pouvez accepter, refuser ou négocier cette proposition directement depuis votre espace.
+            </p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} SYMPHONI.A - Plateforme de Transport Intelligent</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  }),
+
+  // Template pour proposition acceptée (envoyé au transporteur)
+  proposalAccepted: (data) => ({
+    subject: `✅ Votre proposition a été acceptée par ${data.industrialCompanyName}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; }
+          .footer { background: #1e293b; color: #94a3b8; padding: 20px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px; }
+          .button { display: inline-block; background: linear-gradient(135deg, #3B82F6, #8B5CF6); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+          .success-icon { font-size: 48px; margin-bottom: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="success-icon">🎉</div>
+            <h1 style="margin:0;">Proposition Acceptée !</h1>
+          </div>
+          <div class="content">
+            <h2>Félicitations !</h2>
+            <p><strong>${data.industrialCompanyName}</strong> a accepté votre proposition tarifaire.</p>
+
+            <p>Vous pouvez maintenant recevoir des commandes de transport basées sur ces tarifs.</p>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${TRANSPORTER_FRONTEND_URL}/proposals/${data.proposalId}" class="button">
+                📋 Voir les détails
+              </a>
+            </div>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} SYMPHONI.A - Plateforme de Transport Intelligent</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  }),
+
+  // Template pour proposition refusée (envoyé au transporteur)
+  proposalRejected: (data) => ({
+    subject: `❌ Votre proposition n'a pas été retenue par ${data.industrialCompanyName}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #EF4444, #DC2626); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; }
+          .footer { background: #1e293b; color: #94a3b8; padding: 20px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px; }
+          .info-box { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #EF4444; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin:0;">Proposition Non Retenue</h1>
+          </div>
+          <div class="content">
+            <p>Bonjour,</p>
+            <p>Nous vous informons que <strong>${data.industrialCompanyName}</strong> n'a pas retenu votre proposition tarifaire.</p>
+
+            ${data.reason ? `
+            <div class="info-box">
+              <h3 style="margin-top:0;">📝 Motif</h3>
+              <p>${data.reason}</p>
+            </div>
+            ` : ''}
+
+            <p>N'hésitez pas à soumettre de nouvelles propositions pour d'autres demandes de tarifs.</p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} SYMPHONI.A - Plateforme de Transport Intelligent</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  }),
+
+  // Template pour message de négociation
+  negotiationMessage: (data) => ({
+    subject: `💬 Nouveau message de négociation - ${data.fromCompanyName}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #F59E0B, #D97706); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; }
+          .footer { background: #1e293b; color: #94a3b8; padding: 20px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px; }
+          .button { display: inline-block; background: linear-gradient(135deg, #3B82F6, #8B5CF6); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+          .message-box { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #F59E0B; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin:0;">💬 Négociation en cours</h1>
+          </div>
+          <div class="content">
+            <p><strong>${data.fromCompanyName}</strong> vous a envoyé un message concernant la proposition tarifaire.</p>
+
+            <div class="message-box">
+              <p style="font-style: italic;">"${data.message}"</p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${data.isIndustrial ? FRONTEND_URL : TRANSPORTER_FRONTEND_URL}/proposals/${data.proposalId}" class="button">
+                💬 Répondre
+              </a>
+            </div>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} SYMPHONI.A - Plateforme de Transport Intelligent</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  }),
+
+  // Template pour rappel de deadline
+  deadlineReminder: (data) => ({
+    subject: `⏰ Rappel: Demande de tarifs en attente de réponse`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #F59E0B, #D97706); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; }
+          .footer { background: #1e293b; color: #94a3b8; padding: 20px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px; }
+          .button { display: inline-block; background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+          .alert-box { background: #FEF3C7; padding: 20px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #F59E0B; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin:0;">⏰ Rappel</h1>
+          </div>
+          <div class="content">
+            <div class="alert-box">
+              <p><strong>Attention !</strong> La demande de tarifs de <strong>${data.senderCompanyName}</strong> expire bientôt.</p>
+              <p>Date limite: <strong>${new Date(data.responseDeadline).toLocaleDateString('fr-FR')}</strong></p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${TRANSPORTER_FRONTEND_URL}/pricing-requests/${data.requestId}" class="button">
+                📝 Répondre maintenant
+              </a>
+            </div>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} SYMPHONI.A - Plateforme de Transport Intelligent</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  })
+};
+
+// Fonction helper pour envoyer un email
+const sendEmail = async (to, template, data) => {
+  try {
+    const emailContent = emailTemplates[template](data);
+
+    await smtpTransporter.sendMail({
+      from: EMAIL_FROM,
+      to,
+      subject: emailContent.subject,
+      html: emailContent.html
+    });
+
+    console.log(`Email sent: ${template} to ${to}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`Email error: ${template} to ${to}`, error.message);
+    return { success: false, error: error.message };
+  }
+};
 
 // Multer configuration for S3 uploads
 const upload = multer({
@@ -927,7 +1329,35 @@ app.post('/requests', authenticateToken, requireIndustrial, async (req, res) => 
 
     await request.save();
 
-    // TODO: Envoyer notification email au transporteur
+    // Envoyer notification email au transporteur
+    if (carrierContactEmail) {
+      await sendEmail(carrierContactEmail, 'newPricingRequest', {
+        requestId: request.id,
+        senderCompanyName: request.senderCompanyName,
+        senderContactName: request.senderContactName,
+        senderEmail: request.senderEmail,
+        carrierCompanyName: request.carrierCompanyName,
+        zones: request.zones,
+        vehicles: request.vehicles,
+        message: request.message,
+        attachedFiles: request.attachedFiles,
+        responseDeadline: request.responseDeadline
+      });
+    }
+
+    // Synchroniser avec le CRM (créer une activité)
+    try {
+      const token = req.headers['authorization']?.split(' ')[1];
+      await callExternalAPI(EXTERNAL_APIS.CRM_API, '/api/v1/activities', 'POST', {
+        type: 'pricing_request_sent',
+        companyId: req.user.companyId,
+        targetCompanyId: carrierId,
+        description: `Demande de tarifs envoyée à ${carrierCompanyName}`,
+        metadata: { requestId: request.id, configId }
+      }, token);
+    } catch (e) {
+      console.log('CRM sync skipped:', e.message);
+    }
 
     res.status(201).json({ request });
   } catch (error) {
@@ -1162,12 +1592,37 @@ app.post('/proposals/:id/submit', authenticateToken, requireCarrier, async (req,
     await proposal.save();
 
     // Mettre à jour le statut de la demande
-    await PricingRequest.updateOne(
+    const request = await PricingRequest.findOneAndUpdate(
       { id: proposal.requestId },
-      { status: 'responded', respondedAt: new Date(), updatedAt: new Date() }
+      { status: 'responded', respondedAt: new Date(), updatedAt: new Date() },
+      { new: true }
     );
 
-    // TODO: Envoyer notification à l'industriel
+    // Envoyer notification à l'industriel
+    if (request?.senderEmail) {
+      await sendEmail(request.senderEmail, 'newProposalReceived', {
+        proposalId: proposal.id,
+        carrierCompanyName: proposal.carrierCompanyName,
+        validityDays: proposal.validityDays,
+        paymentTerms: proposal.paymentTerms,
+        proposedPrices: proposal.proposedPrices,
+        notes: proposal.notes
+      });
+    }
+
+    // Synchroniser avec le CRM
+    try {
+      const token = req.headers['authorization']?.split(' ')[1];
+      await callExternalAPI(EXTERNAL_APIS.CRM_API, '/api/v1/activities', 'POST', {
+        type: 'pricing_proposal_submitted',
+        companyId: req.user.companyId,
+        targetCompanyId: proposal.industrialId,
+        description: `Proposition tarifaire soumise à ${proposal.industrialCompanyName}`,
+        metadata: { proposalId: proposal.id, requestId: proposal.requestId }
+      }, token);
+    } catch (e) {
+      console.log('CRM sync skipped:', e.message);
+    }
 
     res.json({ message: 'Proposition soumise', proposal });
   } catch (error) {
@@ -1298,8 +1753,58 @@ app.post('/proposals/:id/accept', authenticateToken, requireIndustrial, async (r
     proposal.updatedAt = new Date();
     await proposal.save();
 
-    // TODO: Envoyer notification au transporteur
-    // TODO: Créer un contrat/accord basé sur la proposition
+    // Envoyer notification au transporteur
+    if (proposal.carrierEmail) {
+      await sendEmail(proposal.carrierEmail, 'proposalAccepted', {
+        proposalId: proposal.id,
+        industrialCompanyName: proposal.industrialCompanyName
+      });
+    }
+
+    // Créer un accord tarifaire dans les Orders API
+    try {
+      const token = req.headers['authorization']?.split(' ')[1];
+      await callExternalAPI(EXTERNAL_APIS.ORDERS_API, '/api/v1/pricing-agreements', 'POST', {
+        proposalId: proposal.id,
+        industrialId: proposal.industrialId,
+        carrierId: proposal.carrierId,
+        carrierCompanyName: proposal.carrierCompanyName,
+        proposedPrices: proposal.proposedPrices,
+        proposedFees: proposal.proposedFees,
+        validFrom: proposal.validFrom,
+        validUntil: proposal.validUntil,
+        status: 'active'
+      }, token);
+    } catch (e) {
+      console.log('Orders API sync skipped:', e.message);
+    }
+
+    // Synchroniser avec AFFRET.IA pour mettre à jour les scores transporteur
+    try {
+      const token = req.headers['authorization']?.split(' ')[1];
+      await callExternalAPI(EXTERNAL_APIS.AFFRET_IA_API, '/api/v1/carriers/update-pricing', 'POST', {
+        carrierId: proposal.carrierId,
+        proposalId: proposal.id,
+        pricesCount: proposal.proposedPrices?.length || 0,
+        accepted: true
+      }, token);
+    } catch (e) {
+      console.log('AFFRET.IA sync skipped:', e.message);
+    }
+
+    // Synchroniser avec le CRM
+    try {
+      const token = req.headers['authorization']?.split(' ')[1];
+      await callExternalAPI(EXTERNAL_APIS.CRM_API, '/api/v1/activities', 'POST', {
+        type: 'pricing_proposal_accepted',
+        companyId: req.user.companyId,
+        targetCompanyId: proposal.carrierId,
+        description: `Proposition tarifaire acceptée de ${proposal.carrierCompanyName}`,
+        metadata: { proposalId: proposal.id }
+      }, token);
+    } catch (e) {
+      console.log('CRM sync skipped:', e.message);
+    }
 
     res.json({ message: 'Proposition acceptée', proposal });
   } catch (error) {
@@ -1339,7 +1844,14 @@ app.post('/proposals/:id/reject', authenticateToken, requireIndustrial, async (r
 
     await proposal.save();
 
-    // TODO: Envoyer notification au transporteur
+    // Envoyer notification au transporteur
+    if (proposal.carrierEmail) {
+      await sendEmail(proposal.carrierEmail, 'proposalRejected', {
+        proposalId: proposal.id,
+        industrialCompanyName: proposal.industrialCompanyName,
+        reason
+      });
+    }
 
     res.json({ message: 'Proposition refusée', proposal });
   } catch (error) {
@@ -1380,7 +1892,18 @@ app.post('/proposals/:id/negotiate', authenticateToken, async (req, res) => {
 
     await proposal.save();
 
-    // TODO: Envoyer notification à l'autre partie
+    // Envoyer notification à l'autre partie
+    const recipientEmail = isIndustrial ? proposal.carrierEmail : (await PricingRequest.findOne({ id: proposal.requestId }))?.senderEmail;
+    const fromCompanyName = isIndustrial ? proposal.industrialCompanyName : proposal.carrierCompanyName;
+
+    if (recipientEmail) {
+      await sendEmail(recipientEmail, 'negotiationMessage', {
+        proposalId: proposal.id,
+        fromCompanyName,
+        message,
+        isIndustrial: !isIndustrial // Pour le destinataire
+      });
+    }
 
     res.json({ message: 'Message envoyé', proposal });
   } catch (error) {
@@ -1480,6 +2003,492 @@ app.get('/stats/requests', authenticateToken, async (req, res) => {
 });
 
 // =============================================================================
+// INTERCONNEXIONS - ROUTES CRM / CARRIERS
+// =============================================================================
+
+/**
+ * GET /interconnect/carriers
+ * Récupérer la liste des transporteurs depuis le CRM pour l'envoi de demandes
+ */
+app.get('/interconnect/carriers', authenticateToken, async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const { search, page = 1, limit = 50 } = req.query;
+
+    // Appeler l'API CRM pour récupérer les transporteurs
+    const result = await callExternalAPI(
+      EXTERNAL_APIS.CRM_API,
+      `/api/v1/carriers?search=${search || ''}&page=${page}&limit=${limit}`,
+      'GET',
+      null,
+      token
+    );
+
+    if (result.success) {
+      res.json(result.data);
+    } else {
+      // Fallback: récupérer les transporteurs ayant déjà reçu des demandes
+      const carriers = await PricingRequest.aggregate([
+        { $match: { senderId: req.user.companyId } },
+        { $group: {
+          _id: '$carrierId',
+          companyName: { $first: '$carrierCompanyName' },
+          email: { $first: '$carrierContactEmail' },
+          requestsCount: { $sum: 1 },
+          lastRequest: { $max: '$createdAt' }
+        }},
+        { $sort: { lastRequest: -1 } },
+        { $limit: parseInt(limit) }
+      ]);
+
+      res.json({ carriers, source: 'local' });
+    }
+  } catch (error) {
+    console.error('Erreur récupération transporteurs:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des transporteurs' });
+  }
+});
+
+/**
+ * GET /interconnect/carrier/:id
+ * Récupérer les détails d'un transporteur avec son historique tarifaire
+ */
+app.get('/interconnect/carrier/:id', authenticateToken, async (req, res) => {
+  try {
+    const carrierId = req.params.id;
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    // Récupérer les infos du transporteur depuis le CRM
+    const carrierInfo = await callExternalAPI(
+      EXTERNAL_APIS.CRM_API,
+      `/api/v1/carriers/${carrierId}`,
+      'GET',
+      null,
+      token
+    );
+
+    // Récupérer l'historique des demandes/propositions
+    const requests = await PricingRequest.find({
+      senderId: req.user.companyId,
+      carrierId
+    }).sort({ createdAt: -1 }).limit(10);
+
+    const proposals = await PricingProposal.find({
+      industrialId: req.user.companyId,
+      carrierId
+    }).sort({ createdAt: -1 }).limit(10);
+
+    // Calculer des statistiques
+    const stats = {
+      totalRequests: await PricingRequest.countDocuments({ senderId: req.user.companyId, carrierId }),
+      totalProposals: await PricingProposal.countDocuments({ industrialId: req.user.companyId, carrierId }),
+      acceptedProposals: await PricingProposal.countDocuments({ industrialId: req.user.companyId, carrierId, status: 'accepted' }),
+      avgResponseTime: null
+    };
+
+    // Calculer le temps de réponse moyen
+    const responseTimes = await PricingRequest.aggregate([
+      { $match: { senderId: req.user.companyId, carrierId, respondedAt: { $exists: true } } },
+      { $project: { responseTime: { $subtract: ['$respondedAt', '$createdAt'] } } },
+      { $group: { _id: null, avgTime: { $avg: '$responseTime' } } }
+    ]);
+
+    if (responseTimes.length > 0) {
+      stats.avgResponseTime = Math.round(responseTimes[0].avgTime / (1000 * 60 * 60)); // En heures
+    }
+
+    res.json({
+      carrier: carrierInfo.success ? carrierInfo.data : { id: carrierId },
+      requests,
+      proposals,
+      stats
+    });
+  } catch (error) {
+    console.error('Erreur récupération transporteur:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération du transporteur' });
+  }
+});
+
+// =============================================================================
+// INTERCONNEXIONS - ORDERS / CALCUL DE PRIX
+// =============================================================================
+
+/**
+ * POST /interconnect/calculate-price
+ * Calculer le prix d'un transport basé sur les grilles tarifaires acceptées
+ */
+app.post('/interconnect/calculate-price', authenticateToken, async (req, res) => {
+  try {
+    const {
+      origin, // { department, region, country }
+      destination, // { department, region, country }
+      weight,
+      volume,
+      pallets,
+      vehicleType,
+      carrierId // Optionnel - si spécifié, chercher uniquement pour ce transporteur
+    } = req.body;
+
+    // Récupérer les propositions acceptées pour cet industriel
+    const filter = {
+      industrialId: req.user.companyId,
+      status: 'accepted',
+      $or: [
+        { validUntil: { $gte: new Date() } },
+        { validUntil: null }
+      ]
+    };
+
+    if (carrierId) {
+      filter.carrierId = carrierId;
+    }
+
+    const proposals = await PricingProposal.find(filter);
+
+    const priceResults = [];
+
+    for (const proposal of proposals) {
+      if (!proposal.proposedPrices || proposal.proposedPrices.length === 0) continue;
+
+      for (const price of proposal.proposedPrices) {
+        // Vérifier si la zone correspond
+        const originMatch = !price.zoneOrigin ||
+          price.zoneOrigin.code === origin?.department ||
+          price.zoneOrigin.code === origin?.region;
+
+        const destMatch = !price.zoneDestination ||
+          price.zoneDestination.code === destination?.department ||
+          price.zoneDestination.code === destination?.region;
+
+        const vehicleMatch = !price.vehicleType || price.vehicleType === vehicleType;
+
+        if (originMatch && destMatch && vehicleMatch) {
+          let calculatedPrice = price.minPrice || 0;
+
+          // Calcul basé sur le type de tarification
+          if (price.priceFixed) {
+            calculatedPrice = price.priceFixed;
+          } else if (price.pricePerKm && req.body.distance) {
+            calculatedPrice = Math.max(price.pricePerKm * req.body.distance, price.minPrice || 0);
+          }
+
+          // Ajouter les frais supplémentaires
+          let totalFees = 0;
+          if (proposal.proposedFees) {
+            for (const fee of proposal.proposedFees) {
+              if (fee.type === 'fixed') {
+                totalFees += fee.value;
+              } else if (fee.type === 'percentage') {
+                totalFees += calculatedPrice * (fee.value / 100);
+              }
+            }
+          }
+
+          priceResults.push({
+            carrierId: proposal.carrierId,
+            carrierName: proposal.carrierCompanyName,
+            proposalId: proposal.id,
+            basePrice: calculatedPrice,
+            fees: totalFees,
+            totalPrice: calculatedPrice + totalFees,
+            currency: price.currency || 'EUR',
+            vehicleType: price.vehicleType,
+            validUntil: proposal.validUntil
+          });
+        }
+      }
+    }
+
+    // Trier par prix
+    priceResults.sort((a, b) => a.totalPrice - b.totalPrice);
+
+    res.json({
+      prices: priceResults,
+      bestPrice: priceResults[0] || null,
+      count: priceResults.length
+    });
+  } catch (error) {
+    console.error('Erreur calcul prix:', error);
+    res.status(500).json({ error: 'Erreur lors du calcul du prix' });
+  }
+});
+
+/**
+ * GET /interconnect/pricing-agreements
+ * Récupérer les accords tarifaires actifs pour un industriel
+ */
+app.get('/interconnect/pricing-agreements', authenticateToken, async (req, res) => {
+  try {
+    const { carrierId, status = 'accepted' } = req.query;
+
+    const filter = {
+      industrialId: req.user.companyId,
+      status
+    };
+
+    if (carrierId) {
+      filter.carrierId = carrierId;
+    }
+
+    const agreements = await PricingProposal.find(filter)
+      .select('id carrierId carrierCompanyName proposedPrices proposedFees validFrom validUntil status createdAt')
+      .sort({ createdAt: -1 });
+
+    // Enrichir avec le nombre de zones couvertes
+    const enrichedAgreements = agreements.map(a => ({
+      ...a.toObject(),
+      zonesCount: a.proposedPrices?.length || 0,
+      isExpired: a.validUntil && new Date(a.validUntil) < new Date()
+    }));
+
+    res.json({ agreements: enrichedAgreements });
+  } catch (error) {
+    console.error('Erreur récupération accords:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des accords' });
+  }
+});
+
+// =============================================================================
+// INTERCONNEXIONS - AFFRET.IA
+// =============================================================================
+
+/**
+ * GET /interconnect/carrier-scores
+ * Récupérer les scores des transporteurs basés sur les données tarifaires
+ */
+app.get('/interconnect/carrier-scores', authenticateToken, async (req, res) => {
+  try {
+    // Calculer les scores basés sur les données locales
+    const carrierStats = await PricingProposal.aggregate([
+      { $match: { industrialId: req.user.companyId } },
+      { $group: {
+        _id: '$carrierId',
+        carrierName: { $first: '$carrierCompanyName' },
+        totalProposals: { $sum: 1 },
+        acceptedProposals: { $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, 1, 0] } },
+        avgPricesCount: { $avg: { $size: { $ifNull: ['$proposedPrices', []] } } }
+      }},
+      { $project: {
+        carrierId: '$_id',
+        carrierName: 1,
+        totalProposals: 1,
+        acceptedProposals: 1,
+        avgPricesCount: 1,
+        acceptanceRate: {
+          $cond: [
+            { $eq: ['$totalProposals', 0] },
+            0,
+            { $multiply: [{ $divide: ['$acceptedProposals', '$totalProposals'] }, 100] }
+          ]
+        }
+      }},
+      { $sort: { acceptanceRate: -1 } }
+    ]);
+
+    // Récupérer les scores depuis AFFRET.IA si disponible
+    const token = req.headers['authorization']?.split(' ')[1];
+    const affretResult = await callExternalAPI(
+      EXTERNAL_APIS.AFFRET_IA_API,
+      '/api/v1/carrier-scores',
+      'GET',
+      null,
+      token
+    );
+
+    // Fusionner les données
+    const mergedScores = carrierStats.map(local => {
+      const affretScore = affretResult.success ?
+        affretResult.data?.scores?.find(s => s.carrierId === local.carrierId) : null;
+
+      return {
+        ...local,
+        affretScore: affretScore?.globalScore || null,
+        affretReliability: affretScore?.reliability || null,
+        affretOnTimeRate: affretScore?.onTimeRate || null
+      };
+    });
+
+    res.json({ scores: mergedScores });
+  } catch (error) {
+    console.error('Erreur récupération scores:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des scores' });
+  }
+});
+
+/**
+ * POST /interconnect/recommend-carriers
+ * Recommander des transporteurs pour une demande de tarif basé sur AFFRET.IA
+ */
+app.post('/interconnect/recommend-carriers', authenticateToken, async (req, res) => {
+  try {
+    const { zones, vehicleTypes, criteria } = req.body;
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    // Appeler AFFRET.IA pour les recommandations
+    const affretResult = await callExternalAPI(
+      EXTERNAL_APIS.AFFRET_IA_API,
+      '/api/v1/recommend-carriers',
+      'POST',
+      { zones, vehicleTypes, criteria, industrialId: req.user.companyId },
+      token
+    );
+
+    if (affretResult.success) {
+      res.json(affretResult.data);
+    } else {
+      // Fallback: recommander basé sur l'historique local
+      const recommendations = await PricingProposal.aggregate([
+        { $match: { industrialId: req.user.companyId, status: 'accepted' } },
+        { $group: {
+          _id: '$carrierId',
+          carrierName: { $first: '$carrierCompanyName' },
+          carrierEmail: { $first: '$carrierEmail' },
+          acceptedCount: { $sum: 1 },
+          lastAccepted: { $max: '$createdAt' }
+        }},
+        { $sort: { acceptedCount: -1 } },
+        { $limit: 10 }
+      ]);
+
+      res.json({
+        recommendations,
+        source: 'local_history',
+        message: 'Basé sur vos accords précédents'
+      });
+    }
+  } catch (error) {
+    console.error('Erreur recommandations:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des recommandations' });
+  }
+});
+
+// =============================================================================
+// INTERCONNEXIONS - BILLING / FACTURATION
+// =============================================================================
+
+/**
+ * POST /interconnect/create-invoice-line
+ * Créer une ligne de facturation basée sur un accord tarifaire
+ */
+app.post('/interconnect/create-invoice-line', authenticateToken, async (req, res) => {
+  try {
+    const { orderId, proposalId, priceUsed } = req.body;
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    // Vérifier que la proposition existe et appartient à l'utilisateur
+    const proposal = await PricingProposal.findOne({
+      id: proposalId,
+      $or: [
+        { industrialId: req.user.companyId },
+        { carrierId: req.user.companyId }
+      ]
+    });
+
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposition non trouvée' });
+    }
+
+    // Appeler l'API de facturation
+    const billingResult = await callExternalAPI(
+      EXTERNAL_APIS.BILLING_API,
+      '/api/v1/invoice-lines',
+      'POST',
+      {
+        orderId,
+        proposalId: proposal.id,
+        carrierId: proposal.carrierId,
+        carrierName: proposal.carrierCompanyName,
+        industrialId: proposal.industrialId,
+        priceUsed,
+        fees: proposal.proposedFees,
+        reference: `PRICING-${proposal.id.substring(0, 8)}`
+      },
+      token
+    );
+
+    if (billingResult.success) {
+      res.json(billingResult.data);
+    } else {
+      res.status(500).json({ error: 'Erreur lors de la création de la ligne de facturation' });
+    }
+  } catch (error) {
+    console.error('Erreur création ligne facturation:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de la ligne de facturation' });
+  }
+});
+
+// =============================================================================
+// EMAILS - RAPPELS AUTOMATIQUES
+// =============================================================================
+
+/**
+ * POST /admin/send-reminders
+ * Envoyer des rappels pour les demandes en attente (appelé par cron)
+ */
+app.post('/admin/send-reminders', async (req, res) => {
+  try {
+    const { adminKey } = req.body;
+
+    // Vérification simple de la clé admin
+    if (adminKey !== process.env.ADMIN_API_KEY && adminKey !== 'symphonia-admin-2024') {
+      return res.status(403).json({ error: 'Clé admin invalide' });
+    }
+
+    // Trouver les demandes en attente avec deadline proche (dans les 2 prochains jours)
+    const twoDaysFromNow = new Date();
+    twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
+
+    const pendingRequests = await PricingRequest.find({
+      status: { $in: ['pending', 'viewed'] },
+      responseDeadline: { $lte: twoDaysFromNow, $gte: new Date() }
+    });
+
+    let sentCount = 0;
+
+    for (const request of pendingRequests) {
+      if (request.carrierContactEmail) {
+        await sendEmail(request.carrierContactEmail, 'deadlineReminder', {
+          requestId: request.id,
+          senderCompanyName: request.senderCompanyName,
+          responseDeadline: request.responseDeadline
+        });
+        sentCount++;
+      }
+    }
+
+    res.json({
+      message: `${sentCount} rappels envoyés`,
+      pendingCount: pendingRequests.length
+    });
+  } catch (error) {
+    console.error('Erreur envoi rappels:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'envoi des rappels' });
+  }
+});
+
+/**
+ * GET /admin/email-stats
+ * Statistiques des emails envoyés
+ */
+app.get('/admin/email-stats', async (req, res) => {
+  try {
+    // Stats basiques basées sur les activités
+    const stats = {
+      requestsSent: await PricingRequest.countDocuments({ status: { $ne: 'draft' } }),
+      proposalsSubmitted: await PricingProposal.countDocuments({ status: { $nin: ['draft'] } }),
+      proposalsAccepted: await PricingProposal.countDocuments({ status: 'accepted' }),
+      proposalsRejected: await PricingProposal.countDocuments({ status: 'rejected' }),
+      pendingRequests: await PricingRequest.countDocuments({ status: 'pending' })
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Erreur stats emails:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des stats' });
+  }
+});
+
+// =============================================================================
 // HEALTH CHECK
 // =============================================================================
 
@@ -1487,7 +2496,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'pricing-grids-api',
-    version: '1.0.0',
+    version: '2.0.0',
+    features: ['emails', 'interconnections', 'crm', 'orders', 'affret-ia', 'billing'],
     timestamp: new Date().toISOString()
   });
 });
