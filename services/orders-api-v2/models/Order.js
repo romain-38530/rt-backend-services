@@ -196,11 +196,25 @@ const orderSchema = new mongoose.Schema({
   assignedCarrier: {
     carrierId: String,
     carrierName: String,
-    driverName: String,
+    // Informations chauffeur pour borne
+    driverFirstName: String,
+    driverLastName: String,
+    driverName: String, // Legacy: nom complet
     driverPhone: String,
-    vehiclePlate: String,
+    // Véhicule
+    tractorPlate: String, // Plaque tracteur
+    trailerPlate: String, // Plaque remorque
+    vehiclePlate: String, // Legacy: plaque unique
+    vehicleType: {
+      type: String,
+      enum: ['semi', 'porteur', 'fourgon', 'VUL', 'autre']
+    },
+    // Dates
     acceptedAt: Date,
-    acceptedPrice: Number
+    acceptedPrice: Number,
+    // Infos mises à jour par transporteur
+    driverInfoUpdatedAt: Date,
+    driverInfoUpdatedBy: String
   },
 
   // Tracking

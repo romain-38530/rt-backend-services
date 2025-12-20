@@ -79,7 +79,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'orders-api-v2',
-    version: '2.0.0',
+    version: '2.2.0',
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     websocket: websocket?.connected ? 'connected' : 'disconnected'
   });
@@ -252,6 +252,113 @@ app.delete('/api/v1/orders/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('[ERROR] Delete order:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ==================== DRIVER INFO (pour borne chauffeur) ====================
+
+// PUT /api/v1/orders/:id/driver-info - Mise à jour des infos chauffeur par le transporteur
+app.put('/api/v1/orders/:id/driver-info', async (req, res) => {
+  try {
+    const {
+      driverFirstName,
+      driverLastName,
+      driverPhone,
+      tractorPlate,
+      trailerPlate,
+      vehicleType,
+      updatedBy
+    } = req.body;
+
+    // Construire l'objet de mise à jour
+    const updateData = {
+      'assignedCarrier.driverFirstName': driverFirstName,
+      'assignedCarrier.driverLastName': driverLastName,
+      'assignedCarrier.driverName': `${driverFirstName || ''} ${driverLastName || ''}`.trim(),
+      'assignedCarrier.driverPhone': driverPhone,
+      'assignedCarrier.tractorPlate': tractorPlate?.toUpperCase(),
+      'assignedCarrier.trailerPlate': trailerPlate?.toUpperCase(),
+      'assignedCarrier.vehiclePlate': tractorPlate?.toUpperCase(), // Legacy compatibility
+      'assignedCarrier.vehicleType': vehicleType,
+      'assignedCarrier.driverInfoUpdatedAt': new Date(),
+      'assignedCarrier.driverInfoUpdatedBy': updatedBy
+    };
+
+    // Nettoyer les valeurs undefined
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) delete updateData[key];
+    });
+
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    // Émettre événement WebSocket
+    emitEvent('order.driver_info_updated', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      driverInfo: {
+        firstName: driverFirstName,
+        lastName: driverLastName,
+        tractorPlate,
+        trailerPlate
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Informations chauffeur mises à jour',
+      data: order
+    });
+  } catch (error) {
+    console.error('[ERROR] Update driver info:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/v1/orders/by-plate/:plate - Rechercher commande par plaque (pour borne)
+app.get('/api/v1/orders/by-plate/:plate', async (req, res) => {
+  try {
+    const plate = req.params.plate.toUpperCase();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Chercher commandes du jour avec cette plaque
+    const orders = await Order.find({
+      $or: [
+        { 'assignedCarrier.tractorPlate': plate },
+        { 'assignedCarrier.trailerPlate': plate },
+        { 'assignedCarrier.vehiclePlate': plate }
+      ],
+      pickupDate: { $gte: today, $lt: tomorrow },
+      status: { $in: ['accepted', 'in_transit', 'pickup_completed'] }
+    }).sort({ pickupDate: 1 });
+
+    res.json({
+      success: true,
+      data: orders,
+      count: orders.length
+    });
+  } catch (error) {
+    console.error('[ERROR] Find by plate:', error);
     res.status(500).json({
       success: false,
       error: error.message
