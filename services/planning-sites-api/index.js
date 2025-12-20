@@ -2,7 +2,7 @@
  * SYMPHONI.A Planning Sites API
  * Gestion des sites, quais et créneaux horaires
  * Conforme au cahier des charges Module Planning Chargement & Livraison
- * Version: 1.2.0 - Production avec interconnexions réelles
+ * Version: 1.3.0 - Synchronisation statuts borne vers Orders
  */
 
 require('dotenv').config();
@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3020;
 
 // ==================== CONFIGURATION SERVICES EXTERNES ====================
 const SERVICES = {
-  ORDERS_API: process.env.ORDERS_API_URL || 'http://rt-orders-api-prod-v2.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
+  ORDERS_API: process.env.ORDERS_API_URL || 'http://rt-orders-api-prod-v2.eba-4tprbbqu.eu-central-1.elasticbeanstalk.com',
   CARRIERS_API: process.env.CARRIERS_API_URL || 'http://rt-carriers-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
   AFFRET_IA_API: process.env.AFFRET_IA_API_URL || 'http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com',
   TRACKING_API: process.env.TRACKING_API_URL || 'http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
@@ -40,6 +40,54 @@ async function fetchService(url, options = {}) {
   } catch (error) {
     console.error(`[SERVICE CALL ERROR] ${url}:`, error.message);
     return null;
+  }
+}
+
+// Synchroniser le statut du driver vers Orders API
+async function syncDriverStatusToOrders(checkin, newStatus) {
+  if (!checkin.bookingReference) {
+    console.log('[SYNC] No booking reference, skipping order sync');
+    return;
+  }
+
+  const statusMapping = {
+    'waiting': 'driver_arrived',
+    'called': 'driver_called',
+    'at_dock': 'at_dock',
+    'loading': 'loading_in_progress',
+    'unloading': 'unloading_in_progress',
+    'completed': 'loading_completed',
+    'departed': 'departed'
+  };
+
+  const orderStatus = statusMapping[newStatus];
+  if (!orderStatus) return;
+
+  try {
+    // Mettre a jour le tracking de la commande
+    const trackingData = {
+      status: orderStatus,
+      timestamp: new Date().toISOString(),
+      location: checkin.siteId,
+      details: `Borne chauffeur: ${newStatus}`,
+      dockId: checkin.dockAssigned || null,
+      driverName: checkin.driverName,
+      vehiclePlate: checkin.vehiclePlate
+    };
+
+    const response = await fetchService(
+      `${SERVICES.ORDERS_API}/api/v1/orders/${checkin.bookingReference}/tracking`,
+      {
+        method: 'POST',
+        body: JSON.stringify(trackingData)
+      }
+    );
+
+    if (response) {
+      console.log(`[SYNC] Order ${checkin.bookingReference} updated with status: ${orderStatus}`);
+    }
+  } catch (error) {
+    console.error(`[SYNC ERROR] Failed to sync order ${checkin.bookingReference}:`, error.message);
   }
 }
 
@@ -170,7 +218,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'planning-sites-api',
-    version: '1.2.0',
+    version: '1.3.0',
     features: ['sites', 'docks', 'slots', 'driver', 'interconnections', 'stats'],
     endpoints: {
       sites: '/api/v1/planning/sites',
@@ -185,7 +233,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'SYMPHONI.A Planning Sites API',
-    version: '1.2.0',
+    version: '1.3.0',
     documentation: 'Module Planning Chargement & Livraison',
     features: ['sites', 'docks', 'slots', 'driver', 'interconnections', 'stats']
   });
@@ -563,6 +611,9 @@ app.post('/api/v1/driver/checkin', async (req, res) => {
     await checkin.save({ session });
     await session.commitTransaction();
 
+    // Sync to Orders API
+    syncDriverStatusToOrders(checkin, 'waiting');
+
     res.status(201).json({ success: true, data: checkin });
   } catch (error) {
     await session.abortTransaction();
@@ -597,6 +648,9 @@ app.post('/api/v1/driver/checkout', async (req, res) => {
         { status: 'available', currentBooking: null }
       );
     }
+
+    // Sync to Orders API
+    syncDriverStatusToOrders(checkin, 'departed');
 
     res.json({ success: true, data: checkin });
   } catch (error) {
@@ -662,6 +716,9 @@ app.post('/api/v1/driver/:id/call', async (req, res) => {
       );
     }
 
+    // Sync to Orders API
+    syncDriverStatusToOrders(checkin, 'called');
+
     res.json({ success: true, data: checkin });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -682,6 +739,9 @@ app.put('/api/v1/driver/:id/status', async (req, res) => {
     if (!checkin) {
       return res.status(404).json({ success: false, error: 'Check-in not found' });
     }
+
+    // Sync to Orders API
+    syncDriverStatusToOrders(checkin, status);
 
     res.json({ success: true, data: checkin });
   } catch (error) {
