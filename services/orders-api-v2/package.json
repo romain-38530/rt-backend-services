@@ -1,6 +1,6 @@
 {
   "name": "orders-api-v2",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "description": "API de gestion des commandes de transport SYMPHONI.A - Version améliorée avec import CSV/XML, templates, et export",
   "main": "index.js",
   "scripts": {
