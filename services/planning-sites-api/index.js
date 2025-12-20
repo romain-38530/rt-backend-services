@@ -2,6 +2,7 @@
  * SYMPHONI.A Planning Sites API
  * Gestion des sites, quais et créneaux horaires
  * Conforme au cahier des charges Module Planning Chargement & Livraison
+ * Version: 1.2.0 - Production avec interconnexions réelles
  */
 
 require('dotenv').config();
@@ -11,6 +12,36 @@ const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3020;
+
+// ==================== CONFIGURATION SERVICES EXTERNES ====================
+const SERVICES = {
+  ORDERS_API: process.env.ORDERS_API_URL || 'http://rt-orders-api-prod-v2.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
+  CARRIERS_API: process.env.CARRIERS_API_URL || 'http://rt-carriers-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
+  AFFRET_IA_API: process.env.AFFRET_IA_API_URL || 'http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com',
+  TRACKING_API: process.env.TRACKING_API_URL || 'http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
+  KPI_API: process.env.KPI_API_URL || 'http://rt-kpi-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com'
+};
+
+// Helper pour appels HTTP aux services
+async function fetchService(url, options = {}) {
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      timeout: 10000
+    });
+    if (!response.ok) {
+      throw new Error(`Service error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`[SERVICE CALL ERROR] ${url}:`, error.message);
+    return null;
+  }
+}
 
 app.use(cors());
 app.use(express.json());
@@ -139,7 +170,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'planning-sites-api',
-    version: '1.1.0',
+    version: '1.2.0',
     features: ['sites', 'docks', 'slots', 'driver', 'interconnections', 'stats'],
     endpoints: {
       sites: '/api/v1/planning/sites',
@@ -154,7 +185,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'SYMPHONI.A Planning Sites API',
-    version: '1.1.0',
+    version: '1.2.0',
     documentation: 'Module Planning Chargement & Livraison',
     features: ['sites', 'docks', 'slots', 'driver', 'interconnections', 'stats']
   });
@@ -687,37 +718,49 @@ app.get('/api/v1/driver/history', async (req, res) => {
 // GET /api/v1/planning/interconnect/orders/:siteId - Get orders for a site
 app.get('/api/v1/planning/interconnect/orders/:siteId', async (req, res) => {
   try {
+    const { siteId } = req.params;
     const { date } = req.query;
-    // Simulated data - In production, this would call the Orders API
-    const orders = [
-      {
-        orderId: 'ORD-2024-0125',
-        clientName: 'CARREFOUR LOGISTIQUE',
-        type: 'loading',
-        scheduledTime: '08:00',
-        palletCount: 24,
-        status: 'confirmed'
-      },
-      {
-        orderId: 'ORD-2024-0126',
-        clientName: 'METRO CASH & CARRY',
-        type: 'unloading',
-        scheduledTime: '10:00',
-        palletCount: 18,
-        status: 'pending'
-      },
-      {
-        orderId: 'ORD-2024-0127',
-        clientName: 'LECLERC DISTRIBUTION',
-        type: 'loading',
-        scheduledTime: '14:00',
-        palletCount: 32,
-        status: 'confirmed'
-      }
-    ];
+    const queryDate = date || new Date().toISOString().split('T')[0];
 
-    res.json({ success: true, data: orders, count: orders.length });
+    // Appel réel à Orders API
+    const ordersResponse = await fetchService(
+      `${SERVICES.ORDERS_API}/api/v1/orders?siteId=${siteId}&date=${queryDate}&status=confirmed,pending`
+    );
+
+    if (ordersResponse && ordersResponse.orders) {
+      const orders = ordersResponse.orders.map(order => ({
+        orderId: order.orderId || order._id,
+        clientName: order.client?.name || order.clientName,
+        type: order.type || (order.isPickup ? 'loading' : 'unloading'),
+        scheduledTime: order.scheduledTime || order.pickupDate?.split('T')[1]?.substring(0, 5),
+        palletCount: order.palletCount || order.details?.pallets || 0,
+        status: order.status,
+        carrierId: order.carrierId,
+        carrierName: order.carrier?.name
+      }));
+
+      res.json({ success: true, data: orders, count: orders.length, source: 'live' });
+    } else {
+      // Fallback: récupérer depuis les créneaux réservés localement
+      const bookedSlots = await TimeSlot.find({
+        siteId,
+        date: { $gte: new Date(queryDate), $lt: new Date(new Date(queryDate).getTime() + 86400000) },
+        status: 'booked'
+      }).lean();
+
+      const orders = bookedSlots.map(slot => ({
+        orderId: slot.booking?.orderId || slot.slotId,
+        clientName: slot.booking?.carrierName || 'N/A',
+        type: slot.booking?.type || 'loading',
+        scheduledTime: slot.startTime,
+        palletCount: 0,
+        status: 'confirmed'
+      }));
+
+      res.json({ success: true, data: orders, count: orders.length, source: 'local' });
+    }
   } catch (error) {
+    console.error('[INTERCONNECT/ORDERS]', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -725,33 +768,57 @@ app.get('/api/v1/planning/interconnect/orders/:siteId', async (req, res) => {
 // GET /api/v1/planning/interconnect/carriers/:siteId - Get carriers for a site
 app.get('/api/v1/planning/interconnect/carriers/:siteId', async (req, res) => {
   try {
-    // Simulated data - In production, this would call the Carriers API
-    const carriers = [
-      {
-        carrierId: 'CARR-001',
-        name: 'Transport Express Lyon',
-        rating: 4.8,
-        onTimeRate: 95,
-        vehiclesAvailable: 3
-      },
-      {
-        carrierId: 'CARR-002',
-        name: 'Transports Martin',
-        rating: 4.5,
-        onTimeRate: 88,
-        vehiclesAvailable: 5
-      },
-      {
-        carrierId: 'CARR-003',
-        name: 'Speed Logistics',
-        rating: 4.9,
-        onTimeRate: 98,
-        vehiclesAvailable: 2
-      }
-    ];
+    const { siteId } = req.params;
+    const { available = 'true' } = req.query;
 
-    res.json({ success: true, data: carriers, count: carriers.length });
+    // Appel réel à Carriers API (via référencement transporteurs)
+    const carriersResponse = await fetchService(
+      `${SERVICES.CARRIERS_API}/api/v1/carriers?status=active&limit=50`
+    );
+
+    if (carriersResponse && (carriersResponse.carriers || carriersResponse.data)) {
+      const carriersData = carriersResponse.carriers || carriersResponse.data;
+      const carriers = carriersData.map(carrier => ({
+        carrierId: carrier.carrierId || carrier._id,
+        name: carrier.name || carrier.companyName,
+        rating: carrier.rating || carrier.scoring?.globalScore || 4.0,
+        onTimeRate: carrier.onTimeRate || carrier.scoring?.onTimeDelivery || 85,
+        vehiclesAvailable: carrier.vehiclesAvailable || carrier.fleet?.available || 0,
+        contact: carrier.contact?.phone,
+        region: carrier.region
+      }));
+
+      res.json({ success: true, data: carriers, count: carriers.length, source: 'live' });
+    } else {
+      // Fallback: transporteurs ayant des réservations sur ce site
+      const recentBookings = await TimeSlot.find({
+        siteId,
+        status: { $in: ['booked', 'completed'] },
+        'booking.carrierId': { $exists: true }
+      })
+        .sort({ updatedAt: -1 })
+        .limit(20)
+        .lean();
+
+      const uniqueCarriers = [];
+      const seen = new Set();
+      for (const slot of recentBookings) {
+        if (slot.booking?.carrierId && !seen.has(slot.booking.carrierId)) {
+          seen.add(slot.booking.carrierId);
+          uniqueCarriers.push({
+            carrierId: slot.booking.carrierId,
+            name: slot.booking.carrierName || 'Transporteur',
+            rating: 4.0,
+            onTimeRate: 85,
+            vehiclesAvailable: 1
+          });
+        }
+      }
+
+      res.json({ success: true, data: uniqueCarriers, count: uniqueCarriers.length, source: 'local' });
+    }
   } catch (error) {
+    console.error('[INTERCONNECT/CARRIERS]', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -759,26 +826,57 @@ app.get('/api/v1/planning/interconnect/carriers/:siteId', async (req, res) => {
 // GET /api/v1/planning/interconnect/clients/:siteId - Get clients for a site
 app.get('/api/v1/planning/interconnect/clients/:siteId', async (req, res) => {
   try {
-    // Simulated data - In production, this would call the CRM API
-    const clients = [
-      {
-        clientId: 'CLI-001',
-        name: 'CARREFOUR LOGISTIQUE',
-        type: 'Distribution',
-        priority: 'haute',
-        averageVolume: 45
-      },
-      {
-        clientId: 'CLI-002',
-        name: 'METRO CASH & CARRY',
-        type: 'Grossiste',
-        priority: 'moyenne',
-        averageVolume: 28
-      }
-    ];
+    const { siteId } = req.params;
 
-    res.json({ success: true, data: clients, count: clients.length });
+    // Appel réel à Orders API pour récupérer les clients du site
+    const ordersResponse = await fetchService(
+      `${SERVICES.ORDERS_API}/api/v1/orders/clients?siteId=${siteId}`
+    );
+
+    if (ordersResponse && (ordersResponse.clients || ordersResponse.data)) {
+      const clientsData = ordersResponse.clients || ordersResponse.data;
+      const clients = clientsData.map(client => ({
+        clientId: client.clientId || client._id,
+        name: client.name || client.companyName,
+        type: client.type || client.category || 'Standard',
+        priority: client.priority || 'moyenne',
+        averageVolume: client.averageVolume || client.stats?.avgPallets || 0
+      }));
+
+      res.json({ success: true, data: clients, count: clients.length, source: 'live' });
+    } else {
+      // Fallback: extraire les clients depuis les réservations du site
+      const recentBookings = await TimeSlot.find({
+        siteId,
+        status: { $in: ['booked', 'completed'] }
+      })
+        .sort({ updatedAt: -1 })
+        .limit(50)
+        .lean();
+
+      const clientStats = {};
+      for (const slot of recentBookings) {
+        const clientName = slot.booking?.carrierName;
+        if (clientName) {
+          if (!clientStats[clientName]) {
+            clientStats[clientName] = { count: 0, name: clientName };
+          }
+          clientStats[clientName].count++;
+        }
+      }
+
+      const clients = Object.values(clientStats).map((c, i) => ({
+        clientId: `CLI-${i + 1}`,
+        name: c.name,
+        type: 'Standard',
+        priority: c.count > 5 ? 'haute' : 'moyenne',
+        averageVolume: c.count
+      }));
+
+      res.json({ success: true, data: clients, count: clients.length, source: 'local' });
+    }
   } catch (error) {
+    console.error('[INTERCONNECT/CLIENTS]', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -787,35 +885,71 @@ app.get('/api/v1/planning/interconnect/clients/:siteId', async (req, res) => {
 app.get('/api/v1/planning/interconnect/ai-recommendations', async (req, res) => {
   try {
     const { siteId, date } = req.query;
+    const queryDate = date || new Date().toISOString().split('T')[0];
 
-    // Simulated AI recommendations - In production, this would call AFFRET.IA
-    const recommendations = {
-      optimalSlots: [
-        { time: '06:00', score: 95, reason: 'Faible affluence, temps d\'attente minimal' },
-        { time: '14:00', score: 88, reason: 'Après pause déjeuner, quais disponibles' }
-      ],
-      avoidSlots: [
-        { time: '08:00', score: 35, reason: 'Pic de chargements du matin' },
-        { time: '17:00', score: 40, reason: 'Fin de journée, risque de retard' }
-      ],
-      suggestions: [
-        'Répartir les chargements sur la matinée pour éviter les pics',
-        'Privilégier les créneaux avant 7h pour les livraisons urgentes',
-        'Anticiper 15min supplémentaires le vendredi (affluence +20%)'
-      ],
-      predictedLoad: {
-        '06:00': 30,
-        '08:00': 85,
-        '10:00': 70,
-        '12:00': 40,
-        '14:00': 55,
-        '16:00': 75,
-        '18:00': 50
-      }
-    };
+    // Appel réel à AFFRET.IA pour recommandations intelligentes
+    const aiResponse = await fetchService(
+      `${SERVICES.AFFRET_IA_API}/api/v1/recommendations/planning?siteId=${siteId}&date=${queryDate}`
+    );
 
-    res.json({ success: true, data: recommendations });
+    if (aiResponse && aiResponse.recommendations) {
+      res.json({ success: true, data: aiResponse.recommendations, source: 'affret-ia' });
+    } else {
+      // Fallback: générer recommandations basées sur données locales
+      const dayOfWeek = new Date(queryDate).getDay();
+      const slots = await TimeSlot.find({
+        siteId,
+        date: { $gte: new Date(queryDate), $lt: new Date(new Date(queryDate).getTime() + 86400000) }
+      }).lean();
+
+      // Calculer la charge par créneau
+      const loadByHour = {};
+      const hours = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+      hours.forEach(h => { loadByHour[h] = 0; });
+
+      slots.forEach(slot => {
+        if (slot.status === 'booked') {
+          loadByHour[slot.startTime] = (loadByHour[slot.startTime] || 0) + 20;
+        }
+      });
+
+      // Historique pour affiner les prédictions
+      const historicalSlots = await TimeSlot.countDocuments({
+        siteId,
+        status: 'completed',
+        date: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      });
+
+      const avgDailyLoad = Math.round(historicalSlots / 30);
+
+      // Générer recommandations intelligentes
+      const optimalSlots = [];
+      const avoidSlots = [];
+
+      Object.entries(loadByHour).forEach(([time, load]) => {
+        if (load < 30) {
+          optimalSlots.push({ time, score: 95 - load, reason: 'Faible affluence prévue' });
+        } else if (load > 70) {
+          avoidSlots.push({ time, score: 100 - load, reason: 'Forte affluence prévue' });
+        }
+      });
+
+      const recommendations = {
+        optimalSlots: optimalSlots.slice(0, 3),
+        avoidSlots: avoidSlots.slice(0, 3),
+        suggestions: [
+          dayOfWeek === 5 ? 'Vendredi: prévoir +15min de marge (affluence élevée)' : null,
+          dayOfWeek === 1 ? 'Lundi: créneaux matinaux recommandés' : null,
+          avgDailyLoad > 20 ? 'Site à forte activité: réserver à l\'avance' : 'Disponibilités généralement bonnes'
+        ].filter(Boolean),
+        predictedLoad: loadByHour,
+        avgDailyLoad
+      };
+
+      res.json({ success: true, data: recommendations, source: 'local-analysis' });
+    }
   } catch (error) {
+    console.error('[INTERCONNECT/AI]', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -928,7 +1062,7 @@ app.post('/api/v1/planning/sites/:siteId/subscribe', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`[PLANNING-SITES-API] Running on port ${PORT}`);
-  console.log(`[PLANNING-SITES-API] Version: 1.1.0 (with interconnections)`);
+  console.log(`[PLANNING-SITES-API] Version: 1.2.0 (Production - Live interconnections)`);
   console.log(`[PLANNING-SITES-API] Endpoints available:`);
   console.log(`  - Sites: /api/v1/planning/sites`);
   console.log(`  - Docks: /api/v1/planning/docks`);
