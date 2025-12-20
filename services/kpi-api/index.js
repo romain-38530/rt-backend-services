@@ -1092,6 +1092,229 @@ app.post('/kpi/alerts/:alertId/resolve', async (req, res) => {
   }
 });
 
+// ============================================
+// AUTO-DISPATCH KPI TRACKING
+// ============================================
+
+// POST /kpi/carriers/:carrierId/dispatch-event - Enregistrer evenement auto-dispatch
+app.post('/kpi/carriers/:carrierId/dispatch-event', async (req, res) => {
+  try {
+    const { carrierId } = req.params;
+    const { orderId, event, responseTimeMinutes, refusalReason, carrierName } = req.body;
+
+    if (!orderId || !event) {
+      return res.status(400).json({
+        success: false,
+        error: 'orderId and event are required'
+      });
+    }
+
+    if (!['received', 'accepted', 'refused'].includes(event)) {
+      return res.status(400).json({
+        success: false,
+        error: 'event must be received, accepted, or refused'
+      });
+    }
+
+    // Recuperer ou creer le score transporteur
+    let carrierScore = await CarrierScore.findOne({ carrierId });
+
+    if (!carrierScore) {
+      // Creer nouveau score avec valeurs par defaut
+      carrierScore = new CarrierScore({
+        carrierId,
+        carrierName: carrierName || carrierId,
+        score: 50,
+        scoreDetails: {
+          slotRespect: { value: 50, weight: 15, score: 7.5 },
+          documentDelay: { value: 50, weight: 10, score: 5 },
+          unjustifiedDelays: { value: 50, weight: 15, score: 7.5 },
+          responseTime: { value: 50, weight: 10, score: 5 },
+          vigilanceCompliance: { value: 50, weight: 15, score: 7.5 },
+          cancellationRate: { value: 50, weight: 10, score: 5 },
+          trackingQuality: { value: 50, weight: 10, score: 5 },
+          premiumAdoption: { value: 50, weight: 5, score: 2.5 },
+          overallReliability: { value: 50, weight: 10, score: 5 }
+        },
+        metrics: {
+          totalTransports: 0,
+          onTimeDeliveries: 0,
+          averageDelay: 0,
+          documentsOnTime: 0,
+          totalCancellations: 0,
+          averageResponseTime: 0,
+          dispatchReceived: 0,
+          dispatchAccepted: 0,
+          dispatchRefused: 0
+        },
+        period: 'monthly',
+        calculatedAt: new Date()
+      });
+    }
+
+    // Initialiser les metriques dispatch si elles n'existent pas
+    if (!carrierScore.metrics.dispatchReceived) {
+      carrierScore.metrics.dispatchReceived = 0;
+      carrierScore.metrics.dispatchAccepted = 0;
+      carrierScore.metrics.dispatchRefused = 0;
+    }
+
+    // Mettre a jour les metriques selon l'evenement
+    switch (event) {
+      case 'received':
+        carrierScore.metrics.dispatchReceived += 1;
+        break;
+
+      case 'accepted':
+        carrierScore.metrics.dispatchAccepted += 1;
+        // Mettre a jour le temps de reponse moyen
+        if (responseTimeMinutes !== undefined) {
+          const prevAvg = carrierScore.metrics.averageResponseTime || 0;
+          const prevCount = carrierScore.metrics.dispatchAccepted - 1;
+          if (prevCount > 0) {
+            carrierScore.metrics.averageResponseTime =
+              (prevAvg * prevCount + responseTimeMinutes) / carrierScore.metrics.dispatchAccepted;
+          } else {
+            carrierScore.metrics.averageResponseTime = responseTimeMinutes;
+          }
+        }
+        break;
+
+      case 'refused':
+        carrierScore.metrics.dispatchRefused += 1;
+        carrierScore.metrics.totalCancellations += 1;
+        // Mettre a jour le temps de reponse moyen meme pour les refus
+        if (responseTimeMinutes !== undefined) {
+          const totalResponses = carrierScore.metrics.dispatchAccepted + carrierScore.metrics.dispatchRefused;
+          const prevAvg = carrierScore.metrics.averageResponseTime || 0;
+          const prevCount = totalResponses - 1;
+          if (prevCount > 0) {
+            carrierScore.metrics.averageResponseTime =
+              (prevAvg * prevCount + responseTimeMinutes) / totalResponses;
+          } else {
+            carrierScore.metrics.averageResponseTime = responseTimeMinutes;
+          }
+        }
+        break;
+    }
+
+    // Recalculer les scores affectes
+    const totalDispatches = carrierScore.metrics.dispatchReceived || 1;
+    const acceptanceRate = (carrierScore.metrics.dispatchAccepted / totalDispatches) * 100;
+    const refusalRate = (carrierScore.metrics.dispatchRefused / totalDispatches) * 100;
+
+    // Score temps de reponse (inversement proportionnel au temps)
+    // < 5 min = 100, 5-15 min = 80, 15-30 min = 60, 30-60 min = 40, > 60 min = 20
+    const avgResponseTime = carrierScore.metrics.averageResponseTime || 0;
+    let responseTimeScore = 100;
+    if (avgResponseTime > 60) responseTimeScore = 20;
+    else if (avgResponseTime > 30) responseTimeScore = 40;
+    else if (avgResponseTime > 15) responseTimeScore = 60;
+    else if (avgResponseTime > 5) responseTimeScore = 80;
+
+    // Score taux d'annulation (inversement proportionnel)
+    const cancellationScore = Math.max(0, 100 - refusalRate * 2);
+
+    // Mettre a jour les details du score
+    carrierScore.scoreDetails.responseTime = {
+      value: responseTimeScore,
+      weight: 10,
+      score: (responseTimeScore / 100) * 10
+    };
+    carrierScore.scoreDetails.cancellationRate = {
+      value: cancellationScore,
+      weight: 10,
+      score: (cancellationScore / 100) * 10
+    };
+
+    // Recalculer le score global
+    let totalScore = 0;
+    for (const [key, detail] of Object.entries(carrierScore.scoreDetails)) {
+      if (detail && typeof detail === 'object' && detail.score !== undefined) {
+        totalScore += parseFloat(detail.score) || 0;
+      }
+    }
+    carrierScore.score = Math.round(totalScore);
+    carrierScore.calculatedAt = new Date();
+
+    await carrierScore.save();
+
+    // Logger pour debug
+    console.log(`[KPI] Dispatch event recorded - Carrier: ${carrierId}, Event: ${event}, Order: ${orderId}`);
+    if (event === 'refused' && refusalReason) {
+      console.log(`[KPI] Refusal reason: ${refusalReason}`);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        carrierId,
+        event,
+        orderId,
+        metrics: {
+          dispatchReceived: carrierScore.metrics.dispatchReceived,
+          dispatchAccepted: carrierScore.metrics.dispatchAccepted,
+          dispatchRefused: carrierScore.metrics.dispatchRefused,
+          acceptanceRate: acceptanceRate.toFixed(1),
+          averageResponseTime: carrierScore.metrics.averageResponseTime?.toFixed(1)
+        },
+        score: carrierScore.score
+      },
+      timestamp: new Date()
+    });
+
+  } catch (error) {
+    console.error('Error in /kpi/carriers/:carrierId/dispatch-event:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /kpi/carriers/:carrierId/dispatch-stats - Stats dispatch transporteur
+app.get('/kpi/carriers/:carrierId/dispatch-stats', async (req, res) => {
+  try {
+    const { carrierId } = req.params;
+
+    const carrierScore = await CarrierScore.findOne({ carrierId });
+
+    if (!carrierScore) {
+      return res.status(404).json({
+        success: false,
+        error: 'Carrier not found'
+      });
+    }
+
+    const totalDispatches = carrierScore.metrics.dispatchReceived || 0;
+    const accepted = carrierScore.metrics.dispatchAccepted || 0;
+    const refused = carrierScore.metrics.dispatchRefused || 0;
+
+    res.json({
+      success: true,
+      data: {
+        carrierId,
+        carrierName: carrierScore.carrierName,
+        dispatchStats: {
+          received: totalDispatches,
+          accepted,
+          refused,
+          acceptanceRate: totalDispatches > 0 ? ((accepted / totalDispatches) * 100).toFixed(1) : '0.0',
+          refusalRate: totalDispatches > 0 ? ((refused / totalDispatches) * 100).toFixed(1) : '0.0',
+          averageResponseTime: carrierScore.metrics.averageResponseTime?.toFixed(1) || '0.0'
+        },
+        score: carrierScore.score,
+        scoreDetails: {
+          responseTime: carrierScore.scoreDetails.responseTime,
+          cancellationRate: carrierScore.scoreDetails.cancellationRate
+        }
+      },
+      timestamp: new Date()
+    });
+
+  } catch (error) {
+    console.error('Error in /kpi/carriers/:carrierId/dispatch-stats:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /kpi/export/pdf - Export PDF
 app.get('/kpi/export/pdf', async (req, res) => {
   try {

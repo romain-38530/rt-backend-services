@@ -1,7 +1,7 @@
 {
   "name": "planning-sites-api",
-  "version": "1.0.0",
-  "description": "SYMPHONI.A Planning Sites API - Gestion sites, quais, créneaux et check-in chauffeurs",
+  "version": "1.1.0",
+  "description": "SYMPHONI.A Planning Sites API - Gestion sites, quais, créneaux, check-in chauffeurs et interconnexions",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
