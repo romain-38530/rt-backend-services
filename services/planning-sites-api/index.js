@@ -19,7 +19,8 @@ const SERVICES = {
   CARRIERS_API: process.env.CARRIERS_API_URL || 'http://rt-carriers-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
   AFFRET_IA_API: process.env.AFFRET_IA_API_URL || 'http://rt-affret-ia-api-prod-v2.eba-quc9udpr.eu-central-1.elasticbeanstalk.com',
   TRACKING_API: process.env.TRACKING_API_URL || 'http://rt-tracking-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
-  KPI_API: process.env.KPI_API_URL || 'http://rt-kpi-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com'
+  KPI_API: process.env.KPI_API_URL || 'http://rt-kpi-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com',
+  NOTIFICATIONS_API: process.env.NOTIFICATIONS_API_URL || 'http://rt-notifications-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com'
 };
 
 // Helper pour appels HTTP aux services
@@ -41,6 +42,89 @@ async function fetchService(url, options = {}) {
     console.error(`[SERVICE CALL ERROR] ${url}:`, error.message);
     return null;
   }
+}
+
+// ==================== NOTIFICATIONS HELPER ====================
+async function sendNotification(notificationData) {
+  try {
+    const response = await fetch(`${SERVICES.NOTIFICATIONS_API}/api/v1/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notificationData)
+    });
+    if (!response.ok) {
+      console.warn('[NOTIFICATIONS] Failed to send:', response.status);
+      return null;
+    }
+    console.log('[NOTIFICATIONS] Sent:', notificationData.type, 'to user:', notificationData.userId);
+    return await response.json();
+  } catch (error) {
+    console.error('[NOTIFICATIONS] Error:', error.message);
+    return null;
+  }
+}
+
+// Notification templates for planning events
+const PLANNING_NOTIFICATION_TEMPLATES = {
+  rdv_proposed: (booking) => ({
+    type: 'rdv_proposed',
+    title: 'Nouveau RDV proposé',
+    message: `RDV proposé le ${new Date(booking.slotStart).toLocaleDateString('fr-FR')} à ${new Date(booking.slotStart).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - ${booking.siteName || 'Site'}`,
+    priority: 'normal',
+    channels: { app: true, email: true, sms: false }
+  }),
+  rdv_confirmed: (booking) => ({
+    type: 'rdv_confirmed',
+    title: 'RDV confirmé',
+    message: `RDV confirmé le ${new Date(booking.slotStart).toLocaleDateString('fr-FR')} à ${new Date(booking.slotStart).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - Quai ${booking.dockId || 'à définir'}`,
+    priority: 'normal',
+    channels: { app: true, email: true, sms: false }
+  }),
+  rdv_cancelled: (booking) => ({
+    type: 'rdv_cancelled',
+    title: 'RDV annulé',
+    message: `RDV du ${new Date(booking.slotStart).toLocaleDateString('fr-FR')} annulé`,
+    priority: 'high',
+    channels: { app: true, email: true, sms: true }
+  }),
+  driver_arrived: (checkin) => ({
+    type: 'tracking_update',
+    title: 'Chauffeur arrivé',
+    message: `${checkin.driverName} (${checkin.vehiclePlate}) est arrivé sur site`,
+    priority: 'normal',
+    channels: { app: true, email: false, sms: false }
+  }),
+  driver_called: (checkin, dock) => ({
+    type: 'tracking_update',
+    title: 'Chauffeur appelé',
+    message: `${checkin.driverName} est appelé au quai ${dock || 'N/A'}`,
+    priority: 'high',
+    channels: { app: true, email: false, sms: true }
+  }),
+  loading_completed: (checkin) => ({
+    type: 'tracking_update',
+    title: 'Chargement terminé',
+    message: `Chargement terminé pour ${checkin.driverName} (${checkin.vehiclePlate})`,
+    priority: 'normal',
+    channels: { app: true, email: false, sms: false }
+  })
+};
+
+// Helper to notify users for planning events
+async function notifyPlanningEvent(eventType, data, userIds = []) {
+  const template = PLANNING_NOTIFICATION_TEMPLATES[eventType];
+  if (!template) return;
+
+  const notifData = template(data, data.dockAssigned);
+
+  // Send to all specified users
+  await Promise.all(userIds.map(userId =>
+    sendNotification({
+      userId,
+      ...notifData,
+      data: { bookingId: data._id, siteId: data.siteId }
+    })
+  ));
 }
 
 // Synchroniser le statut du driver vers Orders API
@@ -537,6 +621,17 @@ app.put('/api/v1/planning/slots/:id/book', async (req, res) => {
     if (!slot) {
       return res.status(400).json({ success: false, error: 'Slot not available' });
     }
+
+    // Notify carrier about confirmed booking
+    const booking = req.body;
+    if (booking.carrierId) {
+      notifyPlanningEvent('rdv_confirmed', {
+        ...slot.toObject(),
+        slotStart: slot.startTime,
+        siteName: slot.siteId
+      }, [booking.carrierId]);
+    }
+
     res.json({ success: true, data: slot });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -613,6 +708,11 @@ app.post('/api/v1/driver/checkin', async (req, res) => {
 
     // Sync to Orders API
     syncDriverStatusToOrders(checkin, 'waiting');
+
+    // Notify site managers about driver arrival
+    if (checkin.siteId) {
+      notifyPlanningEvent('driver_arrived', checkin, [checkin.siteId]);
+    }
 
     res.status(201).json({ success: true, data: checkin });
   } catch (error) {
@@ -718,6 +818,11 @@ app.post('/api/v1/driver/:id/call', async (req, res) => {
 
     // Sync to Orders API
     syncDriverStatusToOrders(checkin, 'called');
+
+    // Notify carrier/driver about dock assignment (SMS for urgency)
+    if (checkin.carrierId) {
+      notifyPlanningEvent('driver_called', checkin, [checkin.carrierId]);
+    }
 
     res.json({ success: true, data: checkin });
   } catch (error) {

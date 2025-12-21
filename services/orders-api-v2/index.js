@@ -26,6 +26,7 @@ const PORT = process.env.PORT || 3011;
 const MONGODB_URI = process.env.MONGODB_URI;
 const WEBSOCKET_URL = process.env.WEBSOCKET_URL;
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 10485760; // 10MB
+const NOTIFICATIONS_API_URL = process.env.NOTIFICATIONS_API_URL || 'http://rt-notifications-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com';
 
 // Initialisation Express
 const app = express();
@@ -65,6 +66,101 @@ function emitEvent(eventName, data) {
   if (websocket && websocket.connected) {
     websocket.emit('emit-event', { eventName, data });
   }
+}
+
+// Helper pour envoyer des notifications via Notifications API
+async function sendNotification(notificationData) {
+  try {
+    const response = await fetch(`${NOTIFICATIONS_API_URL}/api/v1/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notificationData)
+    });
+    if (!response.ok) {
+      console.warn('[NOTIFICATIONS] Failed to send:', response.status);
+      return null;
+    }
+    const result = await response.json();
+    console.log('[NOTIFICATIONS] Sent:', notificationData.type, 'to user:', notificationData.userId);
+    return result;
+  } catch (error) {
+    console.error('[NOTIFICATIONS] Error:', error.message);
+    return null;
+  }
+}
+
+// Notification templates for different order events
+const NOTIFICATION_TEMPLATES = {
+  order_created: (order) => ({
+    type: 'order_created',
+    title: 'Nouvelle commande créée',
+    message: `Commande ${order.orderNumber} créée - ${order.pickup?.city || 'N/A'} → ${order.delivery?.city || 'N/A'}`,
+    priority: 'normal',
+    channels: { app: true, email: false, sms: false },
+    actionUrl: `/orders/${order._id}`
+  }),
+  order_updated: (order) => ({
+    type: 'order_updated',
+    title: 'Commande mise à jour',
+    message: `Commande ${order.orderNumber} modifiée - Statut: ${order.status}`,
+    priority: 'normal',
+    channels: { app: true, email: false, sms: false },
+    actionUrl: `/orders/${order._id}`
+  }),
+  order_cancelled: (order) => ({
+    type: 'order_cancelled',
+    title: 'Commande annulée',
+    message: `Commande ${order.orderNumber} a été annulée`,
+    priority: 'high',
+    channels: { app: true, email: true, sms: false },
+    actionUrl: `/orders/${order._id}`
+  }),
+  carrier_assigned: (order, carrier) => ({
+    type: 'carrier_accepted',
+    title: 'Transporteur assigné',
+    message: `${carrier?.name || 'Un transporteur'} a été assigné à la commande ${order.orderNumber}`,
+    priority: 'normal',
+    channels: { app: true, email: true, sms: false },
+    actionUrl: `/orders/${order._id}`
+  }),
+  delivery_completed: (order) => ({
+    type: 'tracking_update',
+    title: 'Livraison effectuée',
+    message: `Commande ${order.orderNumber} livrée avec succès`,
+    priority: 'normal',
+    channels: { app: true, email: true, sms: false },
+    actionUrl: `/orders/${order._id}`
+  })
+};
+
+// Helper to notify relevant users for an order
+async function notifyOrderEvent(order, eventType, extraData = {}) {
+  const template = NOTIFICATION_TEMPLATES[eventType];
+  if (!template) return;
+
+  const notifData = template(order, extraData);
+  const usersToNotify = [];
+
+  // Notify organization users (shipper/industry)
+  if (order.organizationId) {
+    usersToNotify.push({
+      userId: order.organizationId,
+      ...notifData,
+      data: { orderId: order._id, orderNumber: order.orderNumber }
+    });
+  }
+
+  // Notify carrier if assigned
+  if (order.carrier?.id && eventType !== 'carrier_assigned') {
+    usersToNotify.push({
+      userId: order.carrier.id,
+      ...notifData,
+      data: { orderId: order._id, orderNumber: order.orderNumber }
+    });
+  }
+
+  // Send all notifications in parallel
+  await Promise.all(usersToNotify.map(n => sendNotification(n)));
 }
 
 // Connexion MongoDB
@@ -108,6 +204,9 @@ app.post('/api/v1/orders', async (req, res) => {
       organizationId: order.organizationId,
       status: order.status
     });
+
+    // Envoyer notification
+    notifyOrderEvent(order, 'order_created');
 
     res.status(201).json({
       success: true,
@@ -220,6 +319,17 @@ app.put('/api/v1/orders/:id', async (req, res) => {
       orderNumber: order.orderNumber,
       updates: req.body
     });
+
+    // Envoyer notification si changement de statut important
+    if (req.body.status === 'cancelled') {
+      notifyOrderEvent(order, 'order_cancelled');
+    } else if (req.body.status === 'delivered') {
+      notifyOrderEvent(order, 'delivery_completed');
+    } else if (req.body.carrier) {
+      notifyOrderEvent(order, 'carrier_assigned', req.body.carrier);
+    } else {
+      notifyOrderEvent(order, 'order_updated');
+    }
 
     res.json({
       success: true,
