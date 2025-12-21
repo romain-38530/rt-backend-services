@@ -315,13 +315,31 @@ app.put('/api/v1/ecmr/:id', async (req, res) => {
 
 // ==================== SIGNATURE ROUTES ====================
 
+// Mapping for backward compatibility with legacy nomenclature
+const PARTY_MAPPING = {
+  'sender': 'shipper',
+  'driver': 'carrier',
+  'recipient': 'consignee',
+  'warehouse': 'shipper',  // Logistician signs as shipper
+  'forwarder': 'shipper'   // Forwarder signs as shipper
+};
+
 // POST /api/v1/ecmr/:id/sign - Sign eCMR
 app.post('/api/v1/ecmr/:id/sign', async (req, res) => {
   try {
-    const { signerType, signedBy, signatureImage } = req.body;
+    // Support both old and new field names for backward compatibility
+    let signerType = req.body.signerType || req.body.party || req.body.type;
+    const signedBy = req.body.signedBy || req.body.signerName || req.body.name;
+    const signatureImage = req.body.signatureImage || req.body.signatureData || req.body.signature;
+    const reservations = req.body.reservations;
+
+    // Normalize party name using mapping
+    if (PARTY_MAPPING[signerType]) {
+      signerType = PARTY_MAPPING[signerType];
+    }
 
     if (!['shipper', 'carrier', 'consignee'].includes(signerType)) {
-      return res.status(400).json({ success: false, error: 'Invalid signer type' });
+      return res.status(400).json({ success: false, error: 'Invalid signer type. Use: shipper, carrier, or consignee' });
     }
 
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
