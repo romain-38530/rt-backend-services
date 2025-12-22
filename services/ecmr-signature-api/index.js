@@ -514,6 +514,129 @@ app.get('/api/v1/ecmr/:id/download', async (req, res) => {
   }
 });
 
+// GET /api/v1/ecmr/:id/pdf - Download eCMR as actual PDF file
+app.get('/api/v1/ecmr/:id/pdf', async (req, res) => {
+  try {
+    const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
+    if (!ecmr) {
+      return res.status(404).json({ success: false, error: 'eCMR not found' });
+    }
+
+    // Generate PDF using PDFKit
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50 });
+
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=eCMR-${ecmr.ecmrId}.pdf`);
+
+    // Pipe the PDF to the response
+    doc.pipe(res);
+
+    // Header
+    doc.fontSize(24).fillColor('#1a365d').text('eCMR - Lettre de Voiture Electronique', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(12).fillColor('#4a5568').text(`N° ${ecmr.ecmrId}`, { align: 'center' });
+    doc.fontSize(10).text(`Commande: ${ecmr.orderId || 'N/A'}`, { align: 'center' });
+    doc.moveDown();
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e2e8f0');
+    doc.moveDown();
+
+    // Status
+    const statusLabels = {
+      draft: 'Brouillon',
+      pending_shipper: 'En attente expediteur',
+      pending_carrier: 'En attente transporteur',
+      in_transit: 'En transit',
+      pending_consignee: 'En attente destinataire',
+      completed: 'Complete',
+      disputed: 'Litige'
+    };
+    doc.fontSize(12).fillColor('#2d3748').text(`Statut: ${statusLabels[ecmr.status] || ecmr.status}`);
+    doc.moveDown();
+
+    // Shipper section
+    doc.fontSize(14).fillColor('#1a365d').text('EXPEDITEUR');
+    doc.fontSize(10).fillColor('#4a5568');
+    doc.text(`Nom: ${ecmr.shipper?.name || 'N/A'}`);
+    doc.text(`Adresse: ${ecmr.shipper?.address || 'N/A'}`);
+    if (ecmr.shipper?.signedAt) {
+      doc.fillColor('#38a169').text(`Signe par ${ecmr.shipper.signedBy} le ${new Date(ecmr.shipper.signedAt).toLocaleString('fr-FR')}`);
+    }
+    doc.moveDown();
+
+    // Carrier section
+    doc.fontSize(14).fillColor('#1a365d').text('TRANSPORTEUR');
+    doc.fontSize(10).fillColor('#4a5568');
+    doc.text(`Nom: ${ecmr.carrier?.name || 'N/A'}`);
+    doc.text(`Chauffeur: ${ecmr.carrier?.driverName || 'N/A'}`);
+    doc.text(`Immatriculation: ${ecmr.carrier?.vehiclePlate || 'N/A'}`);
+    if (ecmr.carrier?.signedAt) {
+      doc.fillColor('#38a169').text(`Signe par ${ecmr.carrier.signedBy} le ${new Date(ecmr.carrier.signedAt).toLocaleString('fr-FR')}`);
+    }
+    doc.moveDown();
+
+    // Consignee section
+    doc.fontSize(14).fillColor('#1a365d').text('DESTINATAIRE');
+    doc.fontSize(10).fillColor('#4a5568');
+    doc.text(`Nom: ${ecmr.consignee?.name || 'N/A'}`);
+    doc.text(`Adresse: ${ecmr.consignee?.address || 'N/A'}`);
+    if (ecmr.consignee?.signedAt) {
+      doc.fillColor('#38a169').text(`Signe par ${ecmr.consignee.signedBy} le ${new Date(ecmr.consignee.signedAt).toLocaleString('fr-FR')}`);
+    }
+    doc.moveDown();
+
+    // Goods section
+    doc.fontSize(14).fillColor('#1a365d').text('MARCHANDISES');
+    doc.fontSize(10).fillColor('#4a5568');
+    doc.text(`Description: ${ecmr.goods?.description || 'N/A'}`);
+    doc.text(`Quantite: ${ecmr.goods?.quantity || 0} | Poids: ${ecmr.goods?.weight || 0} kg | Colis: ${ecmr.goods?.packages || 0}`);
+    doc.moveDown();
+
+    // Pickup & Delivery
+    doc.fontSize(14).fillColor('#1a365d').text('ENLEVEMENT');
+    doc.fontSize(10).fillColor('#4a5568');
+    doc.text(`Date prevue: ${ecmr.pickup?.date || 'N/A'}`);
+    doc.text(`Adresse: ${ecmr.pickup?.address || 'N/A'}`);
+    doc.moveDown();
+
+    doc.fontSize(14).fillColor('#1a365d').text('LIVRAISON');
+    doc.fontSize(10).fillColor('#4a5568');
+    doc.text(`Date prevue: ${ecmr.delivery?.date || 'N/A'}`);
+    doc.text(`Adresse: ${ecmr.delivery?.address || 'N/A'}`);
+    doc.moveDown();
+
+    // Reservations
+    if (ecmr.reservations) {
+      doc.fontSize(14).fillColor('#c53030').text('RESERVES');
+      doc.fontSize(10).fillColor('#4a5568').text(ecmr.reservations);
+      doc.moveDown();
+    }
+
+    // Footer
+    doc.moveDown(2);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e2e8f0');
+    doc.moveDown(0.5);
+    doc.fontSize(8).fillColor('#a0aec0');
+    doc.text(`Document genere le ${new Date().toLocaleString('fr-FR')}`, { align: 'center' });
+    doc.text('SYMPHONI.A - Lettre de Voiture Electronique conforme eIDAS', { align: 'center' });
+    if (ecmr.compliance?.documentHash) {
+      doc.text(`Hash: ${ecmr.compliance.documentHash.substring(0, 32)}...`, { align: 'center' });
+    }
+
+    // Finalize PDF
+    doc.end();
+
+    // Log audit
+    addAuditEntry(ecmr, 'pdf_downloaded', req.query.userId || 'anonymous', 'PDF downloaded', req.ip);
+    await ecmr.save();
+
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/v1/ecmr/:id/history - Get eCMR audit history
 app.get('/api/v1/ecmr/:id/history', async (req, res) => {
   try {
