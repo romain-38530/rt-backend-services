@@ -93,6 +93,62 @@ function getRealCarrierRegion(carrierId, index = 0) {
   return DEMO_CARRIERS[carrierIndex].region;
 }
 
+// Generer des details sur les transports en retard pour les alertes
+function generateDelayedTransportsDetails(count) {
+  const destinations = [
+    'Paris - Entrepot A', 'Lyon - Plateforme B', 'Marseille - Site C', 'Toulouse - Depot D',
+    'Nice - Terminal E', 'Nantes - Hub F', 'Strasbourg - Zone G', 'Montpellier - Quai H',
+    'Bordeaux - Centre I', 'Lille - Station J', 'Rennes - Base K', 'Reims - Point L'
+  ];
+  const reasons = [
+    'Trafic dense', 'Panne vehicule', 'Attente chargement', 'Conditions meteo',
+    'Retard depart', 'Probleme documentation', 'Incident route'
+  ];
+
+  const transports = [];
+  for (let i = 0; i < Math.min(count, 10); i++) {
+    const carrier = DEMO_CARRIERS[i % DEMO_CARRIERS.length];
+    transports.push({
+      transportId: `TR-2024-${1000 + i}`,
+      orderRef: `CMD-${2400 + i}`,
+      carrier: {
+        id: carrier.id,
+        name: carrier.name,
+        region: carrier.region
+      },
+      destination: destinations[i % destinations.length],
+      delayMinutes: 20 + Math.floor(Math.random() * 60),
+      reason: reasons[Math.floor(Math.random() * reasons.length)],
+      etaOriginal: new Date(Date.now() - (30 + Math.floor(Math.random() * 60)) * 60000).toISOString(),
+      etaUpdated: new Date(Date.now() + (20 + Math.floor(Math.random() * 40)) * 60000).toISOString()
+    });
+  }
+  return transports;
+}
+
+// Generer des details sur les transporteurs bloques pour les alertes
+function generateBlockedCarriersDetails(count) {
+  const blockReasons = [
+    'Documents expires', 'Assurance non valide', 'Autorisation manquante',
+    'Incident securite', 'Non-conformite audit', 'Litige en cours'
+  ];
+
+  const carriers = [];
+  for (let i = 0; i < Math.min(count, 10); i++) {
+    const carrier = DEMO_CARRIERS[(i + 5) % DEMO_CARRIERS.length]; // Decaler pour varier
+    carriers.push({
+      carrierId: carrier.id,
+      carrierName: carrier.name,
+      region: carrier.region,
+      blockReason: blockReasons[i % blockReasons.length],
+      blockedSince: new Date(Date.now() - (1 + Math.floor(Math.random() * 7)) * 24 * 60 * 60000).toISOString(),
+      affectedOrders: Math.floor(Math.random() * 5) + 1,
+      contact: `contact@${carrier.name.toLowerCase().replace(/[^a-z]/g, '')}.fr`
+    });
+  }
+  return carriers;
+}
+
 const app = express();
 const server = http.createServer(app);
 
@@ -887,12 +943,17 @@ const AlertService = {
 
     // Retard >20 minutes detecte
     if (operationalKPIs.delays.detectedByTrackingIA > 10) {
+      // Generer des details sur les transports en retard
+      const delayedTransports = generateDelayedTransportsDetails(operationalKPIs.delays.detectedByTrackingIA);
       alerts.push({
         type: 'delay_detected',
         severity: 'high',
         title: 'Retards multiples detectes',
         message: `${operationalKPIs.delays.detectedByTrackingIA} transports en retard detectes par Tracking IA`,
-        data: operationalKPIs.delays
+        data: {
+          ...operationalKPIs.delays,
+          transports: delayedTransports
+        }
       });
     }
 
@@ -909,12 +970,17 @@ const AlertService = {
 
     // Transporteurs bloques
     if (operationalKPIs.vigilance.blockedCarriers > 5) {
+      // Generer des details sur les transporteurs bloques
+      const blockedCarriersDetails = generateBlockedCarriersDetails(operationalKPIs.vigilance.blockedCarriers);
       alerts.push({
         type: 'vigilance_issue',
         severity: 'medium',
         title: 'Transporteurs bloques',
         message: `${operationalKPIs.vigilance.blockedCarriers} transporteurs bloques par vigilance`,
-        data: operationalKPIs.vigilance
+        data: {
+          ...operationalKPIs.vigilance,
+          carriers: blockedCarriersDetails
+        }
       });
     }
 
@@ -1214,14 +1280,29 @@ app.get('/kpi/dashboard', async (req, res) => {
               ? Math.round(topCarriers.reduce((sum, c) => sum + c.score, 0) / topCarriers.length)
               : 0
           },
-          alerts: alerts.slice(0, 5).map(a => ({
-            id: a.alertId,
-            type: a.type,
-            severity: a.severity,
-            title: a.title,
-            message: a.message,
-            createdAt: a.createdAt
-          })),
+          alerts: alerts.slice(0, 5).map(a => {
+            // Enrichir les alertes avec des details si pas deja presentes
+            let enrichedData = a.data || {};
+            if (a.type === 'delay_detected' && !enrichedData.transports) {
+              enrichedData.transports = generateDelayedTransportsDetails(
+                enrichedData.detectedByTrackingIA || 5
+              );
+            }
+            if (a.type === 'vigilance_issue' && !enrichedData.carriers) {
+              enrichedData.carriers = generateBlockedCarriersDetails(
+                enrichedData.blockedCarriers || 5
+              );
+            }
+            return {
+              id: a.alertId,
+              type: a.type,
+              severity: a.severity,
+              title: a.title,
+              message: a.message,
+              createdAt: a.createdAt,
+              data: enrichedData
+            };
+          }),
           charts: {
             ordersTimeline: generateTimelineData(7, 'orders'),
             revenueTimeline: generateTimelineData(7, 'revenue'),
