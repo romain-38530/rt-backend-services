@@ -53,6 +53,30 @@ const CACHE_TTL = {
   daily: 24 * 60 * 60 * 1000 // 24 heures
 };
 
+// Liste de transporteurs reels pour les demos
+const DEMO_CARRIERS = [
+  { id: 'TR-001', name: 'Transports Dupont & Fils', region: 'Ile-de-France' },
+  { id: 'TR-002', name: 'Logistique Express Lyon', region: 'Auvergne-Rhone-Alpes' },
+  { id: 'TR-003', name: 'Fret Atlantique', region: 'Pays de la Loire' },
+  { id: 'TR-004', name: 'Trans-Europe Services', region: 'Grand Est' },
+  { id: 'TR-005', name: 'Messageries du Sud', region: 'Occitanie' },
+  { id: 'TR-006', name: 'Nord Fret International', region: 'Hauts-de-France' },
+  { id: 'TR-007', name: 'Provence Transport', region: 'PACA' },
+  { id: 'TR-008', name: 'Bretagne Logistique', region: 'Bretagne' },
+  { id: 'TR-009', name: 'Alsace Fret Express', region: 'Grand Est' },
+  { id: 'TR-010', name: 'Aquitaine Transport', region: 'Nouvelle-Aquitaine' },
+  { id: 'TR-011', name: 'Centre Loire Logistics', region: 'Centre-Val de Loire' },
+  { id: 'TR-012', name: 'Normandie Express', region: 'Normandie' },
+  { id: 'TR-013', name: 'Bourgogne Fret', region: 'Bourgogne-Franche-Comte' },
+  { id: 'TR-014', name: 'Transports Martin SA', region: 'Ile-de-France' },
+  { id: 'TR-015', name: 'Euro Fret Solutions', region: 'Grand Est' },
+  { id: 'TR-016', name: 'Rapide Livraison', region: 'Auvergne-Rhone-Alpes' },
+  { id: 'TR-017', name: 'Global Freight France', region: 'Ile-de-France' },
+  { id: 'TR-018', name: 'Transports Lefevre', region: 'Hauts-de-France' },
+  { id: 'TR-019', name: 'Sud-Ouest Express', region: 'Nouvelle-Aquitaine' },
+  { id: 'TR-020', name: 'Alpes Fret Services', region: 'Auvergne-Rhone-Alpes' }
+];
+
 const app = express();
 const server = http.createServer(app);
 
@@ -1053,16 +1077,24 @@ app.get('/kpi/global', async (req, res) => {
     // Alertes actives
     const alerts = await AlertService.getActiveAlerts();
 
+    // Generer les top transporteurs avec vrais noms si pas en DB
+    let carriersData = topCarriers;
+    if (topCarriers.length === 0) {
+      carriersData = DEMO_CARRIERS.slice(0, 5).map((carrier, index) => ({
+        carrierId: carrier.id,
+        carrierName: carrier.name,
+        score: 85 - (index * 3) + Math.floor(Math.random() * 5),
+        trends: { evolution: index < 2 ? 'up' : 'stable' },
+        region: carrier.region
+      }));
+    }
+
     res.json({
       success: true,
       data: {
         operational,
         financial,
-        topCarriers: topCarriers.length > 0 ? topCarriers : await Promise.all(
-          ['carrier1', 'carrier2', 'carrier3', 'carrier4', 'carrier5'].map(id =>
-            KPIService.calculateCarrierScore(id)
-          )
-        ),
+        topCarriers: carriersData,
         alerts: alerts.slice(0, 10),
         summary: {
           healthScore: Math.floor(Math.random() * 20) + 75,
@@ -1089,14 +1121,20 @@ app.get('/kpi/dashboard', async (req, res) => {
       KPIService.calculateFinancialKPIs(companyId || 'global')
     ]);
 
-    // Recuperer top transporteurs
+    // Recuperer top transporteurs depuis la DB ou generer avec vrais noms
     let topCarriers = await CarrierScore.find().sort({ score: -1 }).limit(5);
     if (topCarriers.length === 0) {
-      topCarriers = await Promise.all(
-        ['carrier1', 'carrier2', 'carrier3', 'carrier4', 'carrier5'].map(id =>
-          KPIService.calculateCarrierScore(id)
-        )
-      );
+      // Utiliser les 5 premiers transporteurs demo avec des scores realistes
+      const selectedCarriers = DEMO_CARRIERS.slice(0, 5);
+      topCarriers = selectedCarriers.map((carrier, index) => ({
+        carrierId: carrier.id,
+        carrierName: carrier.name,
+        score: 85 - (index * 3) + Math.floor(Math.random() * 5), // Scores decroissants realistes
+        trends: {
+          evolution: index < 2 ? 'up' : (index < 4 ? 'stable' : 'down')
+        },
+        region: carrier.region
+      }));
     }
 
     // Alertes actives
