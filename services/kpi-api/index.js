@@ -758,6 +758,188 @@ app.get('/kpi/global', async (req, res) => {
   }
 });
 
+// GET /kpi/dashboard - Dashboard KPIs pour tous les univers
+app.get('/kpi/dashboard', async (req, res) => {
+  try {
+    const { universe = 'industry', companyId, period = 'month' } = req.query;
+
+    // Calculer les KPIs selon l'univers
+    const [operational, financial] = await Promise.all([
+      KPIService.calculateOperationalKPIs(),
+      KPIService.calculateFinancialKPIs(companyId || 'global')
+    ]);
+
+    // Recuperer top transporteurs
+    let topCarriers = await CarrierScore.find().sort({ score: -1 }).limit(5);
+    if (topCarriers.length === 0) {
+      topCarriers = await Promise.all(
+        ['carrier1', 'carrier2', 'carrier3', 'carrier4', 'carrier5'].map(id =>
+          KPIService.calculateCarrierScore(id)
+        )
+      );
+    }
+
+    // Alertes actives
+    const alerts = await AlertService.getActiveAlerts();
+
+    // Formater les KPIs pour le dashboard selon l'univers
+    let dashboardData = {};
+
+    switch (universe) {
+      case 'industry':
+        dashboardData = {
+          summary: {
+            orders: {
+              value: operational.transportsInProgress?.total || 0,
+              trend: '+12%',
+              label: 'Commandes'
+            },
+            revenue: {
+              value: parseFloat(financial.monthlyTotals?.invoiced || 0),
+              formatted: `€ ${Math.round(parseFloat(financial.monthlyTotals?.invoiced || 0) / 1000)}K`,
+              trend: '+8%',
+              label: 'Chiffre d\'affaires'
+            },
+            deliveries: {
+              value: operational.transportsInProgress?.byStatus?.enRoute || 0,
+              trend: '+5%',
+              label: 'Livraisons'
+            },
+            satisfaction: {
+              value: parseFloat(operational.eta?.accuracy || 95),
+              formatted: `${Math.round(parseFloat(operational.eta?.accuracy || 95))}%`,
+              trend: '+2%',
+              label: 'Satisfaction'
+            }
+          },
+          operational: {
+            transportsInProgress: operational.transportsInProgress,
+            delays: operational.delays,
+            eta: operational.eta,
+            planning: operational.planning
+          },
+          financial: {
+            invoicing: financial.invoicing,
+            margins: financial.margins,
+            monthlyTotals: financial.monthlyTotals
+          },
+          carriers: {
+            top: topCarriers.map(c => ({
+              id: c.carrierId,
+              name: c.carrierName || c.carrierId,
+              score: c.score,
+              trend: c.trends?.evolution || 'stable'
+            })),
+            averageScore: topCarriers.length > 0
+              ? Math.round(topCarriers.reduce((sum, c) => sum + c.score, 0) / topCarriers.length)
+              : 0
+          },
+          alerts: alerts.slice(0, 5).map(a => ({
+            id: a.alertId,
+            type: a.type,
+            severity: a.severity,
+            title: a.title,
+            message: a.message,
+            createdAt: a.createdAt
+          })),
+          charts: {
+            ordersTimeline: generateTimelineData(7, 'orders'),
+            revenueTimeline: generateTimelineData(7, 'revenue'),
+            delaysBreakdown: {
+              carrierCaused: 45,
+              logisticsCaused: 30,
+              externalCaused: 25
+            }
+          }
+        };
+        break;
+
+      case 'transporter':
+        const carrierScore = companyId
+          ? await KPIService.calculateCarrierScore(companyId)
+          : topCarriers[0];
+        dashboardData = {
+          score: carrierScore,
+          ranking: {
+            position: carrierScore.ranking?.global || 1,
+            total: 156,
+            percentile: carrierScore.ranking?.percentile || 75
+          },
+          metrics: carrierScore.metrics,
+          trends: carrierScore.trends
+        };
+        break;
+
+      case 'logistician':
+        const warehouseKpis = await KPIService.calculateLogisticsKPIs(companyId || 'warehouse-1');
+        dashboardData = {
+          summary: {
+            saturation: {
+              value: parseFloat(warehouseKpis.dockPerformance?.dockSaturation || 0),
+              formatted: `${warehouseKpis.dockPerformance?.dockSaturation}%`,
+              label: 'Saturation quais'
+            },
+            waitTime: {
+              value: warehouseKpis.dockPerformance?.averageWaitTime || 0,
+              formatted: `${warehouseKpis.dockPerformance?.averageWaitTime} min`,
+              label: 'Temps attente moyen'
+            },
+            throughput: {
+              value: warehouseKpis.dailyMetrics?.completed || 0,
+              label: 'Camions traites aujourd\'hui'
+            },
+            noShows: {
+              value: parseFloat(warehouseKpis.dockPerformance?.noShowRate || 0),
+              formatted: `${warehouseKpis.dockPerformance?.noShowRate}%`,
+              label: 'Taux no-show'
+            }
+          },
+          realTime: warehouseKpis.realTimeStatus,
+          dockPerformance: warehouseKpis.dockPerformance,
+          coordination: warehouseKpis.coordination
+        };
+        break;
+
+      default:
+        dashboardData = {
+          operational,
+          financial,
+          topCarriers,
+          alerts: alerts.slice(0, 10)
+        };
+    }
+
+    res.json({
+      success: true,
+      data: dashboardData,
+      universe,
+      period,
+      timestamp: new Date()
+    });
+
+  } catch (error) {
+    console.error('Error in /kpi/dashboard:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Helper pour generer des donnees de timeline
+function generateTimelineData(days, type) {
+  const data = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    data.push({
+      date: format(date, 'dd/MM'),
+      value: type === 'orders'
+        ? Math.floor(Math.random() * 50) + 150
+        : Math.floor(Math.random() * 20000) + 30000
+    });
+  }
+  return data;
+}
+
 // GET /kpi/live - Donnees temps reel
 app.get('/kpi/live', async (req, res) => {
   try {
