@@ -27,6 +27,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const WEBSOCKET_URL = process.env.WEBSOCKET_URL;
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 10485760; // 10MB
 const NOTIFICATIONS_API_URL = process.env.NOTIFICATIONS_API_URL || 'http://rt-notifications-api-prod.eba-mttbqqhw.eu-central-1.elasticbeanstalk.com';
+const ECMR_API_URL = process.env.ECMR_API_URL || 'http://rt-ecmr-signature-api-prod.eba-4pgwbyaj.eu-central-1.elasticbeanstalk.com';
 
 // Initialisation Express
 const app = express();
@@ -163,12 +164,90 @@ async function notifyOrderEvent(order, eventType, extraData = {}) {
   await Promise.all(usersToNotify.map(n => sendNotification(n)));
 }
 
+// ==================== eCMR INTEGRATION ====================
+
+/**
+ * Fetch eCMR data for an order from the eCMR API
+ * @param {string} orderId - The order ID
+ * @returns {Object|null} eCMR data with links or null if not found
+ */
+async function getEcmrForOrder(orderId) {
+  try {
+    const response = await fetch(`${ECMR_API_URL}/api/v1/ecmr?orderId=${orderId}&limit=1`);
+    if (!response.ok) return null;
+
+    const result = await response.json();
+    if (!result.success || !result.data || result.data.length === 0) return null;
+
+    const ecmr = result.data[0];
+    return {
+      ecmrId: ecmr.ecmrId,
+      status: ecmr.status,
+      createdAt: ecmr.createdAt,
+      signatures: {
+        shipper: !!ecmr.shipper?.signedAt,
+        carrier: !!ecmr.carrier?.signedAt,
+        consignee: !!ecmr.consignee?.signedAt
+      },
+      links: {
+        view: `${ECMR_API_URL}/api/v1/ecmr/${ecmr.ecmrId}`,
+        pdf: `${ECMR_API_URL}/api/v1/ecmr/${ecmr.ecmrId}/pdf`,
+        download: `${ECMR_API_URL}/api/v1/ecmr/${ecmr.ecmrId}/download`
+      }
+    };
+  } catch (error) {
+    console.warn('[ECMR] Error fetching eCMR for order:', orderId, error.message);
+    return null;
+  }
+}
+
+/**
+ * Enrich order object with eCMR links
+ * @param {Object} order - The order document
+ * @returns {Object} Order with ecmr property added
+ */
+async function enrichOrderWithEcmr(order) {
+  const orderObj = order.toObject ? order.toObject() : order;
+  const ecmr = await getEcmrForOrder(orderObj._id.toString());
+
+  return {
+    ...orderObj,
+    ecmr: ecmr || {
+      available: false,
+      createUrl: `${ECMR_API_URL}/api/v1/ecmr`,
+      message: 'Aucune eCMR associée à cette commande'
+    }
+  };
+}
+
+/**
+ * Enrich multiple orders with eCMR links (in parallel)
+ * @param {Array} orders - Array of order documents
+ * @returns {Array} Orders with ecmr property added
+ */
+async function enrichOrdersWithEcmr(orders) {
+  return Promise.all(orders.map(order => enrichOrderWithEcmr(order)));
+}
+
 // Connexion MongoDB
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('[MONGODB] Connected successfully'))
   .catch(error => console.error('[MONGODB] Connection failed:', error));
 
 // ==================== ROUTES PRINCIPALES ====================
+
+// Middleware pour rediriger les différents formats d'URL vers /api/v1/orders
+app.use((req, res, next) => {
+  // /orders -> /api/v1/orders
+  if (req.path.startsWith('/orders') && !req.path.startsWith('/api/')) {
+    req.url = '/api/v1' + req.url;
+  }
+  // /api/orders -> /api/v1/orders
+  else if (req.path.startsWith('/api/orders')) {
+    req.url = req.url.replace('/api/orders', '/api/v1/orders');
+  }
+  next();
+});
 
 // Health check
 app.get('/health', (req, res) => {
@@ -284,9 +363,12 @@ app.get('/api/v1/orders/:id', async (req, res) => {
       });
     }
 
+    // Enrichir avec les liens eCMR
+    const enrichedOrder = await enrichOrderWithEcmr(order);
+
     res.json({
       success: true,
-      data: order
+      data: enrichedOrder
     });
   } catch (error) {
     console.error('[ERROR] Get order:', error);
@@ -362,6 +444,314 @@ app.delete('/api/v1/orders/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('[ERROR] Delete order:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ==================== eCMR ENDPOINTS ====================
+
+// GET /api/v1/orders/:id/ecmr - Obtenir l'eCMR associée à une commande
+app.get('/api/v1/orders/:id/ecmr', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    const ecmr = await getEcmrForOrder(req.params.id);
+
+    if (!ecmr) {
+      return res.status(404).json({
+        success: false,
+        error: 'Aucune eCMR associée à cette commande',
+        createUrl: `${ECMR_API_URL}/api/v1/ecmr`,
+        orderData: {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          shipper: order.pickup,
+          consignee: order.delivery,
+          carrier: order.assignedCarrier,
+          goods: order.cargo
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: ecmr
+    });
+  } catch (error) {
+    console.error('[ERROR] Get order eCMR:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/v1/orders/:id/ecmr - Créer une eCMR pour une commande
+app.post('/api/v1/orders/:id/ecmr', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    // Vérifier si une eCMR existe déjà
+    const existingEcmr = await getEcmrForOrder(req.params.id);
+    if (existingEcmr) {
+      return res.status(409).json({
+        success: false,
+        error: 'Une eCMR existe déjà pour cette commande',
+        data: existingEcmr
+      });
+    }
+
+    // Préparer les données eCMR depuis la commande
+    const ecmrData = {
+      orderId: order._id.toString(),
+      orderRef: order.orderNumber,
+      shipper: {
+        name: order.pickup?.name || order.pickup?.company || 'N/A',
+        address: order.pickup?.address,
+        city: order.pickup?.city,
+        postalCode: order.pickup?.postalCode,
+        country: order.pickup?.country || 'France',
+        contactName: order.pickup?.contactName,
+        contactPhone: order.pickup?.phone
+      },
+      carrier: {
+        name: order.assignedCarrier?.carrierName || order.assignedCarrier?.name || 'N/A',
+        carrierId: order.assignedCarrier?.carrierId,
+        driverName: order.assignedCarrier?.driverName,
+        vehiclePlate: order.assignedCarrier?.vehiclePlate || order.assignedCarrier?.tractorPlate
+      },
+      consignee: {
+        name: order.delivery?.name || order.delivery?.company || 'N/A',
+        address: order.delivery?.address,
+        city: order.delivery?.city,
+        postalCode: order.delivery?.postalCode,
+        country: order.delivery?.country || 'France',
+        contactName: order.delivery?.contactName,
+        contactPhone: order.delivery?.phone
+      },
+      goods: {
+        description: order.cargo?.description || order.cargo?.type || 'Marchandises',
+        quantity: order.cargo?.quantity,
+        weight: order.cargo?.weight?.value,
+        volume: order.cargo?.volume?.value,
+        packages: order.cargo?.quantity,
+        packaging: order.cargo?.packaging,
+        dangerousGoods: order.cargo?.hazardous ? {
+          isDangerous: true,
+          unNumber: order.cargo?.hazardous?.unNumber,
+          class: order.cargo?.hazardous?.class
+        } : { isDangerous: false }
+      },
+      pickup: {
+        address: order.pickup?.address,
+        city: order.pickup?.city,
+        postalCode: order.pickup?.postalCode,
+        country: order.pickup?.country || 'France',
+        scheduledDate: order.pickupDate,
+        instructions: order.pickup?.instructions
+      },
+      delivery: {
+        address: order.delivery?.address,
+        city: order.delivery?.city,
+        postalCode: order.delivery?.postalCode,
+        country: order.delivery?.country || 'France',
+        scheduledDate: order.deliveryDate,
+        instructions: order.delivery?.instructions
+      },
+      createdBy: req.body.createdBy || 'orders-api'
+    };
+
+    // Appeler l'API eCMR pour créer le document
+    const response = await fetch(`${ECMR_API_URL}/api/v1/ecmr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ecmrData)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      return res.status(response.status).json({
+        success: false,
+        error: result.error || 'Erreur lors de la création de l\'eCMR'
+      });
+    }
+
+    // Émettre événement WebSocket
+    emitEvent('order.ecmr_created', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      ecmrId: result.data.ecmrId
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'eCMR créée avec succès',
+      data: {
+        ecmrId: result.data.ecmrId,
+        status: result.data.status,
+        links: {
+          view: `${ECMR_API_URL}/api/v1/ecmr/${result.data.ecmrId}`,
+          pdf: `${ECMR_API_URL}/api/v1/ecmr/${result.data.ecmrId}/pdf`,
+          download: `${ECMR_API_URL}/api/v1/ecmr/${result.data.ecmrId}/download`
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[ERROR] Create order eCMR:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/v1/orders/:id/ecmr/pdf - Télécharger directement le PDF de l'eCMR
+app.get('/api/v1/orders/:id/ecmr/pdf', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    const ecmr = await getEcmrForOrder(req.params.id);
+
+    if (!ecmr) {
+      return res.status(404).json({
+        success: false,
+        error: 'Aucune eCMR associée à cette commande'
+      });
+    }
+
+    // Proxy le PDF depuis l'API eCMR (évite les problèmes HTTP/HTTPS mixed content)
+    const pdfUrl = `${ECMR_API_URL}/api/v1/ecmr/${ecmr.ecmrId}/pdf`;
+    console.log('[ECMR] Fetching PDF from:', pdfUrl);
+
+    const pdfResponse = await fetch(pdfUrl);
+
+    if (!pdfResponse.ok) {
+      return res.status(pdfResponse.status).json({
+        success: false,
+        error: 'Erreur lors de la récupération du PDF'
+      });
+    }
+
+    // Transférer les headers appropriés
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="eCMR-${ecmr.ecmrId}.pdf"`);
+
+    // Streamer le PDF vers le client
+    const arrayBuffer = await pdfResponse.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (error) {
+    console.error('[ERROR] Get order eCMR PDF:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ==================== TRACKING ====================
+
+// GET /api/v1/orders/:id/tracking - Obtenir le suivi d'une commande
+app.get('/api/v1/orders/:id/tracking', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    // Construire les données de tracking depuis la commande
+    const trackingData = {
+      orderId: order._id,
+      reference: order.reference || order.orderNumber,
+      status: order.status,
+      currentLocation: order.currentLocation || null,
+      tracking: order.tracking || { isActive: false, events: [] },
+      dates: {
+        pickup: {
+          scheduled: order.dates?.pickupDate,
+          actual: order.dates?.actualPickupDate
+        },
+        delivery: {
+          scheduled: order.dates?.deliveryDate,
+          actual: order.dates?.actualDeliveryDate
+        }
+      },
+      carrier: order.assignedCarrier ? {
+        name: order.assignedCarrier.carrierName || order.carrierName,
+        driverName: order.assignedCarrier.driverName,
+        driverPhone: order.assignedCarrier.driverPhone,
+        vehiclePlate: order.assignedCarrier.vehiclePlate || order.assignedCarrier.tractorPlate
+      } : null,
+      events: order.events || [],
+      updatedAt: order.updatedAt
+    };
+
+    res.json({
+      success: true,
+      data: trackingData
+    });
+  } catch (error) {
+    console.error('[ERROR] Get order tracking:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ==================== EVENTS ====================
+
+// GET /api/v1/orders/:id/events - Obtenir les événements d'une commande
+app.get('/api/v1/orders/:id/events', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        orderId: order._id,
+        reference: order.reference || order.orderNumber,
+        events: order.events || [],
+        tracking: order.tracking?.events || []
+      }
+    });
+  } catch (error) {
+    console.error('[ERROR] Get order events:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -937,6 +1327,7 @@ app.listen(PORT, () => {
 ║              ✓ Export CSV                                    ║
 ║              ✓ Templates récurrents                          ║
 ║              ✓ Détection doublons                            ║
+║              ✓ Intégration eCMR (PDF CMR officiel)           ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
   `);

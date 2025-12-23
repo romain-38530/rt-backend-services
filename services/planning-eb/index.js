@@ -46,6 +46,8 @@ app.use((req, res, next) => {
     req.url = req.url.replace('/api/v1/planning', '');
   } else if (req.url.startsWith('/api/v1/')) {
     req.url = req.url.replace('/api/v1/', '/');
+  } else if (req.url.startsWith('/api/')) {
+    req.url = req.url.replace('/api/', '/');
   }
   next();
 });
@@ -58,8 +60,8 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '1.0.0',
-    features: ['express', 'cors', 'helmet', 'mongodb'],
+    version: '1.1.0',
+    features: ['express', 'cors', 'helmet', 'mongodb', 'appointments'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected
@@ -86,13 +88,125 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT Planning API',
-    version: '1.0.0',
-    features: ['Express', 'MongoDB', 'CORS', 'Helmet'],
+    version: '1.1.0',
+    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'Appointments'],
     endpoints: [
       'GET /health',
-      'GET /'
+      'GET /',
+      'GET /appointments',
+      'GET /appointments/order/:orderId',
+      'POST /appointments'
     ]
   });
+});
+
+// ===========================================
+// APPOINTMENTS ENDPOINTS
+// ===========================================
+
+// Get appointments by order ID
+app.get('/appointments/order/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    if (!mongoConnected || !db) {
+      // Return empty array if MongoDB not connected
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No appointments found'
+      });
+    }
+
+    const appointments = await db.collection('appointments')
+      .find({ orderId })
+      .sort({ scheduledDate: 1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      data: appointments
+    });
+  } catch (error) {
+    console.error('Error fetching appointments:', error);
+    res.json({
+      success: true,
+      data: [],
+      message: 'No appointments found'
+    });
+  }
+});
+
+// Get all appointments
+app.get('/appointments', async (req, res) => {
+  try {
+    if (!mongoConnected || !db) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const appointments = await db.collection('appointments')
+      .find({})
+      .sort({ scheduledDate: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .toArray();
+
+    const total = await db.collection('appointments').countDocuments();
+
+    res.json({
+      success: true,
+      data: appointments,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching appointments:', error);
+    res.json({
+      success: true,
+      data: []
+    });
+  }
+});
+
+// Create appointment
+app.post('/appointments', async (req, res) => {
+  try {
+    if (!mongoConnected || !db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not available'
+      });
+    }
+
+    const appointment = {
+      ...req.body,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('appointments').insertOne(appointment);
+
+    res.status(201).json({
+      success: true,
+      data: { ...appointment, _id: result.insertedId }
+    });
+  } catch (error) {
+    console.error('Error creating appointment:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Start server
