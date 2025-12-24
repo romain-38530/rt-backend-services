@@ -2170,6 +2170,181 @@ app.get('/api/billing/webhooks', authenticateToken, async (req, res) => {
 });
 
 // ===========================================
+// ROUTES API - VALIDATION & PAIEMENT (Frontend Industry)
+// ===========================================
+
+// Valider une prefacturation (Industriel)
+app.post('/api/billing/prefacturation/:id/validate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { comments, adjustments } = req.body;
+
+    const prefacturation = await Prefacturation.findOne({
+      $or: [{ prefacturationId: id }, { _id: id }]
+    });
+
+    if (!prefacturation) {
+      return res.status(404).json({ success: false, error: 'Prefacturation non trouvee' });
+    }
+
+    prefacturation.status = 'validated_industrial';
+    prefacturation.carrierValidation = {
+      ...prefacturation.carrierValidation,
+      status: 'validated',
+      respondedAt: new Date(),
+      validatedBy: req.user?.id || 'system',
+      comments: comments || ''
+    };
+
+    if (adjustments && typeof adjustments === 'object') {
+      if (adjustments.totalHT !== undefined) {
+        prefacturation.calculation.totalHT = parseFloat(adjustments.totalHT);
+        prefacturation.calculation.tva = prefacturation.calculation.totalHT * TVA_RATE;
+        prefacturation.calculation.totalTTC = prefacturation.calculation.totalHT * (1 + TVA_RATE);
+      }
+    }
+
+    prefacturation.auditTrail.push({
+      action: 'validated_by_industrial',
+      timestamp: new Date(),
+      userId: req.user?.id || 'system',
+      details: { comments, adjustments }
+    });
+
+    await prefacturation.save();
+    res.json({ success: true, data: prefacturation });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Marquer comme paye
+app.post('/api/billing/prefacturation/:id/mark-paid', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentReference, paymentDate, amount, paymentMethod } = req.body;
+
+    const prefacturation = await Prefacturation.findOne({
+      $or: [{ prefacturationId: id }, { _id: id }]
+    });
+
+    if (!prefacturation) {
+      return res.status(404).json({ success: false, error: 'Prefacturation non trouvee' });
+    }
+
+    prefacturation.status = 'paid';
+    prefacturation.payment = {
+      status: 'paid',
+      paidAt: paymentDate ? new Date(paymentDate) : new Date(),
+      reference: paymentReference || `PAY-${Date.now()}`,
+      amount: amount || prefacturation.calculation.totalTTC,
+      method: paymentMethod || 'virement'
+    };
+
+    prefacturation.auditTrail.push({
+      action: 'marked_as_paid',
+      timestamp: new Date(),
+      userId: req.user?.id || 'system',
+      details: { paymentReference, paymentDate, amount, paymentMethod }
+    });
+
+    await prefacturation.save();
+    res.json({ success: true, data: prefacturation });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Contester une prefacturation
+app.post('/api/billing/prefacturation/:id/dispute', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason, proposedAmount } = req.body;
+
+    const prefacturation = await Prefacturation.findOne({
+      $or: [{ prefacturationId: id }, { _id: id }]
+    });
+
+    if (!prefacturation) {
+      return res.status(404).json({ success: false, error: 'Prefacturation non trouvee' });
+    }
+
+    const dispute = new BillingDispute({
+      disputeId: `DISP-${Date.now()}`,
+      prefacturationId: prefacturation.prefacturationId,
+      orderId: prefacturation.orderId,
+      transporterId: prefacturation.transporterId,
+      clientId: prefacturation.clientId,
+      type: 'price',
+      symphoniaAmount: prefacturation.calculation.totalTTC,
+      carrierAmount: proposedAmount || prefacturation.calculation.totalTTC,
+      difference: Math.abs((proposedAmount || prefacturation.calculation.totalTTC) - prefacturation.calculation.totalTTC),
+      contestedItems: [{ item: 'total', reason }],
+      status: 'open',
+      openedAt: new Date(),
+      openedBy: req.user?.id || 'system'
+    });
+
+    await dispute.save();
+
+    prefacturation.status = 'contested';
+    prefacturation.auditTrail.push({
+      action: 'dispute_opened',
+      timestamp: new Date(),
+      userId: req.user?.id || 'system',
+      details: { disputeId: dispute.disputeId, reason, proposedAmount }
+    });
+
+    await prefacturation.save();
+    res.json({ success: true, data: { prefacturation, dispute } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Export pour paiement (CSV)
+app.get('/api/billing/prefacturations/export', authenticateToken, async (req, res) => {
+  try {
+    const { status, month, year, clientId } = req.query;
+    const filter = {};
+
+    if (status) filter.status = status;
+    if (clientId) filter.clientId = clientId;
+
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const prefacturations = await Prefacturation.find(filter).sort({ createdAt: -1 });
+
+    const csvRows = [
+      ['Reference', 'Transporteur', 'Date', 'Montant HT', 'TVA', 'Montant TTC', 'Statut', 'IBAN'].join(';')
+    ];
+
+    prefacturations.forEach(p => {
+      csvRows.push([
+        p.prefacturationId,
+        p.transporterName || p.transporterId,
+        moment(p.createdAt).format('DD/MM/YYYY'),
+        (p.calculation?.totalHT || 0).toFixed(2),
+        (p.calculation?.tva || 0).toFixed(2),
+        (p.calculation?.totalTTC || 0).toFixed(2),
+        p.status,
+        p.payment?.iban || ''
+      ].join(';'));
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="export-prefacturations-${month}-${year}.csv"`);
+    res.send('\uFEFF' + csvRows.join('\n'));
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ===========================================
 // ROUTES API - STATISTIQUES
 // ===========================================
 
