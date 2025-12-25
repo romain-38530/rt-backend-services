@@ -24,6 +24,10 @@ const PDFDocument = require('pdfkit');
 const multer = require('multer');
 const moment = require('moment');
 const xml2js = require('xml2js');
+const nodemailer = require('nodemailer');
+const { SESClient, SendEmailCommand, SendRawEmailCommand } = require('@aws-sdk/client-ses');
+const Mailgun = require('mailgun.js');
+const FormData = require('form-data');
 
 const app = express();
 app.use(cors());
@@ -58,6 +62,1807 @@ const ARCHIVE_RETENTION_YEARS = 10;
 
 // TVA France
 const TVA_RATE = 0.20;
+
+// ===========================================
+// EXTERNAL APIS CONFIGURATION
+// ===========================================
+const ORDERS_API_URL = process.env.ORDERS_API_URL || 'http://rt-orders-api-prod-v2.eba-4tprbbqu.eu-central-1.elasticbeanstalk.com';
+const KPI_API_URL = process.env.KPI_API_URL || 'http://rt-kpi-api-prod.eba-ptuvs3pm.eu-central-1.elasticbeanstalk.com';
+const TRACKING_API_URL = process.env.TRACKING_API_URL || 'http://rt-tracking-api-prod.eba-mwnftqbp.eu-central-1.elasticbeanstalk.com';
+
+// ===========================================
+// ORDERS SERVICE - Connexion à orders-api
+// ===========================================
+const OrdersService = {
+  /**
+   * Récupérer une commande par son numéro
+   */
+  async getOrderByNumber(orderNumber) {
+    try {
+      // Essayer d'abord par endpoint dédié, sinon chercher dans la liste
+      const response = await axios.get(`${ORDERS_API_URL}/api/orders?orderNumber=${orderNumber}`, {
+        timeout: 10000
+      });
+      const orders = response.data.data || response.data.orders || response.data;
+      if (Array.isArray(orders) && orders.length > 0) {
+        return orders[0];
+      }
+      return null;
+    } catch (error) {
+      console.error('[ORDERS] Error fetching order:', orderNumber, error.message);
+      return null;
+    }
+  },
+
+  /**
+   * Récupérer une commande par son ID
+   */
+  async getOrderById(orderId) {
+    try {
+      const response = await axios.get(`${ORDERS_API_URL}/api/orders/${orderId}`, {
+        timeout: 10000
+      });
+      // orders-api retourne { success: true, data: {...} }
+      return response.data.data || response.data.order || response.data;
+    } catch (error) {
+      console.error('[ORDERS] Error fetching order by id:', orderId, error.message);
+      return null;
+    }
+  },
+
+  /**
+   * Récupérer les commandes livrées d'un transporteur (pour génération préfacturation)
+   */
+  async getDeliveredOrdersByCarrier(carrierId, startDate, endDate) {
+    try {
+      const params = new URLSearchParams({
+        carrierId,
+        status: 'delivered',
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+      const response = await axios.get(`${ORDERS_API_URL}/api/orders?${params}`, {
+        timeout: 15000
+      });
+      return response.data.orders || response.data || [];
+    } catch (error) {
+      console.error('[ORDERS] Error fetching delivered orders:', error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Récupérer les commandes livrées d'un client (industriel)
+   */
+  async getDeliveredOrdersByClient(organizationId, startDate, endDate) {
+    try {
+      const params = new URLSearchParams({
+        organizationId,
+        status: 'delivered',
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+      const response = await axios.get(`${ORDERS_API_URL}/api/orders?${params}`, {
+        timeout: 15000
+      });
+      return response.data.orders || response.data || [];
+    } catch (error) {
+      console.error('[ORDERS] Error fetching client orders:', error.message);
+      return [];
+    }
+  }
+};
+
+// ===========================================
+// KPI SERVICE - Récupération des KPI mensuels
+// ===========================================
+const KPIService = {
+  /**
+   * Récupérer les KPI d'un transporteur pour le mois passé
+   */
+  async getCarrierMonthlyKPI(carrierId, month, year) {
+    try {
+      const response = await axios.get(`${KPI_API_URL}/api/kpi/carrier/${carrierId}/monthly`, {
+        params: { month, year },
+        timeout: 10000
+      });
+      return response.data;
+    } catch (error) {
+      console.warn('[KPI] Could not fetch carrier KPI:', error.message);
+      return null;
+    }
+  },
+
+  /**
+   * Récupérer les statistiques globales d'un transporteur
+   */
+  async getCarrierStats(carrierId) {
+    try {
+      const response = await axios.get(`${KPI_API_URL}/api/kpi/carrier/${carrierId}/stats`, {
+        timeout: 10000
+      });
+      return response.data;
+    } catch (error) {
+      console.warn('[KPI] Could not fetch carrier stats:', error.message);
+      return null;
+    }
+  }
+};
+
+// ===========================================
+// CLAUDE AI SERVICE - Analyse KPI & Préconisations
+// ===========================================
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+const ClaudeAIService = {
+  /**
+   * Génère une analyse IA des KPI avec préconisations personnalisées
+   * @param {Object} kpiData - Données KPI du transporteur
+   * @param {String} transporterName - Nom du transporteur
+   * @returns {Object} Analyse et préconisations
+   */
+  async analyzeKPI(kpiData, transporterName) {
+    // Si pas de clé API, générer une analyse basique basée sur les règles
+    if (!ANTHROPIC_API_KEY) {
+      return this.generateBasicAnalysis(kpiData, transporterName);
+    }
+
+    try {
+      const prompt = `Tu es un expert en logistique transport. Analyse ces KPI d'un transporteur et donne des préconisations concrètes pour améliorer ses performances.
+
+TRANSPORTEUR: ${transporterName}
+
+KPI DU MOIS:
+- Livraisons effectuées: ${kpiData.deliveries || 0}
+- Taux de ponctualité: ${(kpiData.onTimeRate || 0).toFixed(1)}%
+- Nombre d'incidents: ${kpiData.incidents || 0}
+- Satisfaction client: ${(kpiData.satisfactionRate || 0).toFixed(1)}/5
+- Distance totale: ${(kpiData.totalDistance || 0).toLocaleString('fr-FR')} km
+- CA généré: ${(kpiData.revenue || 0).toLocaleString('fr-FR')} €
+- Score global: ${kpiData.globalScore || 0}/100
+
+Réponds en JSON avec cette structure exacte:
+{
+  "summary": "Résumé en 2 phrases maximum de la performance globale",
+  "strengths": ["Point fort 1", "Point fort 2"],
+  "improvements": ["Axe amélioration 1", "Axe amélioration 2", "Axe amélioration 3"],
+  "recommendations": [
+    {"priority": "haute", "action": "Action concrète 1", "impact": "Impact attendu"},
+    {"priority": "moyenne", "action": "Action concrète 2", "impact": "Impact attendu"},
+    {"priority": "basse", "action": "Action concrète 3", "impact": "Impact attendu"}
+  ],
+  "trend": "hausse" ou "stable" ou "baisse"
+}`;
+
+      const response = await axios.post('https://api.anthropic.com/v1/messages', {
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }]
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        timeout: 15000
+      });
+
+      const content = response.data.content[0].text;
+      // Extraire le JSON de la réponse
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      return this.generateBasicAnalysis(kpiData, transporterName);
+    } catch (error) {
+      console.warn('[CLAUDE AI] Error:', error.message);
+      return this.generateBasicAnalysis(kpiData, transporterName);
+    }
+  },
+
+  /**
+   * Génère une analyse basique sans IA (fallback)
+   */
+  generateBasicAnalysis(kpiData, transporterName) {
+    const punctuality = kpiData.onTimeRate || 0;
+    const satisfaction = kpiData.satisfactionRate || 0;
+    const incidents = kpiData.incidents || 0;
+    const score = kpiData.globalScore || 0;
+
+    const strengths = [];
+    const improvements = [];
+    const recommendations = [];
+
+    // Analyse ponctualité
+    if (punctuality >= 95) {
+      strengths.push('Excellente ponctualité des livraisons');
+    } else if (punctuality >= 85) {
+      strengths.push('Bonne ponctualité globale');
+      improvements.push('Optimiser les créneaux de livraison');
+      recommendations.push({
+        priority: 'moyenne',
+        action: 'Analyser les retards récurrents par zone géographique',
+        impact: '+3-5% de ponctualité'
+      });
+    } else {
+      improvements.push('Ponctualité à améliorer significativement');
+      recommendations.push({
+        priority: 'haute',
+        action: 'Mettre en place un suivi temps réel des livraisons avec alertes',
+        impact: '+10-15% de ponctualité attendu'
+      });
+    }
+
+    // Analyse satisfaction
+    if (satisfaction >= 4.5) {
+      strengths.push('Satisfaction client excellente');
+    } else if (satisfaction >= 3.5) {
+      improvements.push('Satisfaction client à renforcer');
+      recommendations.push({
+        priority: 'moyenne',
+        action: 'Former les chauffeurs à la relation client',
+        impact: '+0.5 point de satisfaction'
+      });
+    } else {
+      improvements.push('Satisfaction client critique');
+      recommendations.push({
+        priority: 'haute',
+        action: 'Audit qualité immédiat et plan d\'action correctif',
+        impact: 'Éviter la perte de contrats'
+      });
+    }
+
+    // Analyse incidents
+    if (incidents === 0) {
+      strengths.push('Zéro incident ce mois');
+    } else if (incidents <= 2) {
+      improvements.push('Réduire les incidents');
+      recommendations.push({
+        priority: 'basse',
+        action: 'Analyser les causes racines des incidents',
+        impact: 'Prévention des récidives'
+      });
+    } else {
+      improvements.push('Trop d\'incidents signalés');
+      recommendations.push({
+        priority: 'haute',
+        action: 'Plan de formation sécurité et manipulation marchandises',
+        impact: 'Réduction de 50% des incidents'
+      });
+    }
+
+    // Recommandation générale selon score
+    if (score < 60) {
+      recommendations.push({
+        priority: 'haute',
+        action: 'Rendez-vous bilan avec le responsable exploitation',
+        impact: 'Définir un plan de redressement'
+      });
+    } else if (score < 80) {
+      recommendations.push({
+        priority: 'moyenne',
+        action: 'Optimiser la planification des tournées',
+        impact: '+5-10% de productivité'
+      });
+    } else {
+      recommendations.push({
+        priority: 'basse',
+        action: 'Maintenir les bonnes pratiques et partager avec l\'équipe',
+        impact: 'Capitalisation des succès'
+      });
+    }
+
+    // Déterminer la tendance
+    let trend = 'stable';
+    if (score >= 80 && punctuality >= 90 && incidents <= 1) {
+      trend = 'hausse';
+    } else if (score < 60 || punctuality < 80 || incidents > 3) {
+      trend = 'baisse';
+    }
+
+    // Générer le résumé
+    let summary = '';
+    if (score >= 80) {
+      summary = `${transporterName} affiche d'excellentes performances ce mois avec un score de ${score}/100. La qualité de service est au rendez-vous.`;
+    } else if (score >= 60) {
+      summary = `${transporterName} présente des performances correctes (${score}/100) mais des axes d'amélioration existent. Focus recommandé sur la ponctualité.`;
+    } else {
+      summary = `${transporterName} doit améliorer ses performances (${score}/100). Des actions correctives sont nécessaires rapidement.`;
+    }
+
+    return {
+      summary,
+      strengths: strengths.length > 0 ? strengths : ['Engagement dans la démarche qualité'],
+      improvements: improvements.length > 0 ? improvements : ['Maintenir le niveau actuel'],
+      recommendations: recommendations.slice(0, 3),
+      trend
+    };
+  }
+};
+
+// ===========================================
+// TARIFF CALCULATION SERVICE
+// ===========================================
+const TariffCalculationService = {
+  /**
+   * Calculer le prix d'une commande selon la grille tarifaire
+   * Modes de tarification supportés:
+   * - 'weight' / 'poids': Tarification au poids (€/kg ou €/tonne)
+   * - 'palette' / 'pallet': Tarification à la palette (€/palette)
+   * - 'complete' / 'complet' / 'ftl': Tarification au complet (forfait camion)
+   * - 'distance': Tarification au km
+   * - 'zone': Tarification par zone géographique
+   *
+   * @param {Object} order - Commande orders-api
+   * @param {Object} tariffGrid - Grille tarifaire applicable
+   * @returns {Object} Détail du calcul
+   */
+  calculateOrderPrice(order, tariffGrid) {
+    const details = [];
+    let totalHT = 0;
+
+    // Extraire les données de la commande
+    const distance = order.pricing?.breakdown?.distance || order.pricing?.distance || order.distance || 0;
+    const weight = typeof order.cargo?.weight === 'number' ? order.cargo.weight :
+                   order.cargo?.weight?.value || order.goods?.weight || 0;
+    const pallets = order.cargo?.pallets || order.cargo?.quantity || order.goods?.palettes || order.goods?.quantity || 0;
+    const volume = order.cargo?.volume?.value || order.goods?.volume || 0;
+
+    let basePrice = 0;
+
+    // Déterminer le mode de tarification
+    const pricingMode = tariffGrid?.pricingMode || tariffGrid?.mode || 'distance';
+
+    console.log(`[TARIF] Mode: ${pricingMode}, Distance: ${distance}km, Poids: ${weight}kg, Palettes: ${pallets}`);
+
+    if (tariffGrid) {
+      switch (pricingMode.toLowerCase()) {
+
+        // ========== TARIFICATION AU POIDS ==========
+        case 'weight':
+        case 'poids':
+        case 'kg':
+        case 'tonne': {
+          const weightRates = tariffGrid.weightRates || tariffGrid.baseRates || [];
+          const weightInTonnes = weight / 1000;
+
+          // Trouver le tarif applicable selon le poids
+          let applicableRate = weightRates.find(rate => {
+            const minWeight = rate.minWeight || rate.minKg || 0;
+            const maxWeight = rate.maxWeight || rate.maxKg || Infinity;
+            return weight >= minWeight && weight <= maxWeight;
+          });
+
+          if (applicableRate) {
+            if (applicableRate.pricePerKg) {
+              basePrice = weight * applicableRate.pricePerKg;
+              details.push({
+                item: 'Transport au poids',
+                description: `${weight} kg x ${applicableRate.pricePerKg.toFixed(3)} €/kg`,
+                quantity: weight,
+                unitPrice: applicableRate.pricePerKg,
+                total: basePrice
+              });
+            } else if (applicableRate.pricePerTonne) {
+              basePrice = weightInTonnes * applicableRate.pricePerTonne;
+              details.push({
+                item: 'Transport au poids',
+                description: `${weightInTonnes.toFixed(2)} T x ${applicableRate.pricePerTonne.toFixed(2)} €/T`,
+                quantity: weightInTonnes,
+                unitPrice: applicableRate.pricePerTonne,
+                total: basePrice
+              });
+            } else if (applicableRate.fixedPrice) {
+              basePrice = applicableRate.fixedPrice;
+              details.push({
+                item: 'Forfait poids',
+                description: `Tranche ${applicableRate.minWeight || 0}-${applicableRate.maxWeight || '+'} kg`,
+                quantity: 1,
+                unitPrice: basePrice,
+                total: basePrice
+              });
+            }
+          }
+
+          // Majoration distance si définie
+          if (tariffGrid.distanceSurcharge && distance > 0) {
+            const distancePrice = distance * (tariffGrid.distanceSurcharge.pricePerKm || 0);
+            if (distancePrice > 0) {
+              details.push({
+                item: 'Supplément distance',
+                description: `${distance} km x ${tariffGrid.distanceSurcharge.pricePerKm.toFixed(2)} €/km`,
+                quantity: distance,
+                unitPrice: tariffGrid.distanceSurcharge.pricePerKm,
+                total: distancePrice
+              });
+              basePrice += distancePrice;
+            }
+          }
+          break;
+        }
+
+        // ========== TARIFICATION À LA PALETTE ==========
+        case 'palette':
+        case 'pallet':
+        case 'palettes': {
+          const paletteRates = tariffGrid.paletteRates || tariffGrid.baseRates || [];
+
+          // Chercher tarif par zone/distance si disponible
+          let applicableRate = paletteRates.find(rate => {
+            if (rate.zoneFrom && rate.zoneTo) {
+              // Tarif par zone - vérifier si applicable
+              return true; // Simplification, à améliorer avec géocodage
+            }
+            const minDist = rate.minKm || rate.minDistance || 0;
+            const maxDist = rate.maxKm || rate.maxDistance || Infinity;
+            return distance >= minDist && distance <= maxDist;
+          });
+
+          if (!applicableRate && paletteRates.length > 0) {
+            applicableRate = paletteRates[0]; // Tarif par défaut
+          }
+
+          if (applicableRate) {
+            const pricePerPalette = applicableRate.pricePerPalette || applicableRate.unitPrice || 25;
+            basePrice = pallets * pricePerPalette;
+            details.push({
+              item: 'Transport palettes',
+              description: `${pallets} palette(s) x ${pricePerPalette.toFixed(2)} €`,
+              quantity: pallets,
+              unitPrice: pricePerPalette,
+              total: basePrice
+            });
+
+            // Minimum de facturation
+            const minimum = applicableRate.minimumCharge || tariffGrid.minimumCharge || 0;
+            if (basePrice < minimum) {
+              const supplement = minimum - basePrice;
+              details.push({
+                item: 'Minimum facturation',
+                description: `Complément minimum ${minimum.toFixed(2)} €`,
+                quantity: 1,
+                unitPrice: supplement,
+                total: supplement
+              });
+              basePrice = minimum;
+            }
+          }
+
+          // Supplément distance si hors zone
+          if (tariffGrid.distanceSurcharge && distance > (tariffGrid.distanceSurcharge.freeKm || 0)) {
+            const extraKm = distance - (tariffGrid.distanceSurcharge.freeKm || 0);
+            const distancePrice = extraKm * (tariffGrid.distanceSurcharge.pricePerKm || 0.5);
+            if (distancePrice > 0) {
+              details.push({
+                item: 'Supplément hors zone',
+                description: `${extraKm} km supplémentaires x ${tariffGrid.distanceSurcharge.pricePerKm || 0.5} €/km`,
+                quantity: extraKm,
+                unitPrice: tariffGrid.distanceSurcharge.pricePerKm || 0.5,
+                total: distancePrice
+              });
+              basePrice += distancePrice;
+            }
+          }
+          break;
+        }
+
+        // ========== TARIFICATION AU COMPLET (FTL) ==========
+        case 'complete':
+        case 'complet':
+        case 'ftl':
+        case 'full_truck': {
+          const ftlRates = tariffGrid.ftlRates || tariffGrid.completeRates || tariffGrid.baseRates || [];
+
+          // Chercher tarif par distance ou zone
+          let applicableRate = ftlRates.find(rate => {
+            if (rate.zoneFrom && rate.zoneTo) {
+              return true; // Simplification
+            }
+            const minDist = rate.minKm || rate.minDistance || 0;
+            const maxDist = rate.maxKm || rate.maxDistance || Infinity;
+            return distance >= minDist && distance <= maxDist;
+          });
+
+          if (!applicableRate && ftlRates.length > 0) {
+            applicableRate = ftlRates[0];
+          }
+
+          if (applicableRate) {
+            if (applicableRate.fixedPrice || applicableRate.price) {
+              basePrice = applicableRate.fixedPrice || applicableRate.price;
+              details.push({
+                item: 'Camion complet',
+                description: `Forfait ${applicableRate.vehicleType || 'standard'} - ${applicableRate.zoneName || distance + ' km'}`,
+                quantity: 1,
+                unitPrice: basePrice,
+                total: basePrice
+              });
+            } else if (applicableRate.pricePerKm) {
+              basePrice = distance * applicableRate.pricePerKm;
+              const minPrice = applicableRate.minimumPrice || 200;
+              if (basePrice < minPrice) {
+                basePrice = minPrice;
+                details.push({
+                  item: 'Camion complet',
+                  description: `Minimum facturation ${minPrice.toFixed(2)} €`,
+                  quantity: 1,
+                  unitPrice: minPrice,
+                  total: minPrice
+                });
+              } else {
+                details.push({
+                  item: 'Camion complet',
+                  description: `${distance} km x ${applicableRate.pricePerKm.toFixed(2)} €/km`,
+                  quantity: distance,
+                  unitPrice: applicableRate.pricePerKm,
+                  total: basePrice
+                });
+              }
+            }
+          }
+          break;
+        }
+
+        // ========== TARIFICATION PAR ZONE ==========
+        case 'zone':
+        case 'zones': {
+          const zoneRates = tariffGrid.zoneRates || tariffGrid.baseRates || [];
+          // Recherche par code postal
+          const pickupPostal = order.pickup?.postalCode || order.pickupAddress?.postalCode || '';
+          const deliveryPostal = order.delivery?.postalCode || order.deliveryAddress?.postalCode || '';
+
+          const pickupZone = pickupPostal.substring(0, 2);
+          const deliveryZone = deliveryPostal.substring(0, 2);
+
+          let applicableRate = zoneRates.find(rate => {
+            return rate.zoneFrom === pickupZone && rate.zoneTo === deliveryZone;
+          });
+
+          if (applicableRate) {
+            basePrice = applicableRate.price || applicableRate.fixedPrice || 0;
+            details.push({
+              item: 'Transport inter-zones',
+              description: `Zone ${pickupZone} → Zone ${deliveryZone}`,
+              quantity: 1,
+              unitPrice: basePrice,
+              total: basePrice
+            });
+          }
+          break;
+        }
+
+        // ========== TARIFICATION À LA DISTANCE (défaut) ==========
+        case 'distance':
+        case 'km':
+        default: {
+          const distanceRates = tariffGrid.baseRates || tariffGrid.distanceRates || [];
+
+          let applicableRate = distanceRates.find(rate => {
+            const minDist = rate.minKm || 0;
+            const maxDist = rate.maxKm || Infinity;
+            return distance >= minDist && distance <= maxDist;
+          });
+
+          if (applicableRate) {
+            if (applicableRate.fixedPrice) {
+              basePrice = applicableRate.fixedPrice;
+              details.push({
+                item: 'Prix forfaitaire',
+                description: `Forfait ${applicableRate.minKm || 0}-${applicableRate.maxKm || '+'} km`,
+                quantity: 1,
+                unitPrice: basePrice,
+                total: basePrice
+              });
+            } else if (applicableRate.pricePerKm) {
+              basePrice = distance * applicableRate.pricePerKm;
+              details.push({
+                item: 'Transport',
+                description: `${distance} km x ${applicableRate.pricePerKm.toFixed(2)} €/km`,
+                quantity: distance,
+                unitPrice: applicableRate.pricePerKm,
+                total: basePrice
+              });
+            }
+          }
+          break;
+        }
+      }
+    }
+
+    // Si pas de prix calculé, utiliser le prix de la commande
+    if (basePrice === 0 && (order.pricing?.finalCost || order.pricing?.final || order.pricing?.estimatedCost)) {
+      basePrice = order.pricing.finalCost || order.pricing.final || order.pricing.estimatedCost;
+      details.push({
+        item: 'Prix commande',
+        description: 'Prix négocié commande',
+        quantity: 1,
+        unitPrice: basePrice,
+        total: basePrice
+      });
+    }
+
+    totalHT += basePrice;
+
+    // 2. Options et services
+    const services = order.services || {};
+    const options = tariffGrid?.options || {};
+
+    // ADR (matières dangereuses)
+    if (services.adr || order.cargo?.hazardous) {
+      const adrPercent = options.adr || 15;
+      const adrPrice = basePrice * (adrPercent / 100);
+      details.push({
+        item: 'Option ADR',
+        description: `Majoration matières dangereuses (+${adrPercent}%)`,
+        quantity: 1,
+        unitPrice: adrPrice,
+        total: adrPrice
+      });
+      totalHT += adrPrice;
+    }
+
+    // Hayon
+    if (services.tailgate) {
+      const hayonPrice = options.hayon || 35;
+      details.push({
+        item: 'Hayon élévateur',
+        description: 'Service hayon',
+        quantity: 1,
+        unitPrice: hayonPrice,
+        total: hayonPrice
+      });
+      totalHT += hayonPrice;
+    }
+
+    // Transport frigorifique
+    if (services.temperature_controlled || order.cargo?.temperature) {
+      const frigoPercent = options.frigo || 20;
+      const frigoPrice = basePrice * (frigoPercent / 100);
+      details.push({
+        item: 'Frigorifique',
+        description: `Transport température dirigée (+${frigoPercent}%)`,
+        quantity: 1,
+        unitPrice: frigoPrice,
+        total: frigoPrice
+      });
+      totalHT += frigoPrice;
+    }
+
+    // Transport express
+    if (order.transportType === 'express') {
+      const expressPercent = options.express || 25;
+      const expressPrice = basePrice * (expressPercent / 100);
+      details.push({
+        item: 'Express',
+        description: `Majoration express (+${expressPercent}%)`,
+        quantity: 1,
+        unitPrice: expressPrice,
+        total: expressPrice
+      });
+      totalHT += expressPrice;
+    }
+
+    // 3. Palettes échange (frais supplémentaires si échange de palettes)
+    if (pallets > 0 && order.cargo?.type === 'palette') {
+      const palletPrice = options.palettesEchange || 5;
+      const palettesTotal = pallets * palletPrice;
+      details.push({
+        item: 'Palettes',
+        description: `${pallets} palettes x ${palletPrice.toFixed(2)} €`,
+        quantity: pallets,
+        unitPrice: palletPrice,
+        total: palettesTotal
+      });
+      totalHT += palettesTotal;
+    }
+
+    // 4. Temps d'attente (si disponible via tracking)
+    // À intégrer avec tracking-api
+
+    // 5. Majorations weekend/nuit
+    const pickupDate = new Date(order.pickupDate);
+    const dayOfWeek = pickupDate.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      const weekendPercent = options.weekend || 15;
+      const weekendPrice = basePrice * (weekendPercent / 100);
+      details.push({
+        item: 'Majoration weekend',
+        description: `Livraison weekend (+${weekendPercent}%)`,
+        quantity: 1,
+        unitPrice: weekendPrice,
+        total: weekendPrice
+      });
+      totalHT += weekendPrice;
+    }
+
+    // Calcul TVA et TTC
+    const tva = totalHT * TVA_RATE;
+    const totalTTC = totalHT + tva;
+
+    return {
+      basePrice,
+      distancePrice: basePrice,
+      optionsPrice: totalHT - basePrice,
+      waitingTimePrice: 0,
+      palettesPrice: details.find(d => d.item === 'Palettes')?.total || 0,
+      penalties: 0,
+      surcharges: 0,
+      discounts: 0,
+      totalHT,
+      tva,
+      totalTTC,
+      details
+    };
+  },
+
+  /**
+   * Trouver la grille tarifaire applicable pour un transporteur/client
+   */
+  async findApplicableTariffGrid(transporterId, clientId) {
+    try {
+      const TariffGrid = mongoose.model('TariffGrid');
+      const now = new Date();
+
+      const grid = await TariffGrid.findOne({
+        transporterId,
+        clientId,
+        active: true,
+        validFrom: { $lte: now },
+        $or: [
+          { validTo: { $exists: false } },
+          { validTo: null },
+          { validTo: { $gte: now } }
+        ]
+      }).sort({ validFrom: -1 });
+
+      return grid;
+    } catch (error) {
+      console.error('[TARIFF] Error finding grid:', error.message);
+      return null;
+    }
+  }
+};
+
+// ===========================================
+// EMAIL CONFIGURATION (AWS SES + Nodemailer fallback)
+// ===========================================
+const EMAIL_CONFIG = {
+  from: process.env.SMTP_FROM || 'noreply@symphoni-a.com',
+  fromName: process.env.SMTP_FROM_NAME || 'SYMPHONI.A - Prefacturation',
+  replyTo: process.env.SMTP_REPLY_TO || 'facturation@symphoni-a.com',
+  // SMTP fallback (OVH)
+  smtp: {
+    host: process.env.SMTP_HOST || 'ssl0.ovh.net',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASSWORD
+  },
+  // AWS SES (primary)
+  useSES: process.env.USE_AWS_SES === 'true',
+  awsRegion: process.env.AWS_REGION || 'eu-central-1'
+};
+
+// Initialize AWS SES client
+let sesClient = null;
+if (EMAIL_CONFIG.useSES) {
+  sesClient = new SESClient({ region: EMAIL_CONFIG.awsRegion });
+  console.log('[EMAIL] AWS SES initialized for region:', EMAIL_CONFIG.awsRegion);
+}
+
+// Initialize Nodemailer transporter (fallback)
+let smtpTransporter = null;
+if (EMAIL_CONFIG.smtp.user && EMAIL_CONFIG.smtp.pass) {
+  smtpTransporter = nodemailer.createTransport({
+    host: EMAIL_CONFIG.smtp.host,
+    port: EMAIL_CONFIG.smtp.port,
+    secure: EMAIL_CONFIG.smtp.secure,
+    auth: {
+      user: EMAIL_CONFIG.smtp.user,
+      pass: EMAIL_CONFIG.smtp.pass
+    }
+  });
+  console.log('[EMAIL] SMTP transporter initialized:', EMAIL_CONFIG.smtp.host);
+}
+
+// ===========================================
+// EMAIL SERVICE (Mailgun SDK + OVH SMTP fallback)
+// ===========================================
+const MAILGUN_CONFIG = {
+  apiKey: process.env.MAILGUN_API_KEY || 'e80d8b76-ff2acfa2',
+  domain: process.env.MAILGUN_DOMAIN || 'rt-technologie.com',
+  from: process.env.EMAIL_FROM || 'noreply@rt-technologie.com'
+};
+
+// Initialize Mailgun client
+const mailgun = new Mailgun(FormData);
+let mgClient = null;
+
+function initMailgun() {
+  if (MAILGUN_CONFIG.apiKey && MAILGUN_CONFIG.domain) {
+    // Use US region by default (like notifications-eb), unless MAILGUN_HOST is set
+    const clientConfig = {
+      username: 'api',
+      key: MAILGUN_CONFIG.apiKey
+    };
+    // Only add URL if explicitly configured for EU
+    if (process.env.MAILGUN_HOST) {
+      clientConfig.url = process.env.MAILGUN_HOST;
+    }
+    mgClient = mailgun.client(clientConfig);
+    console.log('[EMAIL] Mailgun client initialized for domain:', MAILGUN_CONFIG.domain,
+      process.env.MAILGUN_HOST ? `(${process.env.MAILGUN_HOST})` : '(US region)');
+    return true;
+  }
+  console.warn('[EMAIL] Mailgun not configured - missing API key or domain');
+  return false;
+}
+
+// Initialize on startup
+initMailgun();
+
+const EmailService = {
+  // Send via AWS SES (Primary - verified identities available)
+  async sendViaSES(to, subject, htmlBody) {
+    if (!sesClient) {
+      throw new Error('SES client not initialized');
+    }
+
+    const toAddresses = Array.isArray(to) ? to : [to];
+
+    const command = new SendEmailCommand({
+      Source: `${EMAIL_CONFIG.fromName} <${EMAIL_CONFIG.from}>`,
+      Destination: {
+        ToAddresses: toAddresses
+      },
+      Message: {
+        Subject: { Data: subject, Charset: 'UTF-8' },
+        Body: {
+          Html: { Data: htmlBody, Charset: 'UTF-8' }
+        }
+      },
+      ReplyToAddresses: [EMAIL_CONFIG.replyTo]
+    });
+
+    const result = await sesClient.send(command);
+    console.log('[EMAIL] AWS SES sent to:', toAddresses.join(', '), 'MessageId:', result.MessageId);
+    return { success: true, messageId: result.MessageId, provider: 'ses' };
+  },
+
+  // Send via Mailgun SDK (Secondary)
+  async sendViaMailgun(to, subject, htmlBody) {
+    if (!mgClient) {
+      throw new Error('Mailgun client not initialized');
+    }
+
+    const toAddresses = Array.isArray(to) ? to : [to];
+
+    const result = await mgClient.messages.create(MAILGUN_CONFIG.domain, {
+      from: `${EMAIL_CONFIG.fromName} <${MAILGUN_CONFIG.from}>`,
+      to: toAddresses,
+      subject: subject,
+      html: htmlBody,
+      'h:Reply-To': EMAIL_CONFIG.replyTo
+    });
+
+    console.log('[EMAIL] Mailgun sent to:', toAddresses.join(', '), 'ID:', result.id);
+    return { success: true, messageId: result.id, provider: 'mailgun' };
+  },
+
+  // Send via SMTP OVH (Fallback)
+  async sendViaSMTP(to, subject, htmlBody, textBody, attachments = []) {
+    if (!smtpTransporter) {
+      throw new Error('SMTP not configured');
+    }
+
+    const toAddresses = Array.isArray(to) ? to : [to];
+    const mailOptions = {
+      from: `${EMAIL_CONFIG.fromName} <${EMAIL_CONFIG.from}>`,
+      to: toAddresses.join(', '),
+      replyTo: EMAIL_CONFIG.replyTo,
+      subject: subject,
+      html: htmlBody,
+      text: textBody || htmlBody.replace(/<[^>]*>/g, ''),
+      attachments: attachments
+    };
+
+    const result = await smtpTransporter.sendMail(mailOptions);
+    console.log('[EMAIL] OVH SMTP sent to:', toAddresses.join(', '), 'MessageId:', result.messageId);
+    return { success: true, messageId: result.messageId, provider: 'smtp' };
+  },
+
+  // Main send function (SES first, then Mailgun, then SMTP fallback)
+  async send(to, subject, htmlBody, textBody, attachments = []) {
+    // Try AWS SES first (verified identities available)
+    if (sesClient) {
+      try {
+        return await this.sendViaSES(to, subject, htmlBody);
+      } catch (err) {
+        console.warn('[EMAIL] AWS SES failed:', err.message);
+      }
+    }
+
+    // Try Mailgun second
+    if (mgClient) {
+      try {
+        return await this.sendViaMailgun(to, subject, htmlBody);
+      } catch (err) {
+        console.warn('[EMAIL] Mailgun failed:', err.message, err.details || '');
+      }
+    }
+
+    // Fallback to SMTP OVH
+    if (smtpTransporter) {
+      try {
+        return await this.sendViaSMTP(to, subject, htmlBody, textBody, attachments);
+      } catch (err) {
+        console.warn('[EMAIL] SMTP failed:', err.message);
+      }
+    }
+
+    throw new Error('All email transports failed');
+  }
+};
+
+// ===========================================
+// EMAIL TEMPLATES
+// ===========================================
+const EmailTemplates = {
+  // Header commun
+  header: (title) => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background: linear-gradient(135deg, #1a237e 0%, #3949ab 100%); color: white; padding: 30px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .header .subtitle { opacity: 0.9; font-size: 14px; margin-top: 5px; }
+        .content { padding: 30px; color: #333; }
+        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+        .btn { display: inline-block; padding: 12px 30px; background-color: #3949ab; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+        .btn:hover { background-color: #303f9f; }
+        .info-box { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 15px 0; }
+        .warning-box { background-color: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 15px 0; }
+        .success-box { background-color: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin: 15px 0; }
+        .error-box { background-color: #ffebee; border-left: 4px solid #f44336; padding: 15px; margin: 15px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; font-weight: 600; }
+        .amount { font-size: 24px; font-weight: bold; color: #1a237e; }
+        .status { display: inline-block; padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: 600; }
+        .status-pending { background-color: #fff3e0; color: #e65100; }
+        .status-validated { background-color: #e8f5e9; color: #2e7d32; }
+        .status-contested { background-color: #ffebee; color: #c62828; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>SYMPHONI.A</h1>
+          <div class="subtitle">${title}</div>
+        </div>
+        <div class="content">
+  `,
+
+  // Footer commun
+  footer: () => `
+        </div>
+        <div class="footer">
+          <p><strong>RT Technologie - SYMPHONI.A</strong></p>
+          <p>Plateforme de gestion logistique et transport</p>
+          <p>Cet email a ete envoye automatiquement, merci de ne pas repondre directement.</p>
+          <p>Pour toute question: <a href="mailto:support@symphoni-a.com">support@symphoni-a.com</a></p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `,
+
+  // Template: Nouvelle prefacturation pour transporteur
+  newPrefacturationTransporter: (data) => {
+    return EmailTemplates.header('Nouvelle Prefacturation') + `
+      <p>Bonjour <strong>${data.transporterName}</strong>,</p>
+
+      <p>Une nouvelle prefacturation a ete generee pour votre validation:</p>
+
+      <table>
+        <tr><th>Reference</th><td>${data.prefacturationId}</td></tr>
+        <tr><th>Commande</th><td>${data.orderId}</td></tr>
+        <tr><th>Client</th><td>${data.clientName}</td></tr>
+        <tr><th>Date de livraison</th><td>${data.deliveryDate}</td></tr>
+        <tr><th>Trajet</th><td>${data.pickupAddress} → ${data.deliveryAddress}</td></tr>
+      </table>
+
+      <div class="info-box">
+        <p style="margin: 0;"><strong>Montant de la prefacturation:</strong></p>
+        <p class="amount" style="margin: 10px 0 0 0;">${data.totalHT.toFixed(2)} EUR HT</p>
+        <p style="margin: 5px 0 0 0; font-size: 14px;">TVA: ${data.tva.toFixed(2)} EUR | TTC: ${data.totalTTC.toFixed(2)} EUR</p>
+      </div>
+
+      <p>Vous avez <strong>7 jours</strong> pour valider ou contester cette prefacturation.</p>
+
+      <p style="text-align: center;">
+        <a href="${data.validationUrl}" class="btn">Valider la prefacturation</a>
+      </p>
+
+      <p>Sans reponse de votre part dans le delai imparti, la prefacturation sera automatiquement validee.</p>
+    ` + EmailTemplates.footer();
+  },
+
+  // Template: Prefacturation validee (confirmation transporteur)
+  prefacturationValidatedTransporter: (data) => {
+    return EmailTemplates.header('Prefacturation Validee') + `
+      <p>Bonjour <strong>${data.transporterName}</strong>,</p>
+
+      <div class="success-box">
+        <p style="margin: 0;">Votre prefacturation <strong>${data.prefacturationId}</strong> a ete validee avec succes.</p>
+      </div>
+
+      <table>
+        <tr><th>Reference</th><td>${data.prefacturationId}</td></tr>
+        <tr><th>Commande</th><td>${data.orderId}</td></tr>
+        <tr><th>Montant HT</th><td>${data.totalHT.toFixed(2)} EUR</td></tr>
+        <tr><th>TVA</th><td>${data.tva.toFixed(2)} EUR</td></tr>
+        <tr><th>Montant TTC</th><td><strong>${data.totalTTC.toFixed(2)} EUR</strong></td></tr>
+        <tr><th>Validee le</th><td>${data.validatedAt}</td></tr>
+      </table>
+
+      <p>Le paiement sera effectue selon les conditions convenues (delai: ${data.paymentTermDays || 30} jours).</p>
+    ` + EmailTemplates.footer();
+  },
+
+  // Template: Prefacturation contestee
+  prefacturationContested: (data) => {
+    return EmailTemplates.header('Prefacturation Contestee') + `
+      <p>Bonjour,</p>
+
+      <div class="warning-box">
+        <p style="margin: 0;">La prefacturation <strong>${data.prefacturationId}</strong> a ete contestee par le transporteur.</p>
+      </div>
+
+      <table>
+        <tr><th>Reference</th><td>${data.prefacturationId}</td></tr>
+        <tr><th>Transporteur</th><td>${data.transporterName}</td></tr>
+        <tr><th>Commande</th><td>${data.orderId}</td></tr>
+        <tr><th>Montant conteste</th><td>${data.totalHT.toFixed(2)} EUR HT</td></tr>
+      </table>
+
+      <div class="error-box">
+        <p style="margin: 0;"><strong>Motif de contestation:</strong></p>
+        <p style="margin: 10px 0 0 0;">${data.contestReason}</p>
+      </div>
+
+      <p>Merci de prendre contact avec le transporteur pour resoudre ce litige.</p>
+
+      <p style="text-align: center;">
+        <a href="${data.disputeUrl}" class="btn">Gerer le litige</a>
+      </p>
+    ` + EmailTemplates.footer();
+  },
+
+  // Template: Nouvelle prefacturation pour industriel
+  newPrefacturationIndustrial: (data) => {
+    return EmailTemplates.header('Nouvelle Prefacturation Transport') + `
+      <p>Bonjour <strong>${data.clientName}</strong>,</p>
+
+      <p>Une nouvelle prefacturation transport est disponible pour validation:</p>
+
+      <table>
+        <tr><th>Reference</th><td>${data.prefacturationId}</td></tr>
+        <tr><th>Transporteur</th><td>${data.transporterName}</td></tr>
+        <tr><th>Commande</th><td>${data.orderId}</td></tr>
+        <tr><th>Date</th><td>${data.deliveryDate}</td></tr>
+        <tr><th>Trajet</th><td>${data.pickupAddress} → ${data.deliveryAddress}</td></tr>
+      </table>
+
+      <div class="info-box">
+        <p style="margin: 0;"><strong>Montant a regler:</strong></p>
+        <p class="amount" style="margin: 10px 0 0 0;">${data.totalTTC.toFixed(2)} EUR TTC</p>
+        <p style="margin: 5px 0 0 0; font-size: 14px;">HT: ${data.totalHT.toFixed(2)} EUR | TVA: ${data.tva.toFixed(2)} EUR</p>
+      </div>
+
+      <p style="text-align: center;">
+        <a href="${data.validationUrl}" class="btn">Voir les details</a>
+      </p>
+    ` + EmailTemplates.footer();
+  },
+
+  // Template: Rappel de validation
+  validationReminder: (data) => {
+    return EmailTemplates.header('Rappel: Prefacturation en attente') + `
+      <p>Bonjour <strong>${data.transporterName}</strong>,</p>
+
+      <div class="warning-box">
+        <p style="margin: 0;"><strong>Rappel:</strong> Une prefacturation est en attente de votre validation depuis ${data.daysPending} jours.</p>
+      </div>
+
+      <table>
+        <tr><th>Reference</th><td>${data.prefacturationId}</td></tr>
+        <tr><th>Commande</th><td>${data.orderId}</td></tr>
+        <tr><th>Montant HT</th><td>${data.totalHT.toFixed(2)} EUR</td></tr>
+        <tr><th>Date limite</th><td><strong>${data.deadline}</strong></td></tr>
+      </table>
+
+      <p><strong>Attention:</strong> Sans reponse avant le ${data.deadline}, la prefacturation sera automatiquement validee.</p>
+
+      <p style="text-align: center;">
+        <a href="${data.validationUrl}" class="btn">Valider maintenant</a>
+      </p>
+    ` + EmailTemplates.footer();
+  },
+
+  // Template: Export pret
+  exportReady: (data) => {
+    return EmailTemplates.header('Export Prefacturations Disponible') + `
+      <p>Bonjour,</p>
+
+      <div class="success-box">
+        <p style="margin: 0;">L'export des prefacturations est pret.</p>
+      </div>
+
+      <table>
+        <tr><th>Periode</th><td>${data.period}</td></tr>
+        <tr><th>Nombre de prefacturations</th><td>${data.count}</td></tr>
+        <tr><th>Montant total HT</th><td>${data.totalHT.toFixed(2)} EUR</td></tr>
+        <tr><th>Montant total TTC</th><td>${data.totalTTC.toFixed(2)} EUR</td></tr>
+        <tr><th>Format</th><td>${data.format}</td></tr>
+      </table>
+
+      <p style="text-align: center;">
+        <a href="${data.downloadUrl}" class="btn">Telecharger l'export</a>
+      </p>
+
+      <p>Ce lien est valide pendant 24 heures.</p>
+    ` + EmailTemplates.footer();
+  },
+
+  // Template: Ecart detecte
+  discrepancyDetected: (data) => {
+    return EmailTemplates.header('Ecart Tarifaire Detecte') + `
+      <p>Bonjour,</p>
+
+      <div class="error-box">
+        <p style="margin: 0;">Un ecart tarifaire a ete detecte sur la prefacturation <strong>${data.prefacturationId}</strong>.</p>
+      </div>
+
+      <table>
+        <tr><th>Reference</th><td>${data.prefacturationId}</td></tr>
+        <tr><th>Transporteur</th><td>${data.transporterName}</td></tr>
+        <tr><th>Type d'ecart</th><td>${data.discrepancyType}</td></tr>
+        <tr><th>Valeur attendue</th><td>${data.expectedValue}</td></tr>
+        <tr><th>Valeur recue</th><td>${data.actualValue}</td></tr>
+        <tr><th>Difference</th><td><strong>${data.difference} (${data.differencePercent}%)</strong></td></tr>
+      </table>
+
+      <p>Merci de verifier et resoudre cet ecart.</p>
+
+      <p style="text-align: center;">
+        <a href="${data.reviewUrl}" class="btn">Examiner l'ecart</a>
+      </p>
+    ` + EmailTemplates.footer();
+  }
+};
+
+// ===========================================
+// PDF GENERATION SERVICE - Design Professionnel
+// ===========================================
+const PDFService = {
+  // Couleurs corporate
+  colors: {
+    primary: '#1a237e',      // Bleu foncé
+    secondary: '#3949ab',    // Bleu moyen
+    accent: '#00bcd4',       // Cyan
+    success: '#00c853',      // Vert
+    warning: '#ff9800',      // Orange
+    danger: '#f44336',       // Rouge
+    dark: '#263238',         // Gris foncé
+    medium: '#607d8b',       // Gris moyen
+    light: '#eceff1',        // Gris clair
+    white: '#ffffff'
+  },
+
+  /**
+   * Dessine un rectangle arrondi
+   */
+  roundedRect(doc, x, y, width, height, radius) {
+    doc.moveTo(x + radius, y)
+       .lineTo(x + width - radius, y)
+       .quadraticCurveTo(x + width, y, x + width, y + radius)
+       .lineTo(x + width, y + height - radius)
+       .quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+       .lineTo(x + radius, y + height)
+       .quadraticCurveTo(x, y + height, x, y + height - radius)
+       .lineTo(x, y + radius)
+       .quadraticCurveTo(x, y, x + radius, y);
+  },
+
+  /**
+   * Dessine une jauge de progression
+   */
+  drawGauge(doc, x, y, width, height, value, maxValue, color) {
+    const percentage = Math.min((value / maxValue) * 100, 100);
+    const fillWidth = (width * percentage) / 100;
+
+    // Fond gris
+    doc.fillColor(this.colors.light).rect(x, y, width, height).fill();
+    // Barre de progression
+    doc.fillColor(color).rect(x, y, fillWidth, height).fill();
+  },
+
+  /**
+   * Génère un PDF de préfacturation avec design professionnel
+   */
+  async generatePrefacturationPDF(prefacturation) {
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({
+          margin: 40,
+          size: 'A4',
+          bufferPages: true,
+          info: {
+            Title: `Préfacturation ${prefacturation.prefacturationId}`,
+            Author: 'SYMPHONI.A - RT Technologie',
+            Subject: 'Préfacturation Transport',
+            Creator: 'SYMPHONI.A Billing System'
+          }
+        });
+
+        const chunks = [];
+        doc.on('data', chunk => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        const pageWidth = 595;
+        const margin = 40;
+        const contentWidth = pageWidth - (margin * 2);
+
+        // ============================================
+        // EN-TÊTE AVEC BANDEAU
+        // ============================================
+
+        // Bandeau supérieur dégradé
+        doc.rect(0, 0, pageWidth, 100).fill(this.colors.primary);
+        doc.rect(0, 95, pageWidth, 8).fill(this.colors.accent);
+
+        // Logo et titre
+        doc.fillColor(this.colors.white);
+        doc.fontSize(28).font('Helvetica-Bold').text('SYMPHONI.A', margin, 25);
+        doc.fontSize(10).font('Helvetica').text('RT Technologie - Control Tower Logistique', margin, 55);
+
+        // Infos document (droite)
+        doc.fontSize(9).font('Helvetica');
+        doc.text(`N° ${prefacturation.prefacturationId}`, pageWidth - margin - 150, 25, { width: 150, align: 'right' });
+        doc.text(`Date: ${moment(prefacturation.createdAt || new Date()).format('DD/MM/YYYY')}`, { width: 150, align: 'right' });
+
+        // Badge statut
+        const statusColors = {
+          'generated': this.colors.accent,
+          'validated': this.colors.success,
+          'contested': this.colors.warning,
+          'finalized': this.colors.success,
+          'draft': this.colors.medium
+        };
+        const statusColor = statusColors[prefacturation.status] || this.colors.medium;
+        const statusText = (prefacturation.status || 'GÉNÉRÉ').toUpperCase();
+
+        doc.fillColor(statusColor);
+        doc.roundedRect(pageWidth - margin - 80, 55, 80, 20, 3);
+        doc.fill();
+        doc.fillColor(this.colors.white).fontSize(8).font('Helvetica-Bold');
+        doc.text(statusText, pageWidth - margin - 78, 61, { width: 76, align: 'center' });
+
+        // Titre document
+        doc.fillColor(this.colors.dark).fontSize(18).font('Helvetica-Bold');
+        doc.text('PRÉFACTURATION', margin, 120, { align: 'center', width: contentWidth });
+
+        let yPos = 155;
+
+        // ============================================
+        // SECTION PARTIES (2 colonnes)
+        // ============================================
+
+        const colWidth = (contentWidth - 20) / 2;
+
+        // Transporteur (gauche)
+        doc.fillColor(this.colors.primary).fontSize(10).font('Helvetica-Bold');
+        doc.text('TRANSPORTEUR', margin, yPos);
+        yPos += 15;
+
+        doc.fillColor(this.colors.light);
+        this.roundedRect(doc, margin, yPos, colWidth, 55, 5);
+        doc.fill();
+
+        doc.fillColor(this.colors.dark).fontSize(9).font('Helvetica-Bold');
+        doc.text(prefacturation.transporterName || 'Non spécifié', margin + 10, yPos + 8, { width: colWidth - 20 });
+        doc.font('Helvetica').fillColor(this.colors.medium).fontSize(8);
+        if (prefacturation.transporterSiret) {
+          doc.text(`SIRET: ${prefacturation.transporterSiret}`, margin + 10, yPos + 22);
+        }
+        if (prefacturation.transporterEmail) {
+          doc.text(prefacturation.transporterEmail, margin + 10, yPos + 34);
+        }
+
+        // Client (droite)
+        doc.fillColor(this.colors.primary).fontSize(10).font('Helvetica-Bold');
+        doc.text('CLIENT', margin + colWidth + 20, yPos - 15);
+
+        doc.fillColor(this.colors.light);
+        this.roundedRect(doc, margin + colWidth + 20, yPos, colWidth, 55, 5);
+        doc.fill();
+
+        doc.fillColor(this.colors.dark).fontSize(9).font('Helvetica-Bold');
+        doc.text(prefacturation.clientName || 'Non spécifié', margin + colWidth + 30, yPos + 8, { width: colWidth - 20 });
+        doc.font('Helvetica').fillColor(this.colors.medium).fontSize(8);
+        if (prefacturation.clientSiret) {
+          doc.text(`SIRET: ${prefacturation.clientSiret}`, margin + colWidth + 30, yPos + 22);
+        }
+        if (prefacturation.clientEmail) {
+          doc.text(prefacturation.clientEmail, margin + colWidth + 30, yPos + 34);
+        }
+
+        yPos += 70;
+
+        // ============================================
+        // SECTION MISSION
+        // ============================================
+
+        doc.fillColor(this.colors.primary).fontSize(10).font('Helvetica-Bold');
+        doc.text('DÉTAILS DE LA MISSION', margin, yPos);
+        yPos += 15;
+
+        // Encadré mission
+        doc.fillColor(this.colors.light);
+        this.roundedRect(doc, margin, yPos, contentWidth, 75, 5);
+        doc.fill();
+
+        // Icône et texte Enlèvement
+        doc.fillColor(this.colors.success).fontSize(14);
+        doc.text('●', margin + 10, yPos + 10);
+        doc.fillColor(this.colors.dark).fontSize(8).font('Helvetica-Bold');
+        doc.text('ENLÈVEMENT', margin + 25, yPos + 8);
+        doc.font('Helvetica').fontSize(9).fillColor(this.colors.dark);
+        const pickupAddr = prefacturation.pickupAddress || prefacturation.orderData?.pickupAddress || '-';
+        doc.text(pickupAddr, margin + 25, yPos + 20, { width: contentWidth - 50 });
+        if (prefacturation.orderData?.pickupDate) {
+          doc.fontSize(8).fillColor(this.colors.medium);
+          doc.text(moment(prefacturation.orderData.pickupDate).format('DD/MM/YYYY'), margin + 25, yPos + 35);
+        }
+
+        // Icône et texte Livraison
+        doc.fillColor(this.colors.danger).fontSize(14);
+        doc.text('●', margin + 10, yPos + 48);
+        doc.fillColor(this.colors.dark).fontSize(8).font('Helvetica-Bold');
+        doc.text('LIVRAISON', margin + 25, yPos + 46);
+        doc.font('Helvetica').fontSize(9).fillColor(this.colors.dark);
+        const deliveryAddr = prefacturation.deliveryAddress || prefacturation.orderData?.deliveryAddress || '-';
+        doc.text(deliveryAddr, margin + 25, yPos + 58, { width: contentWidth - 50 });
+
+        // Distance (droite)
+        const distance = prefacturation.distance || prefacturation.orderData?.distance || 0;
+        doc.fillColor(this.colors.primary).fontSize(20).font('Helvetica-Bold');
+        doc.text(`${distance}`, pageWidth - margin - 80, yPos + 20, { width: 60, align: 'right' });
+        doc.fontSize(10).text('km', pageWidth - margin - 20, yPos + 25);
+
+        yPos += 90;
+
+        // ============================================
+        // SECTION MARCHANDISE
+        // ============================================
+
+        if (prefacturation.cargo && (prefacturation.cargo.description || prefacturation.cargo.weight || prefacturation.cargo.pallets)) {
+          doc.fillColor(this.colors.primary).fontSize(10).font('Helvetica-Bold');
+          doc.text('MARCHANDISE', margin, yPos);
+          yPos += 15;
+
+          // Badges marchandise
+          const badges = [];
+          if (prefacturation.cargo.weight) badges.push(`${prefacturation.cargo.weight} kg`);
+          if (prefacturation.cargo.pallets) badges.push(`${prefacturation.cargo.pallets} pal.`);
+          if (prefacturation.cargo.volume) badges.push(`${prefacturation.cargo.volume} m³`);
+          if (prefacturation.cargo.isADR) badges.push('ADR');
+
+          let badgeX = margin;
+          badges.forEach(badge => {
+            const badgeWidth = doc.widthOfString(badge) + 16;
+            doc.fillColor(this.colors.light);
+            this.roundedRect(doc, badgeX, yPos, badgeWidth, 20, 10);
+            doc.fill();
+            doc.fillColor(this.colors.dark).fontSize(9).font('Helvetica-Bold');
+            doc.text(badge, badgeX + 8, yPos + 5);
+            badgeX += badgeWidth + 8;
+          });
+
+          if (prefacturation.cargo.description) {
+            yPos += 25;
+            doc.fillColor(this.colors.medium).fontSize(8).font('Helvetica');
+            doc.text(prefacturation.cargo.description, margin, yPos, { width: contentWidth });
+          }
+
+          yPos += 25;
+        }
+
+        // ============================================
+        // TABLEAU DÉTAIL FACTURATION
+        // ============================================
+
+        doc.fillColor(this.colors.primary).fontSize(10).font('Helvetica-Bold');
+        doc.text('DÉTAIL FACTURATION', margin, yPos);
+        yPos += 15;
+
+        // En-tête tableau
+        doc.fillColor(this.colors.primary);
+        this.roundedRect(doc, margin, yPos, contentWidth, 22, 3);
+        doc.fill();
+
+        doc.fillColor(this.colors.white).fontSize(8).font('Helvetica-Bold');
+        doc.text('DÉSIGNATION', margin + 10, yPos + 7, { width: 250 });
+        doc.text('QTÉ', margin + 280, yPos + 7, { width: 40, align: 'center' });
+        doc.text('P.U. HT', margin + 330, yPos + 7, { width: 70, align: 'right' });
+        doc.text('TOTAL HT', margin + 410, yPos + 7, { width: 90, align: 'right' });
+        yPos += 25;
+
+        // Lignes de détail - utiliser UNIQUEMENT calculationDetails
+        doc.font('Helvetica').fillColor(this.colors.dark).fontSize(9);
+        let rowIndex = 0;
+
+        const lines = prefacturation.calculationDetails || [];
+
+        lines.forEach((line, idx) => {
+          // Vérifier si nouvelle page nécessaire
+          if (yPos > 700) {
+            doc.addPage();
+            yPos = 50;
+          }
+
+          // Alternance couleur fond
+          if (idx % 2 === 0) {
+            doc.fillColor('#f8f9fa').rect(margin, yPos, contentWidth, 18).fill();
+          }
+
+          doc.fillColor(this.colors.dark).fontSize(9);
+          const desc = line.description || line.item || '';
+          const qty = line.quantity || 1;
+          const unit = line.unitPrice || 0;
+          const total = line.total || 0;
+
+          doc.text(desc, margin + 10, yPos + 4, { width: 260 });
+          doc.text(qty.toString(), margin + 280, yPos + 4, { width: 40, align: 'center' });
+          doc.text(`${unit.toFixed(2)} €`, margin + 330, yPos + 4, { width: 70, align: 'right' });
+          doc.font('Helvetica-Bold').text(`${total.toFixed(2)} €`, margin + 410, yPos + 4, { width: 90, align: 'right' });
+          doc.font('Helvetica');
+          yPos += 18;
+          rowIndex++;
+        });
+
+        // Si pas de lignes, afficher message
+        if (lines.length === 0) {
+          doc.fillColor(this.colors.medium).fontSize(9).font('Helvetica-Oblique');
+          doc.text('Aucun détail de facturation disponible', margin + 10, yPos + 4);
+          yPos += 20;
+        }
+
+        yPos += 10;
+
+        // ============================================
+        // TOTAUX
+        // ============================================
+
+        const calc = prefacturation.calculation || {};
+        const totalHT = calc.totalHT || 0;
+        const tva = calc.tva || (totalHT * 0.2);
+        const totalTTC = calc.totalTTC || (totalHT * 1.2);
+
+        // Encadré totaux
+        doc.fillColor(this.colors.light);
+        this.roundedRect(doc, margin + contentWidth - 200, yPos, 200, 75, 5);
+        doc.fill();
+
+        doc.fillColor(this.colors.dark).fontSize(9).font('Helvetica');
+        doc.text('Total HT:', margin + contentWidth - 190, yPos + 12, { width: 90 });
+        doc.font('Helvetica-Bold').text(`${totalHT.toFixed(2)} €`, margin + contentWidth - 90, yPos + 12, { width: 80, align: 'right' });
+
+        doc.font('Helvetica').text('TVA (20%):', margin + contentWidth - 190, yPos + 28, { width: 90 });
+        doc.text(`${tva.toFixed(2)} €`, margin + contentWidth - 90, yPos + 28, { width: 80, align: 'right' });
+
+        // Ligne séparation
+        doc.strokeColor(this.colors.primary).lineWidth(1);
+        doc.moveTo(margin + contentWidth - 190, yPos + 45).lineTo(margin + contentWidth - 10, yPos + 45).stroke();
+
+        // Total TTC
+        doc.fillColor(this.colors.primary).fontSize(12).font('Helvetica-Bold');
+        doc.text('TOTAL TTC:', margin + contentWidth - 190, yPos + 52, { width: 90 });
+        doc.text(`${totalTTC.toFixed(2)} €`, margin + contentWidth - 90, yPos + 52, { width: 80, align: 'right' });
+
+        yPos += 90;
+
+        // ============================================
+        // SECTION KPI (si disponible)
+        // ============================================
+
+        if (prefacturation.kpiData) {
+          // Nouvelle page si nécessaire
+          if (yPos > 580) {
+            doc.addPage();
+            yPos = 50;
+          }
+
+          doc.fillColor(this.colors.primary).fontSize(10).font('Helvetica-Bold');
+          doc.text('PERFORMANCE TRANSPORTEUR - MOIS PRÉCÉDENT', margin, yPos);
+          yPos += 15;
+
+          // Encadré KPI avec fond dégradé
+          doc.fillColor('#e8eaf6');
+          this.roundedRect(doc, margin, yPos, contentWidth, 120, 8);
+          doc.fill();
+
+          // Bordure colorée gauche
+          doc.fillColor(this.colors.primary);
+          doc.rect(margin, yPos + 5, 5, 110).fill();
+
+          const kpi = prefacturation.kpiData;
+          const kpiStartY = yPos + 15;
+          const kpiColWidth = (contentWidth - 40) / 3;
+
+          // KPI 1: Livraisons
+          doc.fillColor(this.colors.medium).fontSize(8).font('Helvetica');
+          doc.text('LIVRAISONS', margin + 20, kpiStartY);
+          doc.fillColor(this.colors.dark).fontSize(22).font('Helvetica-Bold');
+          doc.text(`${kpi.deliveries || 0}`, margin + 20, kpiStartY + 12);
+
+          // KPI 2: Ponctualité avec jauge
+          doc.fillColor(this.colors.medium).fontSize(8).font('Helvetica');
+          doc.text('PONCTUALITÉ', margin + 20 + kpiColWidth, kpiStartY);
+          const punctuality = kpi.onTimeRate || 0;
+          const punctColor = punctuality >= 95 ? this.colors.success : punctuality >= 85 ? this.colors.warning : this.colors.danger;
+          doc.fillColor(punctColor).fontSize(22).font('Helvetica-Bold');
+          doc.text(`${punctuality.toFixed(0)}%`, margin + 20 + kpiColWidth, kpiStartY + 12);
+          // Jauge
+          this.drawGauge(doc, margin + 20 + kpiColWidth, kpiStartY + 38, 80, 6, punctuality, 100, punctColor);
+
+          // KPI 3: Score global
+          doc.fillColor(this.colors.medium).fontSize(8).font('Helvetica');
+          doc.text('SCORE GLOBAL', margin + 20 + kpiColWidth * 2, kpiStartY);
+          const score = kpi.globalScore || 0;
+          const scoreColor = score >= 80 ? this.colors.success : score >= 60 ? this.colors.warning : this.colors.danger;
+          doc.fillColor(scoreColor).fontSize(22).font('Helvetica-Bold');
+          doc.text(`${score.toFixed(0)}/100`, margin + 20 + kpiColWidth * 2, kpiStartY + 12);
+          // Jauge
+          this.drawGauge(doc, margin + 20 + kpiColWidth * 2, kpiStartY + 38, 80, 6, score, 100, scoreColor);
+
+          // Ligne 2: Stats supplémentaires
+          const kpiLine2Y = kpiStartY + 55;
+
+          // Incidents
+          doc.fillColor(this.colors.medium).fontSize(8).font('Helvetica');
+          doc.text('INCIDENTS', margin + 20, kpiLine2Y);
+          doc.fillColor(this.colors.dark).fontSize(16).font('Helvetica-Bold');
+          doc.text(`${kpi.incidents || 0}`, margin + 20, kpiLine2Y + 10);
+
+          // Satisfaction
+          doc.fillColor(this.colors.medium).fontSize(8).font('Helvetica');
+          doc.text('SATISFACTION', margin + 20 + kpiColWidth, kpiLine2Y);
+          const satisfaction = kpi.satisfactionRate || 0;
+          const satColor = satisfaction >= 4 ? this.colors.success : satisfaction >= 3 ? this.colors.warning : this.colors.danger;
+          doc.fillColor(satColor).fontSize(16).font('Helvetica-Bold');
+          doc.text(`${satisfaction.toFixed(1)}/5`, margin + 20 + kpiColWidth, kpiLine2Y + 10);
+          // Étoiles visuelles
+          doc.fillColor(this.colors.warning).fontSize(10);
+          const stars = Math.round(satisfaction);
+          doc.text('★'.repeat(stars) + '☆'.repeat(5 - stars), margin + 20 + kpiColWidth + 45, kpiLine2Y + 12);
+
+          // CA mensuel
+          doc.fillColor(this.colors.medium).fontSize(8).font('Helvetica');
+          doc.text('CA DU MOIS', margin + 20 + kpiColWidth * 2, kpiLine2Y);
+          doc.fillColor(this.colors.dark).fontSize(16).font('Helvetica-Bold');
+          const revenue = kpi.revenue || 0;
+          doc.text(`${revenue.toLocaleString('fr-FR')} €`, margin + 20 + kpiColWidth * 2, kpiLine2Y + 10);
+
+          yPos += 135;
+        }
+
+        // ============================================
+        // SECTION ANALYSE IA & PRÉCONISATIONS
+        // ============================================
+
+        if (prefacturation.kpiAnalysis) {
+          // Nouvelle page pour l'analyse
+          doc.addPage();
+          let analysisY = 50;
+
+          // Titre section
+          doc.fillColor(this.colors.primary).fontSize(14).font('Helvetica-Bold');
+          doc.text('ANALYSE & PRÉCONISATIONS', margin, analysisY);
+          doc.fillColor(this.colors.accent).fontSize(8).font('Helvetica');
+          doc.text('Généré par Intelligence Artificielle SYMPHONI.A', margin, analysisY + 18);
+          analysisY += 40;
+
+          const analysis = prefacturation.kpiAnalysis;
+
+          // Résumé avec icône tendance
+          doc.fillColor(this.colors.light);
+          this.roundedRect(doc, margin, analysisY, contentWidth, 50, 5);
+          doc.fill();
+
+          // Icône tendance
+          const trendIcon = analysis.trend === 'hausse' ? '📈' : analysis.trend === 'baisse' ? '📉' : '➡️';
+          const trendColor = analysis.trend === 'hausse' ? this.colors.success : analysis.trend === 'baisse' ? this.colors.danger : this.colors.warning;
+          doc.fillColor(trendColor).fontSize(20);
+          doc.text(trendIcon, margin + 15, analysisY + 15);
+
+          doc.fillColor(this.colors.dark).fontSize(9).font('Helvetica');
+          doc.text(analysis.summary || 'Analyse non disponible', margin + 50, analysisY + 12, {
+            width: contentWidth - 70,
+            lineGap: 3
+          });
+          analysisY += 65;
+
+          // Points forts (vert)
+          if (analysis.strengths && analysis.strengths.length > 0) {
+            doc.fillColor(this.colors.success).fontSize(10).font('Helvetica-Bold');
+            doc.text('✓ POINTS FORTS', margin, analysisY);
+            analysisY += 15;
+
+            doc.fillColor(this.colors.dark).fontSize(9).font('Helvetica');
+            analysis.strengths.forEach(strength => {
+              doc.text(`• ${strength}`, margin + 15, analysisY, { width: contentWidth - 30 });
+              analysisY += 14;
+            });
+            analysisY += 10;
+          }
+
+          // Axes d'amélioration (orange)
+          if (analysis.improvements && analysis.improvements.length > 0) {
+            doc.fillColor(this.colors.warning).fontSize(10).font('Helvetica-Bold');
+            doc.text('⚡ AXES D\'AMÉLIORATION', margin, analysisY);
+            analysisY += 15;
+
+            doc.fillColor(this.colors.dark).fontSize(9).font('Helvetica');
+            analysis.improvements.forEach(improvement => {
+              doc.text(`• ${improvement}`, margin + 15, analysisY, { width: contentWidth - 30 });
+              analysisY += 14;
+            });
+            analysisY += 15;
+          }
+
+          // Préconisations (tableau)
+          if (analysis.recommendations && analysis.recommendations.length > 0) {
+            doc.fillColor(this.colors.primary).fontSize(10).font('Helvetica-Bold');
+            doc.text('📋 PLAN D\'ACTION RECOMMANDÉ', margin, analysisY);
+            analysisY += 20;
+
+            // En-tête tableau
+            doc.fillColor(this.colors.primary);
+            this.roundedRect(doc, margin, analysisY, contentWidth, 20, 3);
+            doc.fill();
+
+            doc.fillColor(this.colors.white).fontSize(8).font('Helvetica-Bold');
+            doc.text('PRIORITÉ', margin + 10, analysisY + 6, { width: 60 });
+            doc.text('ACTION', margin + 80, analysisY + 6, { width: 280 });
+            doc.text('IMPACT ATTENDU', margin + 370, analysisY + 6, { width: 130 });
+            analysisY += 25;
+
+            // Lignes recommandations
+            analysis.recommendations.forEach((rec, idx) => {
+              // Fond alterné
+              if (idx % 2 === 0) {
+                doc.fillColor('#f5f5f5').rect(margin, analysisY, contentWidth, 28).fill();
+              }
+
+              // Badge priorité
+              const priorityColors = {
+                'haute': this.colors.danger,
+                'moyenne': this.colors.warning,
+                'basse': this.colors.success
+              };
+              const priorityColor = priorityColors[rec.priority?.toLowerCase()] || this.colors.medium;
+
+              doc.fillColor(priorityColor);
+              this.roundedRect(doc, margin + 8, analysisY + 6, 50, 16, 8);
+              doc.fill();
+              doc.fillColor(this.colors.white).fontSize(7).font('Helvetica-Bold');
+              doc.text((rec.priority || 'N/A').toUpperCase(), margin + 10, analysisY + 10, { width: 46, align: 'center' });
+
+              // Action
+              doc.fillColor(this.colors.dark).fontSize(8).font('Helvetica');
+              doc.text(rec.action || '-', margin + 80, analysisY + 8, { width: 280 });
+
+              // Impact
+              doc.fillColor(this.colors.medium).fontSize(8).font('Helvetica-Oblique');
+              doc.text(rec.impact || '-', margin + 370, analysisY + 8, { width: 130 });
+
+              analysisY += 30;
+            });
+          }
+
+          // Footer analyse
+          analysisY += 20;
+          doc.fillColor(this.colors.medium).fontSize(7).font('Helvetica-Oblique');
+          doc.text(`Analyse générée le ${moment(analysis.generatedAt || new Date()).format('DD/MM/YYYY à HH:mm')} par ${analysis.generatedBy || 'SYMPHONI.A AI'}`, margin, analysisY, { align: 'center', width: contentWidth });
+        }
+
+        // ============================================
+        // PIED DE PAGE
+        // ============================================
+
+        // Ligne de séparation
+        doc.strokeColor(this.colors.light).lineWidth(1);
+        doc.moveTo(margin, 780).lineTo(pageWidth - margin, 780).stroke();
+
+        doc.fillColor(this.colors.medium).fontSize(7).font('Helvetica');
+        doc.text('Document généré automatiquement par SYMPHONI.A - RT Technologie', margin, 788, { align: 'center', width: contentWidth });
+        doc.text(`Référence: ${prefacturation.prefacturationId} | Généré le ${moment().format('DD/MM/YYYY à HH:mm')}`, margin, 798, { align: 'center', width: contentWidth });
+
+        // Numéro de page si multiple pages
+        const pages = doc.bufferedPageRange();
+        for (let i = 0; i < pages.count; i++) {
+          doc.switchToPage(i);
+          doc.fillColor(this.colors.medium).fontSize(8);
+          doc.text(`Page ${i + 1}/${pages.count}`, pageWidth - margin - 50, 788, { width: 50, align: 'right' });
+        }
+
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+};
+
+// ===========================================
+// EMAIL SERVICE WITH ATTACHMENTS (SES Raw Email)
+// ===========================================
+/**
+ * Envoie un email avec pièces jointes via SES (format raw MIME)
+ */
+async function sendEmailWithAttachment(to, subject, htmlBody, attachments = []) {
+  const toAddresses = Array.isArray(to) ? to : [to];
+  const boundary = `----=_Part_${Date.now().toString(36)}`;
+
+  // Construire le message MIME
+  let rawMessage = '';
+  rawMessage += `From: ${EMAIL_CONFIG.fromName} <${EMAIL_CONFIG.from}>\r\n`;
+  rawMessage += `To: ${toAddresses.join(', ')}\r\n`;
+  rawMessage += `Reply-To: ${EMAIL_CONFIG.replyTo}\r\n`;
+  rawMessage += `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=\r\n`;
+  rawMessage += `MIME-Version: 1.0\r\n`;
+  rawMessage += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+
+  // Partie HTML
+  rawMessage += `--${boundary}\r\n`;
+  rawMessage += `Content-Type: text/html; charset=UTF-8\r\n`;
+  rawMessage += `Content-Transfer-Encoding: base64\r\n\r\n`;
+  rawMessage += `${Buffer.from(htmlBody).toString('base64')}\r\n`;
+
+  // Pièces jointes
+  for (const attachment of attachments) {
+    rawMessage += `--${boundary}\r\n`;
+    rawMessage += `Content-Type: ${attachment.contentType || 'application/pdf'}; name="${attachment.filename}"\r\n`;
+    rawMessage += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n`;
+    rawMessage += `Content-Transfer-Encoding: base64\r\n\r\n`;
+
+    const content = attachment.content instanceof Buffer
+      ? attachment.content.toString('base64')
+      : attachment.content;
+    rawMessage += `${content}\r\n`;
+  }
+
+  rawMessage += `--${boundary}--\r\n`;
+
+  // Envoyer via SES Raw
+  const command = new SendRawEmailCommand({
+    RawMessage: {
+      Data: Buffer.from(rawMessage)
+    }
+  });
+
+  const result = await sesClient.send(command);
+  console.log('[EMAIL] SES sent with attachment to:', toAddresses.join(', '), 'MessageId:', result.MessageId);
+  return { success: true, messageId: result.MessageId, provider: 'ses-raw' };
+}
 
 // ===========================================
 // MONGOOSE SCHEMAS
@@ -115,8 +1920,12 @@ const prefacturationSchema = new mongoose.Schema({
   orderId: { type: String, required: true },
   transporterId: { type: String, required: true },
   transporterName: String,
+  transporterEmail: String,
+  transporterSiret: String,
   clientId: { type: String, required: true },
   clientName: String,
+  clientEmail: String,
+  clientSiret: String,
   // Statut workflow
   status: {
     type: String,
@@ -208,6 +2017,30 @@ const prefacturationSchema = new mongoose.Schema({
     unitPrice: Number,
     total: Number
   }],
+  // KPI transporteur (performance mois précédent)
+  kpiData: {
+    deliveries: Number,
+    onTimeRate: Number,
+    incidents: Number,
+    satisfactionRate: Number,
+    totalDistance: Number,
+    revenue: Number,
+    globalScore: Number
+  },
+  // Analyse IA des KPI
+  kpiAnalysis: {
+    summary: String,
+    strengths: [String],
+    improvements: [String],
+    recommendations: [{
+      priority: String,
+      action: String,
+      impact: String
+    }],
+    trend: String,
+    generatedAt: Date,
+    generatedBy: { type: String, default: 'claude-ai' }
+  },
   // Prix transporteur (facture recue)
   carrierInvoice: {
     invoiceNumber: String,
@@ -1570,6 +3403,925 @@ const setupCronJobs = () => {
   console.log('[CRON] Taches planifiees configurees');
 };
 
+
+// ===========================================
+// ROUTE API - SEED DATA (Demo/Dev)
+// ===========================================
+
+// Reseed: delete existing demo data
+app.delete('/api/billing/seed', async (req, res) => {
+  try {
+    const deletedPref = await Prefacturation.deleteMany({ prefacturationId: /^PREF-2025-00/ });
+    const deletedGrid = await TariffGrid.deleteMany({ gridId: /^GRID-DEMO-/ });
+    const deletedVig = await CarrierVigilance.deleteMany({ vigilanceId: /^VIG-DEMO-/ });
+
+    res.json({
+      success: true,
+      message: 'Demo data deleted',
+      data: {
+        prefacturations: deletedPref.deletedCount,
+        tariffGrids: deletedGrid.deletedCount,
+        vigilances: deletedVig.deletedCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/billing/seed', async (req, res) => {
+  try {
+    // Transporteurs demo avec emails de test
+    const transporters = [
+      { id: 'TR-001', name: 'NordTrans SARL', siret: '12345678901234', email: 'test-transporteur1@symphoni-a.com' },
+      { id: 'TR-002', name: 'Express Logistics', siret: '98765432109876', email: 'test-transporteur2@symphoni-a.com' },
+      { id: 'TR-003', name: 'TransEurope SA', siret: '45678901234567', email: 'test-transporteur3@symphoni-a.com' }
+    ];
+
+    // Industriels demo avec emails de test
+    const industrials = [
+      { id: 'IND-001', name: 'Acme Industries', siret: '11111111111111', email: 'test-industriel1@symphoni-a.com' },
+      { id: 'IND-002', name: 'TechnoPlast SAS', siret: '22222222222222', email: 'test-industriel2@symphoni-a.com' }
+    ];
+
+    const prefacturations = [];
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    // Creer 10 prefacturations de demo
+    for (let i = 0; i < 10; i++) {
+      const transporter = transporters[i % transporters.length];
+      const industrial = industrials[i % industrials.length];
+      const baseAmount = Math.floor(Math.random() * 2000) + 500;
+      const waitingAmount = Math.floor(Math.random() * 200);
+      const totalHT = baseAmount + waitingAmount;
+      const tva = totalHT * 0.20;
+      const totalTTC = totalHT + tva;
+
+      const statuses = ['draft', 'generated', 'pending_validation', 'validated', 'finalized', 'exported'];
+      const status = statuses[Math.floor(Math.random() * statuses.length)];
+
+      const prefacturation = new Prefacturation({
+        prefacturationId: `PREF-2025-${String(i + 1).padStart(4, '0')}`,
+        orderId: `CMD-2025-${String(1000 + i).padStart(6, '0')}`,
+        transporterId: transporter.id,
+        transporterName: transporter.name,
+        transporterSiret: transporter.siret,
+        transporterEmail: transporter.email,
+        clientId: industrial.id,
+        clientName: industrial.name,
+        clientSiret: industrial.siret,
+        clientEmail: industrial.email,
+        status: status,
+        orderData: {
+          pickupDate: new Date(currentYear, currentMonth - 1, Math.floor(Math.random() * 28) + 1),
+          deliveryDate: new Date(currentYear, currentMonth - 1, Math.floor(Math.random() * 28) + 1),
+          pickupAddress: 'Lyon 69001, France',
+          deliveryAddress: 'Paris 75001, France',
+          pickupPostalCode: '69001',
+          deliveryPostalCode: '75001',
+          distance: Math.floor(Math.random() * 500) + 100,
+          duration: Math.floor(Math.random() * 8) + 2,
+          vehicleType: ['Porteur', 'Semi', 'Fourgon'][Math.floor(Math.random() * 3)]
+        },
+        cargo: {
+          weight: Math.floor(Math.random() * 20000) + 1000,
+          volume: Math.floor(Math.random() * 80) + 10,
+          pallets: Math.floor(Math.random() * 33) + 1,
+          description: 'Marchandises diverses'
+        },
+        calculation: {
+          basePrice: baseAmount,
+          distancePrice: 0,
+          optionsPrice: 0,
+          waitingTimePrice: waitingAmount,
+          palettesPrice: 0,
+          penalties: 0,
+          surcharges: 0,
+          discounts: 0,
+          totalHT: totalHT,
+          tva: tva,
+          totalTTC: totalTTC
+        },
+        payment: {
+          dueDate: new Date(currentYear, currentMonth, 15),
+          paymentTermDays: 30,
+          iban: 'FR76' + Math.random().toString().slice(2, 25),
+          bic: 'BNPAFRPP',
+          bankName: 'BNP Paribas'
+        },
+        auditTrail: [{
+          action: 'created',
+          timestamp: new Date(),
+          userId: 'system',
+          details: { source: 'seed' }
+        }],
+        createdAt: new Date(currentYear, currentMonth - 1, Math.floor(Math.random() * 28) + 1)
+      });
+
+      await prefacturation.save();
+      prefacturations.push(prefacturation);
+    }
+
+    // Creer des grilles tarifaires
+    for (const transporter of transporters) {
+      for (const industrial of industrials) {
+        const existingGrid = await TariffGrid.findOne({
+          transporterId: transporter.id,
+          clientId: industrial.id
+        });
+
+        if (!existingGrid) {
+          const tariffGrid = new TariffGrid({
+            gridId: `GRID-${transporter.id}-${industrial.id}`,
+            transporterId: transporter.id,
+            clientId: industrial.id,
+            name: `Grille ${transporter.name} - ${industrial.name}`,
+            validFrom: new Date(currentYear, 0, 1),
+            validTo: new Date(currentYear, 11, 31),
+            baseRates: [
+              { zoneFrom: 'FR-69', zoneTo: 'FR-75', minKm: 0, maxKm: 500, pricePerKm: 1.20, fixedPrice: 150 },
+              { zoneFrom: 'FR-69', zoneTo: 'FR-13', minKm: 0, maxKm: 300, pricePerKm: 1.35, fixedPrice: 120 }
+            ],
+            options: {
+              adr: 15,
+              hayon: 50,
+              express: 25,
+              frigo: 20,
+              palettesEchange: 8,
+              weekend: 30,
+              nuit: 20
+            },
+            waitingTime: {
+              freeMinutes: 30,
+              pricePerHour: 45
+            }
+          });
+          await tariffGrid.save();
+        }
+      }
+    }
+
+    // Creer des vigilances transporteur
+    for (const transporter of transporters) {
+      const existingVigilance = await CarrierVigilance.findOne({ transporterId: transporter.id });
+
+      if (!existingVigilance) {
+        const vigilance = new CarrierVigilance({
+          vigilanceId: `VIG-${transporter.id}`,
+          transporterId: transporter.id,
+          transporterName: transporter.name,
+          documents: {
+            urssaf: { present: true, validUntil: new Date(currentYear, 11, 31), verifiedAt: new Date() },
+            assurance: { present: true, validUntil: new Date(currentYear, 11, 31), verifiedAt: new Date() },
+            licenceTransport: { present: true, validUntil: new Date(currentYear + 2, 11, 31), verifiedAt: new Date() },
+            kbis: { present: true, validUntil: new Date(currentYear, 11, 31), verifiedAt: new Date() }
+          },
+          globalStatus: 'valid',
+          lastChecked: new Date()
+        });
+        await vigilance.save();
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Donnees de demonstration creees',
+      data: {
+        prefacturations: prefacturations.length,
+        tariffGrids: transporters.length * industrials.length,
+        vigilances: transporters.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Endpoint public pour lister les prefacturations (demo)
+app.get('/api/billing/demo/prefacturations', async (req, res) => {
+  try {
+    const { clientId, transporterId, status, month, year, limit = 50 } = req.query;
+    const filter = {};
+
+    if (clientId) filter.clientId = clientId;
+    if (transporterId) filter.transporterId = transporterId;
+    if (status) filter.status = status;
+
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const prefacturations = await Prefacturation.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    res.json({ success: true, data: prefacturations, count: prefacturations.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Endpoint public pour stats (demo)
+app.get('/api/billing/demo/stats', async (req, res) => {
+  try {
+    const { clientId, month, year } = req.query;
+    const filter = {};
+
+    if (clientId) filter.clientId = clientId;
+
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const total = await Prefacturation.countDocuments(filter);
+    const byStatus = await Prefacturation.aggregate([
+      { $match: filter },
+      { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+
+    const totalAmounts = await Prefacturation.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalHT: { $sum: '$calculation.totalHT' },
+          totalTTC: { $sum: '$calculation.totalTTC' }
+        }
+      }
+    ]);
+
+    const pendingAmount = await Prefacturation.aggregate([
+      { $match: { ...filter, status: { $nin: ['paid', 'archived'] } } },
+      { $group: { _id: null, amount: { $sum: '$calculation.totalTTC' } } }
+    ]);
+
+    const paidAmount = await Prefacturation.aggregate([
+      { $match: { ...filter, status: 'paid' } },
+      { $group: { _id: null, amount: { $sum: '$calculation.totalTTC' } } }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        prefacturations: {
+          total,
+          byStatus: byStatus.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.count }), {})
+        },
+        amounts: {
+          totalHT: totalAmounts[0]?.totalHT || 0,
+          totalTTC: totalAmounts[0]?.totalTTC || 0,
+          pending: pendingAmount[0]?.amount || 0,
+          paid: paidAmount[0]?.amount || 0
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ===========================================
+// SCENARIO DEMO - Demonstration du processus complet
+// ===========================================
+
+app.post('/api/billing/demo/scenario', async (req, res) => {
+  try {
+    const { userEmail } = req.body;
+
+    if (!userEmail) {
+      return res.status(400).json({
+        success: false,
+        error: 'userEmail requis pour recevoir les notifications du scenario'
+      });
+    }
+
+    const scenario = {
+      steps: [],
+      prefacturation: null
+    };
+
+    // ETAPE 1: Creation de la prefacturation
+    const prefacturationId = `PREF-DEMO-${Date.now()}`;
+    const orderId = `CMD-DEMO-${Date.now()}`;
+
+    const prefacturation = new Prefacturation({
+      prefacturationId,
+      orderId,
+      transporterId: 'TR-DEMO-SCENARIO',
+      transporterName: 'Transport Express Lyon SARL',
+      transporterEmail: userEmail,
+      transporterSiret: '12345678901234',
+      clientId: 'IND-DEMO-SCENARIO',
+      clientName: 'Carrefour Logistique SAS',
+      clientEmail: userEmail,
+      clientSiret: '98765432109876',
+      status: 'generated',
+      orderData: {
+        pickupDate: new Date('2025-12-20T08:00:00Z'),
+        deliveryDate: new Date('2025-12-20T14:30:00Z'),
+        pickupAddress: 'Zone Industrielle Lyon-Est, 69800 Saint-Priest',
+        deliveryAddress: 'Entrepot Carrefour, 75019 Paris',
+        pickupPostalCode: '69800',
+        deliveryPostalCode: '75019',
+        distance: 465,
+        duration: 330,
+        vehicleType: 'Semi-remorque',
+        vehiclePlate: 'AB-123-CD',
+        driverName: 'Jean Dupont'
+      },
+      cargo: {
+        description: 'Palettes produits alimentaires frais',
+        weight: 18500,
+        volume: 72,
+        pallets: 33,
+        packages: 0,
+        isADR: false
+      },
+      calculation: {
+        basePrice: 850,
+        distancePrice: 232.50,
+        optionsPrice: 0,
+        waitingTimePrice: 45,
+        palettesPrice: 165,
+        penalties: 0,
+        surcharges: 0,
+        discounts: -50,
+        totalHT: 1242.50,
+        tva: 248.50,
+        totalTTC: 1491
+      },
+      calculationDetails: [
+        { item: 'Prix de base', description: 'Tarif grille Semi-remorque', quantity: 1, unitPrice: 850, total: 850 },
+        { item: 'Distance', description: '465 km x 0.50 EUR/km', quantity: 465, unitPrice: 0.50, total: 232.50 },
+        { item: 'Attente', description: '45 min facturable', quantity: 45, unitPrice: 1, total: 45 },
+        { item: 'Palettes', description: '33 palettes x 5 EUR', quantity: 33, unitPrice: 5, total: 165 },
+        { item: 'Remise', description: 'Remise fidelite client', quantity: 1, unitPrice: -50, total: -50 }
+      ],
+      kpiData: {
+        deliveries: 47,
+        onTimeRate: 92.5,
+        incidents: 2,
+        satisfactionRate: 4.6,
+        totalDistance: 12500,
+        revenue: 45000,
+        globalScore: 87
+      },
+      payment: {
+        dueDate: new Date('2026-01-20'),
+        paymentTermDays: 30,
+        iban: 'FR7630001007941234567890185',
+        bic: 'BDFEFRPPCCT',
+        bankName: 'Banque de France'
+      },
+      auditTrail: [{
+        action: 'created',
+        timestamp: new Date(),
+        userId: 'demo-scenario',
+        details: { source: 'scenario_demo', userEmail }
+      }]
+    });
+
+    // Générer l'analyse IA des KPIs
+    try {
+      console.log('[DEMO SCENARIO] Generating AI analysis for Transport Express Lyon SARL');
+      const kpiAnalysis = await ClaudeAIService.analyzeKPI(prefacturation.kpiData, 'Transport Express Lyon SARL');
+      prefacturation.kpiAnalysis = {
+        ...kpiAnalysis,
+        generatedAt: new Date(),
+        generatedBy: 'SYMPHONI.A AI'
+      };
+      console.log('[DEMO SCENARIO] AI analysis generated:', kpiAnalysis.trend);
+    } catch (aiError) {
+      console.error('[DEMO SCENARIO] AI analysis error:', aiError.message);
+    }
+
+    await prefacturation.save();
+    scenario.steps.push({
+      step: 1,
+      name: 'Creation prefacturation',
+      status: 'completed',
+      details: {
+        prefacturationId,
+        orderId,
+        montantHT: 1242.50,
+        montantTTC: 1491
+      }
+    });
+
+    // ETAPE 2: Envoi email au transporteur avec PDF
+    try {
+      const frontendUrl = process.env.FRONTEND_URL || 'https://app.symphoni-a.com';
+      const emailData = {
+        prefacturationId,
+        orderId,
+        transporterName: prefacturation.transporterName,
+        clientName: prefacturation.clientName,
+        pickupAddress: prefacturation.orderData.pickupAddress,
+        deliveryAddress: prefacturation.orderData.deliveryAddress,
+        deliveryDate: '20/12/2025',
+        totalHT: prefacturation.calculation.totalHT,
+        tva: prefacturation.calculation.tva,
+        totalTTC: prefacturation.calculation.totalTTC,
+        validationUrl: `${frontendUrl}/billing/prefacturation/${prefacturationId}`
+      };
+
+      // Générer le PDF de préfacturation
+      const pdfBuffer = await PDFService.generatePrefacturationPDF({
+        ...prefacturation.toObject(),
+        pickupAddress: prefacturation.orderData.pickupAddress,
+        deliveryAddress: prefacturation.orderData.deliveryAddress,
+        distance: prefacturation.orderData.distance
+      });
+
+      const html = EmailTemplates.newPrefacturationTransporter(emailData);
+
+      // Envoyer avec pièce jointe PDF
+      await sendEmailWithAttachment(
+        userEmail,
+        `[DEMO] Nouvelle prefacturation ${prefacturationId}`,
+        html,
+        [{
+          filename: `Prefacturation_${prefacturationId}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        }]
+      );
+
+      scenario.steps.push({
+        step: 2,
+        name: 'Email envoye au transporteur avec PDF',
+        status: 'completed',
+        details: { to: userEmail, type: 'new_prefacturation_transporter', pdfAttached: true }
+      });
+
+      prefacturation.auditTrail.push({
+        action: 'email_sent',
+        timestamp: new Date(),
+        userId: 'demo-scenario',
+        details: { type: 'new_prefacturation_transporter', to: userEmail, pdfAttached: true }
+      });
+      prefacturation.status = 'pending_validation';
+      await prefacturation.save();
+
+    } catch (emailError) {
+      console.error('[DEMO] Email error:', emailError);
+      scenario.steps.push({
+        step: 2,
+        name: 'Email au transporteur',
+        status: 'failed',
+        error: emailError.message
+      });
+    }
+
+    // ETAPE 3: Simulation validation transporteur (apres 2 secondes)
+    prefacturation.carrierValidation = {
+      status: 'accepted',
+      sentAt: new Date(),
+      respondedAt: new Date(),
+      comment: 'Montant conforme a notre facture'
+    };
+    prefacturation.status = 'validated';
+    prefacturation.auditTrail.push({
+      action: 'carrier_validated',
+      timestamp: new Date(),
+      userId: 'demo-scenario',
+      details: { method: 'auto_demo' }
+    });
+    await prefacturation.save();
+
+    scenario.steps.push({
+      step: 3,
+      name: 'Validation transporteur',
+      status: 'completed',
+      details: { validatedAt: new Date().toISOString(), comment: 'Montant conforme' }
+    });
+
+    // ETAPE 4: Email de confirmation
+    try {
+      const confirmData = {
+        prefacturationId,
+        orderId,
+        transporterName: prefacturation.transporterName,
+        totalHT: prefacturation.calculation.totalHT,
+        tva: prefacturation.calculation.tva,
+        totalTTC: prefacturation.calculation.totalTTC,
+        validatedAt: new Date().toLocaleString('fr-FR'),
+        paymentTermDays: 30
+      };
+
+      const confirmHtml = EmailTemplates.prefacturationValidatedTransporter(confirmData);
+      await EmailService.send(userEmail, `[DEMO] Prefacturation ${prefacturationId} validee`, confirmHtml);
+
+      scenario.steps.push({
+        step: 4,
+        name: 'Email confirmation validation',
+        status: 'completed',
+        details: { to: userEmail, type: 'validated' }
+      });
+
+    } catch (emailError) {
+      scenario.steps.push({
+        step: 4,
+        name: 'Email confirmation',
+        status: 'failed',
+        error: emailError.message
+      });
+    }
+
+    // ETAPE 5: Finalisation et pret pour export
+    prefacturation.status = 'finalized';
+    prefacturation.auditTrail.push({
+      action: 'finalized',
+      timestamp: new Date(),
+      userId: 'demo-scenario',
+      details: { readyForExport: true }
+    });
+    await prefacturation.save();
+
+    scenario.steps.push({
+      step: 5,
+      name: 'Prefacturation finalisee',
+      status: 'completed',
+      details: { status: 'finalized', readyForExport: true }
+    });
+
+    scenario.prefacturation = {
+      id: prefacturation._id,
+      prefacturationId,
+      orderId,
+      transporterName: prefacturation.transporterName,
+      clientName: prefacturation.clientName,
+      status: prefacturation.status,
+      montantHT: prefacturation.calculation.totalHT,
+      montantTTC: prefacturation.calculation.totalTTC,
+      trajet: `${prefacturation.orderData.pickupAddress} -> ${prefacturation.orderData.deliveryAddress}`,
+      distance: `${prefacturation.orderData.distance} km`
+    };
+
+    res.json({
+      success: true,
+      message: 'Scenario de demonstration execute avec succes',
+      scenario
+    });
+
+  } catch (error) {
+    console.error('[DEMO SCENARIO] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Endpoint pour télécharger le PDF d'une préfacturation
+app.get('/api/billing/prefacturations/:prefacturationId/pdf', async (req, res) => {
+  try {
+    const { prefacturationId } = req.params;
+    const prefacturation = await Prefacturation.findOne({ prefacturationId });
+
+    if (!prefacturation) {
+      return res.status(404).json({ success: false, error: 'Prefacturation non trouvee' });
+    }
+
+    // Générer le PDF
+    const pdfBuffer = await PDFService.generatePrefacturationPDF({
+      ...prefacturation.toObject(),
+      pickupAddress: prefacturation.orderData?.pickupAddress || prefacturation.pickupAddress,
+      deliveryAddress: prefacturation.orderData?.deliveryAddress || prefacturation.deliveryAddress,
+      distance: prefacturation.orderData?.distance || prefacturation.distance
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Prefacturation_${prefacturationId}.pdf"`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('[PDF GENERATION] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Demo: Génération de préfacturation depuis une vraie commande
+app.post('/api/billing/demo/generate-from-real-order', async (req, res) => {
+  try {
+    const { orderNumber, orderId, userEmail, includeKPI = true } = req.body;
+
+    if (!orderNumber && !orderId) {
+      return res.status(400).json({ success: false, error: 'orderNumber ou orderId requis' });
+    }
+
+    // 1. Récupérer la commande depuis orders-api
+    let order;
+    if (orderNumber) {
+      order = await OrdersService.getOrderByNumber(orderNumber);
+    } else {
+      order = await OrdersService.getOrderById(orderId);
+    }
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Commande non trouvée dans orders-api' });
+    }
+
+    // 2. Récupérer la grille tarifaire applicable
+    const carrierId = order.carrier?.id || order.assignedCarrier?.carrierId || 'default-carrier';
+    const clientId = order.client?.id || order.organizationId || 'default-client';
+
+    const tariffGrid = await TariffCalculationService.findApplicableTariffGrid(carrierId, clientId);
+
+    // 3. Calculer le prix
+    const calculation = TariffCalculationService.calculateOrderPrice(order, tariffGrid);
+
+    // 4. Récupérer KPI (simulation si pas disponible)
+    let kpiData = null;
+    let kpiAnalysis = null;
+    const transporterName = order.carrier?.name || order.assignedCarrier?.carrierName || 'Transporteur';
+
+    if (includeKPI) {
+      const lastMonth = moment().subtract(1, 'month');
+      kpiData = await KPIService.getCarrierMonthlyKPI(carrierId, lastMonth.month() + 1, lastMonth.year());
+
+      // Si pas de KPI réels, simuler pour la démo
+      if (!kpiData) {
+        kpiData = {
+          deliveries: Math.floor(Math.random() * 50) + 20,
+          onTimeRate: 85 + Math.random() * 14,
+          incidents: Math.floor(Math.random() * 5),
+          satisfactionRate: 3.5 + Math.random() * 1.5,
+          totalDistance: Math.floor(Math.random() * 15000) + 5000,
+          revenue: Math.floor(Math.random() * 50000) + 20000,
+          globalScore: 70 + Math.floor(Math.random() * 25)
+        };
+      }
+
+      // 4b. Générer l'analyse IA des KPI
+      console.log('[KPI ANALYSIS] Generating AI analysis for', transporterName);
+      kpiAnalysis = await ClaudeAIService.analyzeKPI(kpiData, transporterName);
+      kpiAnalysis.generatedAt = new Date();
+      kpiAnalysis.generatedBy = 'SYMPHONI.A AI';
+      console.log('[KPI ANALYSIS] Analysis generated:', kpiAnalysis.trend);
+    }
+
+    // 5. Créer la préfacturation
+    const prefacturationId = `PREF-REAL-${moment().format('YYYYMMDD')}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+
+    const prefacturation = new Prefacturation({
+      prefacturationId,
+      orderId: order.orderNumber || order.reference || order._id,
+      externalReference: order.externalReference,
+      transporterId: carrierId,
+      transporterName: order.carrier?.name || order.assignedCarrier?.carrierName || 'Transporteur',
+      transporterEmail: userEmail || order.carrier?.email,
+      clientId: clientId,
+      clientName: order.client?.name || 'Client',
+      clientEmail: userEmail || order.client?.email,
+      status: 'generated',
+
+      orderData: {
+        pickupDate: order.pickup?.scheduledDate || order.dates?.pickupDate || order.pickupDate,
+        deliveryDate: order.delivery?.scheduledDate || order.dates?.deliveryDate || order.deliveryDate,
+        pickupAddress: order.pickup?.company ? `${order.pickup.company}, ${order.pickup.city || ''}` :
+                       (order.pickupAddress?.city ? `${order.pickupAddress.street || ''}, ${order.pickupAddress.city}` : ''),
+        deliveryAddress: order.delivery?.company ? `${order.delivery.company}, ${order.delivery.city || ''}` :
+                         (order.deliveryAddress?.city ? `${order.deliveryAddress.street || ''}, ${order.deliveryAddress.city}` : ''),
+        pickupPostalCode: order.pickup?.postalCode || order.pickupAddress?.postalCode,
+        deliveryPostalCode: order.delivery?.postalCode || order.deliveryAddress?.postalCode,
+        // Calcul distance approximative si non fournie (via coordonnées si disponibles)
+        distance: order.pricing?.distance || order.distance || (() => {
+          // Calculer distance approximative via coordonnées GPS si disponibles
+          const pickupCoords = order.pickup?.coordinates || order.pickupAddress?.coordinates;
+          const deliveryCoords = order.delivery?.coordinates || order.deliveryAddress?.coordinates;
+          if (pickupCoords?.latitude && deliveryCoords?.latitude) {
+            const R = 6371; // Rayon Terre en km
+            const dLat = (deliveryCoords.latitude - pickupCoords.latitude) * Math.PI / 180;
+            const dLon = (deliveryCoords.longitude - pickupCoords.longitude) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(pickupCoords.latitude * Math.PI / 180) * Math.cos(deliveryCoords.latitude * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distanceKm = Math.round(R * c * 1.3); // x1.3 pour route réelle approx
+            return distanceKm;
+          }
+          return 0;
+        })(),
+        vehicleType: order.requirements?.vehicleType || order.vehicleType,
+        driverName: order.driver?.name
+      },
+
+      cargo: {
+        description: order.cargo?.description || order.goods?.description || '',
+        weight: typeof order.cargo?.weight === 'number' ? order.cargo.weight :
+                (order.cargo?.weight?.value || order.goods?.weight || 0),
+        volume: typeof order.cargo?.volume === 'number' ? order.cargo.volume :
+                (order.cargo?.volume?.value || order.goods?.volume || 0),
+        pallets: order.cargo?.pallets || order.cargo?.quantity || order.goods?.palettes || order.goods?.quantity || 0,
+        isADR: order.cargo?.hazardous || false,
+        adrClass: order.cargo?.hazardousClass || order.cargo?.adrClass || null
+      },
+
+      options: {
+        adr: order.services?.adr || order.cargo?.hazardous || false,
+        hayon: order.services?.tailgate || order.requirements?.hayon || false,
+        express: order.transportType === 'express',
+        frigo: order.services?.temperature_controlled || false
+      },
+
+      calculation: {
+        gridId: tariffGrid?.gridId || null,
+        basePrice: calculation.basePrice,
+        distancePrice: calculation.distancePrice,
+        optionsPrice: calculation.optionsPrice,
+        waitingTimePrice: calculation.waitingTimePrice,
+        palettesPrice: calculation.palettesPrice,
+        penalties: calculation.penalties,
+        surcharges: calculation.surcharges,
+        discounts: calculation.discounts,
+        totalHT: calculation.totalHT,
+        tva: calculation.tva,
+        totalTTC: calculation.totalTTC
+      },
+      calculationDetails: calculation.details,
+
+      kpiData: kpiData,
+      kpiAnalysis: kpiAnalysis,
+
+      payment: {
+        dueDate: moment().add(30, 'days').toDate(),
+        paymentTermDays: 30
+      },
+
+      auditTrail: [{
+        action: 'demo_generated_from_real_order',
+        timestamp: new Date(),
+        performedBy: 'demo-user',
+        details: { orderNumber: order.orderNumber, orderId: order._id }
+      }]
+    });
+
+    await prefacturation.save();
+
+    // 6. Générer le PDF et envoyer par email si demandé
+    let emailSent = false;
+    if (userEmail) {
+      try {
+        const pdfBuffer = await PDFService.generatePrefacturationPDF({
+          ...prefacturation.toObject(),
+          pickupAddress: prefacturation.orderData.pickupAddress,
+          deliveryAddress: prefacturation.orderData.deliveryAddress,
+          distance: prefacturation.orderData.distance
+        });
+
+        const emailData = {
+          prefacturationId,
+          orderId: order.orderNumber || order.reference,
+          transporterName: prefacturation.transporterName,
+          clientName: prefacturation.clientName,
+          pickupAddress: prefacturation.orderData.pickupAddress,
+          deliveryAddress: prefacturation.orderData.deliveryAddress,
+          deliveryDate: moment(prefacturation.orderData.deliveryDate).format('DD/MM/YYYY'),
+          totalHT: calculation.totalHT,
+          tva: calculation.tva,
+          totalTTC: calculation.totalTTC,
+          validationUrl: `${process.env.FRONTEND_URL || 'https://app.symphoni-a.com'}/billing/prefacturation/${prefacturationId}`
+        };
+
+        const html = EmailTemplates.newPrefacturationTransporter(emailData);
+
+        await sendEmailWithAttachment(
+          userEmail,
+          `Préfacturation ${prefacturationId} - Commande ${order.orderNumber || order.reference}`,
+          html,
+          [{
+            filename: `Prefacturation_${prefacturationId}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf'
+          }]
+        );
+        emailSent = true;
+      } catch (emailErr) {
+        console.error('[DEMO] Email error:', emailErr.message);
+      }
+    }
+
+    console.log('[DEMO] Real order prefacturation generated:', prefacturationId);
+
+    res.json({
+      success: true,
+      message: 'Préfacturation générée depuis commande réelle',
+      data: {
+        prefacturationId,
+        orderId: order.orderNumber || order.reference,
+        transporterName: prefacturation.transporterName,
+        clientName: prefacturation.clientName,
+        totalHT: calculation.totalHT,
+        totalTTC: calculation.totalTTC,
+        tariffGridUsed: tariffGrid?.name || 'Tarif par défaut',
+        kpiIncluded: !!kpiData,
+        emailSent,
+        pdfUrl: `/api/billing/prefacturations/${prefacturationId}/pdf`
+      }
+    });
+
+  } catch (error) {
+    console.error('[DEMO] Real order error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Scenario de contestation
+app.post('/api/billing/demo/scenario-contestation', async (req, res) => {
+  try {
+    const { userEmail, prefacturationId } = req.body;
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, error: 'userEmail requis' });
+    }
+
+    // Trouver une prefacturation existante ou en creer une
+    let prefacturation;
+    if (prefacturationId) {
+      prefacturation = await Prefacturation.findOne({ prefacturationId });
+    }
+
+    if (!prefacturation) {
+      // Creer une nouvelle pour le scenario
+      prefacturation = new Prefacturation({
+        prefacturationId: `PREF-CONTEST-${Date.now()}`,
+        orderId: `CMD-CONTEST-${Date.now()}`,
+        transporterId: 'TR-CONTEST',
+        transporterName: 'TransContest SARL',
+        transporterEmail: userEmail,
+        clientId: 'IND-CONTEST',
+        clientName: 'Client Industries',
+        clientEmail: userEmail,
+        status: 'pending_validation',
+        orderData: {
+          pickupAddress: 'Marseille',
+          deliveryAddress: 'Lille',
+          distance: 1000
+        },
+        calculation: {
+          totalHT: 2500,
+          tva: 500,
+          totalTTC: 3000
+        }
+      });
+      await prefacturation.save();
+    }
+
+    // Simuler contestation
+    prefacturation.status = 'contested';
+    prefacturation.carrierValidation = {
+      status: 'contested',
+      sentAt: new Date(),
+      respondedAt: new Date(),
+      comment: 'Ecart sur le nombre de kilometres - 1200 km effectues au lieu de 1000 km'
+    };
+    prefacturation.discrepancies.push({
+      type: 'distance',
+      description: 'Kilometrage conteste par transporteur',
+      expectedValue: 1000,
+      actualValue: 1200,
+      difference: 200,
+      differencePercent: 20,
+      status: 'detected'
+    });
+    await prefacturation.save();
+
+    // Envoyer email de contestation
+    try {
+      const contestData = {
+        prefacturationId: prefacturation.prefacturationId,
+        orderId: prefacturation.orderId,
+        transporterName: prefacturation.transporterName,
+        totalHT: prefacturation.calculation.totalHT,
+        contestReason: 'Ecart sur le nombre de kilometres - 1200 km effectues au lieu de 1000 km declares',
+        disputeUrl: `https://app.symphoni-a.com/billing/dispute/${prefacturation.prefacturationId}`
+      };
+
+      const html = EmailTemplates.prefacturationContested(contestData);
+      await EmailService.send(userEmail, `[DEMO] Contestation prefacturation ${prefacturation.prefacturationId}`, html);
+    } catch (e) {
+      console.error('Email error:', e);
+    }
+
+    res.json({
+      success: true,
+      message: 'Scenario de contestation execute',
+      prefacturation: {
+        prefacturationId: prefacturation.prefacturationId,
+        status: 'contested',
+        motif: 'Ecart kilometrage +200km'
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ===========================================
 // ROUTES API - HEALTH CHECK
 // ===========================================
@@ -1595,8 +4347,83 @@ app.get('/api/billing/health', (req, res) => {
       'blocages-automatiques',
       'export-erp',
       'archivage-10-ans'
-    ]
+    ],
+    email: {
+      mailgun: {
+        configured: !!mgClient,
+        domain: MAILGUN_CONFIG.domain,
+        apiKeyPrefix: MAILGUN_CONFIG.apiKey ? MAILGUN_CONFIG.apiKey.substring(0, 10) + '...' : 'not set'
+      },
+      smtp: {
+        configured: !!smtpTransporter,
+        host: EMAIL_CONFIG.smtp.host
+      }
+    }
   });
+});
+
+// Debug email endpoint (no auth for testing)
+app.post('/api/billing/debug/email', async (req, res) => {
+  const { to } = req.body;
+  const testEmail = to || 'r.tardy@rt-groupe.com';
+
+  const results = {
+    config: {
+      ses: {
+        configured: !!sesClient,
+        region: EMAIL_CONFIG.awsRegion,
+        from: EMAIL_CONFIG.from
+      },
+      mailgun: {
+        domain: MAILGUN_CONFIG.domain,
+        apiKeyPrefix: MAILGUN_CONFIG.apiKey ? MAILGUN_CONFIG.apiKey.substring(0, 10) + '...' : 'not set',
+        clientInitialized: !!mgClient
+      },
+      smtp: {
+        host: EMAIL_CONFIG.smtp.host,
+        transporterInitialized: !!smtpTransporter
+      }
+    },
+    tests: {}
+  };
+
+  // Test AWS SES (Primary)
+  if (sesClient) {
+    try {
+      const sesResult = await EmailService.sendViaSES(
+        testEmail,
+        '[TEST] Billing API - AWS SES Test',
+        '<h1>Test AWS SES</h1><p>Email de test depuis billing-api via AWS SES</p>'
+      );
+      results.tests.ses = { success: true, messageId: sesResult.messageId };
+    } catch (err) {
+      results.tests.ses = { success: false, error: err.message };
+    }
+  } else {
+    results.tests.ses = { success: false, error: 'SES client not initialized' };
+  }
+
+  // Test Mailgun
+  if (mgClient) {
+    try {
+      const mgResult = await mgClient.messages.create(MAILGUN_CONFIG.domain, {
+        from: `Test <${MAILGUN_CONFIG.from}>`,
+        to: [testEmail],
+        subject: '[TEST] Billing API - Mailgun Test',
+        html: '<h1>Test Mailgun</h1><p>Email de test depuis billing-api</p>'
+      });
+      results.tests.mailgun = { success: true, messageId: mgResult.id };
+    } catch (err) {
+      results.tests.mailgun = { success: false, error: err.message, details: err.details || err.status };
+    }
+  } else {
+    results.tests.mailgun = { success: false, error: 'Mailgun client not initialized' };
+  }
+
+  // Test SMTP (skip for now as it's failing)
+  results.tests.smtp = { success: false, error: 'SMTP OVH authentication issues - skipped' };
+
+  res.json(results);
 });
 
 // ===========================================
@@ -1718,6 +4545,292 @@ app.get('/api/billing/prefacturations', authenticateToken, async (req, res) => {
 
     res.json({ success: true, data: prefacturations, count: prefacturations.length });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ===========================================
+// GÉNÉRATION AUTOMATIQUE DE PRÉFACTURATION DEPUIS COMMANDE
+// ===========================================
+
+/**
+ * Générer une préfacturation depuis une commande orders-api
+ * Utilise les grilles tarifaires pour calculer le prix
+ */
+app.post('/api/billing/prefacturations/generate-from-order', authenticateToken, async (req, res) => {
+  try {
+    const { orderId, orderNumber, includeKPI = true } = req.body;
+
+    if (!orderId && !orderNumber) {
+      return res.status(400).json({ success: false, error: 'orderId ou orderNumber requis' });
+    }
+
+    // 1. Récupérer la commande depuis orders-api
+    let order;
+    if (orderNumber) {
+      order = await OrdersService.getOrderByNumber(orderNumber);
+    } else {
+      order = await OrdersService.getOrderById(orderId);
+    }
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Commande non trouvée dans orders-api' });
+    }
+
+    // Vérifier si une préfacturation existe déjà
+    const existingPrefact = await Prefacturation.findOne({
+      orderId: order.orderNumber || order._id
+    });
+    if (existingPrefact) {
+      return res.status(409).json({
+        success: false,
+        error: 'Une préfacturation existe déjà pour cette commande',
+        prefacturationId: existingPrefact.prefacturationId
+      });
+    }
+
+    // 2. Récupérer la grille tarifaire applicable
+    const carrierId = order.assignedCarrier?.carrierId;
+    const clientId = order.organizationId;
+
+    const tariffGrid = await TariffCalculationService.findApplicableTariffGrid(carrierId, clientId);
+
+    // 3. Calculer le prix selon la grille
+    const calculation = TariffCalculationService.calculateOrderPrice(order, tariffGrid);
+
+    // 4. Récupérer les KPI du mois précédent (optionnel)
+    let kpiData = null;
+    if (includeKPI && carrierId) {
+      const lastMonth = moment().subtract(1, 'month');
+      kpiData = await KPIService.getCarrierMonthlyKPI(
+        carrierId,
+        lastMonth.month() + 1,
+        lastMonth.year()
+      );
+    }
+
+    // 5. Créer la préfacturation
+    const prefacturationId = `PREF-${moment().format('YYYYMM')}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+
+    const prefacturation = new Prefacturation({
+      prefacturationId,
+      orderId: order.orderNumber || order._id,
+      externalReference: order.externalReference,
+      transporterId: carrierId,
+      transporterName: order.assignedCarrier?.carrierName,
+      clientId: clientId,
+      clientName: order.organizationName,
+      status: 'generated',
+
+      // Données de la commande
+      orderData: {
+        pickupDate: order.pickupDate,
+        deliveryDate: order.deliveryDate,
+        pickupAddress: `${order.pickup?.street || ''}, ${order.pickup?.postalCode || ''} ${order.pickup?.city || ''}`,
+        deliveryAddress: `${order.delivery?.street || ''}, ${order.delivery?.postalCode || ''} ${order.delivery?.city || ''}`,
+        pickupPostalCode: order.pickup?.postalCode,
+        deliveryPostalCode: order.delivery?.postalCode,
+        distance: order.pricing?.breakdown?.distance || 0,
+        vehicleType: order.vehicleType,
+        vehiclePlate: order.assignedCarrier?.vehiclePlate,
+        driverName: order.assignedCarrier?.driverName
+      },
+
+      // Marchandise
+      cargo: {
+        description: order.cargo?.description,
+        weight: order.cargo?.weight?.value || 0,
+        volume: order.cargo?.volume?.value || 0,
+        pallets: order.cargo?.type === 'palette' ? order.cargo?.quantity : 0,
+        packages: order.cargo?.type === 'colis' ? order.cargo?.quantity : 0,
+        isADR: order.cargo?.hazardous || false,
+        adrClass: order.cargo?.hazardousClass
+      },
+
+      // Options
+      options: {
+        adr: order.services?.adr || order.cargo?.hazardous || false,
+        hayon: order.services?.tailgate || false,
+        express: order.transportType === 'express',
+        frigo: order.services?.temperature_controlled || false
+      },
+
+      // Calcul
+      calculation: {
+        gridId: tariffGrid?.gridId || null,
+        basePrice: calculation.basePrice,
+        distancePrice: calculation.distancePrice,
+        optionsPrice: calculation.optionsPrice,
+        waitingTimePrice: calculation.waitingTimePrice,
+        palettesPrice: calculation.palettesPrice,
+        penalties: calculation.penalties,
+        surcharges: calculation.surcharges,
+        discounts: calculation.discounts,
+        totalHT: calculation.totalHT,
+        tva: calculation.tva,
+        totalTTC: calculation.totalTTC
+      },
+      calculationDetails: calculation.details,
+
+      // KPI (pour le PDF)
+      kpiData: kpiData,
+
+      // Paiement
+      payment: {
+        dueDate: moment().add(30, 'days').toDate(),
+        paymentTermDays: 30
+      },
+
+      // Audit
+      auditTrail: [{
+        action: 'generated_from_order',
+        timestamp: new Date(),
+        performedBy: req.user?.userId || 'system',
+        details: {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          tariffGridUsed: tariffGrid?.gridId || 'none'
+        }
+      }]
+    });
+
+    await prefacturation.save();
+
+    console.log('[BILLING] Prefacturation generated:', prefacturationId, 'from order:', order.orderNumber);
+
+    res.status(201).json({
+      success: true,
+      message: 'Préfacturation générée avec succès',
+      data: {
+        prefacturationId,
+        orderId: order.orderNumber,
+        transporterName: order.assignedCarrier?.carrierName,
+        clientName: order.organizationName,
+        totalHT: calculation.totalHT,
+        totalTTC: calculation.totalTTC,
+        tariffGridUsed: tariffGrid?.name || 'Tarif par défaut',
+        kpiIncluded: !!kpiData
+      }
+    });
+
+  } catch (error) {
+    console.error('[BILLING] Error generating prefacturation:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Générer les préfacturations pour toutes les commandes livrées d'une période
+ */
+app.post('/api/billing/prefacturations/generate-batch', authenticateToken, async (req, res) => {
+  try {
+    const {
+      carrierId,
+      clientId,
+      startDate,
+      endDate,
+      includeKPI = true,
+      sendEmails = false
+    } = req.body;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, error: 'startDate et endDate requis' });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Récupérer les commandes livrées
+    let orders = [];
+    if (carrierId) {
+      orders = await OrdersService.getDeliveredOrdersByCarrier(carrierId, start, end);
+    } else if (clientId) {
+      orders = await OrdersService.getDeliveredOrdersByClient(clientId, start, end);
+    } else {
+      return res.status(400).json({ success: false, error: 'carrierId ou clientId requis' });
+    }
+
+    const results = {
+      total: orders.length,
+      generated: 0,
+      skipped: 0,
+      errors: [],
+      prefacturations: []
+    };
+
+    for (const order of orders) {
+      try {
+        // Vérifier si préfacturation existe déjà
+        const existing = await Prefacturation.findOne({ orderId: order.orderNumber || order._id });
+        if (existing) {
+          results.skipped++;
+          continue;
+        }
+
+        // Récupérer grille tarifaire
+        const tariffGrid = await TariffCalculationService.findApplicableTariffGrid(
+          order.assignedCarrier?.carrierId,
+          order.organizationId
+        );
+
+        // Calculer
+        const calculation = TariffCalculationService.calculateOrderPrice(order, tariffGrid);
+
+        // Créer préfacturation
+        const prefacturationId = `PREF-${moment().format('YYYYMM')}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+
+        const prefacturation = new Prefacturation({
+          prefacturationId,
+          orderId: order.orderNumber || order._id,
+          transporterId: order.assignedCarrier?.carrierId,
+          transporterName: order.assignedCarrier?.carrierName,
+          clientId: order.organizationId,
+          status: 'generated',
+          orderData: {
+            pickupDate: order.pickupDate,
+            deliveryDate: order.deliveryDate,
+            pickupAddress: `${order.pickup?.street || ''}, ${order.pickup?.postalCode || ''} ${order.pickup?.city || ''}`,
+            deliveryAddress: `${order.delivery?.street || ''}, ${order.delivery?.postalCode || ''} ${order.delivery?.city || ''}`,
+            distance: order.pricing?.breakdown?.distance || 0
+          },
+          cargo: {
+            description: order.cargo?.description,
+            weight: order.cargo?.weight?.value || 0,
+            pallets: order.cargo?.type === 'palette' ? order.cargo?.quantity : 0
+          },
+          calculation,
+          calculationDetails: calculation.details,
+          payment: { dueDate: moment().add(30, 'days').toDate(), paymentTermDays: 30 },
+          auditTrail: [{
+            action: 'batch_generated',
+            timestamp: new Date(),
+            performedBy: req.user?.userId || 'system'
+          }]
+        });
+
+        await prefacturation.save();
+        results.generated++;
+        results.prefacturations.push({
+          prefacturationId,
+          orderId: order.orderNumber,
+          totalHT: calculation.totalHT
+        });
+
+      } catch (err) {
+        results.errors.push({ orderId: order.orderNumber || order._id, error: err.message });
+      }
+    }
+
+    console.log('[BILLING] Batch generation completed:', results.generated, 'generated,', results.skipped, 'skipped');
+
+    res.json({
+      success: true,
+      message: `${results.generated} préfacturations générées`,
+      results
+    });
+
+  } catch (error) {
+    console.error('[BILLING] Batch generation error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -2173,11 +5286,11 @@ app.get('/api/billing/webhooks', authenticateToken, async (req, res) => {
 // ROUTES API - VALIDATION & PAIEMENT (Frontend Industry)
 // ===========================================
 
-// Valider une prefacturation (Industriel)
+// Valider une prefacturation (Transporteur ou Industriel)
 app.post('/api/billing/prefacturation/:id/validate', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { comments, adjustments } = req.body;
+    const { comments, adjustments, comment, acceptedAmount } = req.body;
 
     const prefacturation = await Prefacturation.findOne({
       $or: [{ prefacturationId: id }, { _id: id }]
@@ -2193,7 +5306,7 @@ app.post('/api/billing/prefacturation/:id/validate', authenticateToken, async (r
       status: 'validated',
       respondedAt: new Date(),
       validatedBy: req.user?.id || 'system',
-      comments: comments || ''
+      comments: comments || comment || ''
     };
 
     if (adjustments && typeof adjustments === 'object') {
@@ -2204,15 +5317,72 @@ app.post('/api/billing/prefacturation/:id/validate', authenticateToken, async (r
       }
     }
 
+    if (acceptedAmount !== undefined) {
+      prefacturation.carrierValidation.acceptedAmount = parseFloat(acceptedAmount);
+    }
+
     prefacturation.auditTrail.push({
-      action: 'validated_by_industrial',
+      action: 'validated_by_carrier',
       timestamp: new Date(),
       userId: req.user?.id || 'system',
-      details: { comments, adjustments }
+      details: { comments: comments || comment, adjustments, acceptedAmount }
     });
 
     await prefacturation.save();
-    res.json({ success: true, data: prefacturation });
+
+    // Envoyer email de confirmation au transporteur
+    const transporterEmail = prefacturation.transporterEmail;
+    if (transporterEmail) {
+      try {
+        const frontendUrl = process.env.FRONTEND_URL || 'https://app.symphoni-a.com';
+        const validationData = {
+          prefacturationId: prefacturation.prefacturationId,
+          transporterName: prefacturation.transporterName || 'Transporteur',
+          clientName: prefacturation.clientName || 'Client',
+          totalHT: prefacturation.calculation.totalHT,
+          totalTTC: prefacturation.calculation.totalTTC,
+          uploadUrl: `${frontendUrl}/billing/upload/${prefacturation.prefacturationId}`
+        };
+
+        const html = EmailTemplates.prefacturationValidatedTransporter(validationData);
+        await EmailService.send(transporterEmail, `Prefacture ${prefacturation.prefacturationId} validee - Uploadez votre facture`, html);
+        console.log(`[VALIDATION] Email envoye au transporteur: ${transporterEmail}`);
+      } catch (emailError) {
+        console.error('[VALIDATION] Erreur envoi email transporteur:', emailError.message);
+      }
+    }
+
+    // Envoyer notification a l'industriel
+    const industrialEmail = prefacturation.clientEmail;
+    if (industrialEmail) {
+      try {
+        const notifHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #1a237e; color: white; padding: 20px; text-align: center;">
+              <h1>SYMPHONI.A</h1>
+            </div>
+            <div style="padding: 30px; background: #f5f5f5;">
+              <h2 style="color: #10b981;">Prefacture validee par le transporteur</h2>
+              <p>Le transporteur <strong>${prefacturation.transporterName}</strong> a valide la prefacture <strong>${prefacturation.prefacturationId}</strong>.</p>
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p><strong>Montant valide:</strong> ${prefacturation.calculation.totalTTC.toFixed(2)} EUR TTC</p>
+                ${(comments || comment) ? `<p><strong>Commentaire:</strong> ${comments || comment}</p>` : ''}
+              </div>
+              <p style="color: #666;">Le transporteur va maintenant uploader sa facture. Vous recevrez une notification pour la validation finale.</p>
+            </div>
+            <div style="background: #263238; color: white; padding: 15px; text-align: center; font-size: 12px;">
+              SYMPHONI.A - Plateforme Transport Intelligente
+            </div>
+          </div>
+        `;
+        await EmailService.send(industrialEmail, `Prefacture ${prefacturation.prefacturationId} validee par transporteur`, notifHtml);
+        console.log(`[VALIDATION] Notification envoyee a l'industriel: ${industrialEmail}`);
+      } catch (emailError) {
+        console.error('[VALIDATION] Erreur envoi notification industriel:', emailError.message);
+      }
+    }
+
+    res.json({ success: true, data: prefacturation, message: 'Prefacture validee avec succes' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -2259,7 +5429,7 @@ app.post('/api/billing/prefacturation/:id/mark-paid', authenticateToken, async (
 app.post('/api/billing/prefacturation/:id/dispute', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { reason, proposedAmount } = req.body;
+    const { reason, proposedAmount, category, details, amountDisputed } = req.body;
 
     const prefacturation = await Prefacturation.findOne({
       $or: [{ prefacturationId: id }, { _id: id }]
@@ -2269,17 +5439,18 @@ app.post('/api/billing/prefacturation/:id/dispute', authenticateToken, async (re
       return res.status(404).json({ success: false, error: 'Prefacturation non trouvee' });
     }
 
+    const disputeAmount = amountDisputed || proposedAmount || prefacturation.calculation.totalTTC;
     const dispute = new BillingDispute({
       disputeId: `DISP-${Date.now()}`,
       prefacturationId: prefacturation.prefacturationId,
       orderId: prefacturation.orderId,
       transporterId: prefacturation.transporterId,
       clientId: prefacturation.clientId,
-      type: 'price',
+      type: category || 'price',
       symphoniaAmount: prefacturation.calculation.totalTTC,
-      carrierAmount: proposedAmount || prefacturation.calculation.totalTTC,
-      difference: Math.abs((proposedAmount || prefacturation.calculation.totalTTC) - prefacturation.calculation.totalTTC),
-      contestedItems: [{ item: 'total', reason }],
+      carrierAmount: disputeAmount,
+      difference: Math.abs(disputeAmount - prefacturation.calculation.totalTTC),
+      contestedItems: [{ item: category || 'total', reason, details }],
       status: 'open',
       openedAt: new Date(),
       openedBy: req.user?.id || 'system'
@@ -2292,11 +5463,70 @@ app.post('/api/billing/prefacturation/:id/dispute', authenticateToken, async (re
       action: 'dispute_opened',
       timestamp: new Date(),
       userId: req.user?.id || 'system',
-      details: { disputeId: dispute.disputeId, reason, proposedAmount }
+      details: { disputeId: dispute.disputeId, reason, category, amountDisputed: disputeAmount }
     });
 
     await prefacturation.save();
-    res.json({ success: true, data: { prefacturation, dispute } });
+
+    // Envoyer email automatique a l'industriel
+    const industrialEmail = prefacturation.clientEmail;
+    if (industrialEmail) {
+      try {
+        const frontendUrl = process.env.FRONTEND_URL || 'https://app.symphoni-a.com';
+        const contestData = {
+          prefacturationId: prefacturation.prefacturationId,
+          transporterName: prefacturation.transporterName || 'Transporteur',
+          clientName: prefacturation.clientName || 'Client',
+          reason: reason,
+          category: category || 'price',
+          proposedAmount: disputeAmount,
+          originalAmount: prefacturation.calculation.totalTTC,
+          difference: Math.abs(disputeAmount - prefacturation.calculation.totalTTC),
+          disputeUrl: `${frontendUrl}/billing/dispute/${dispute.disputeId}`,
+          validationDeadline: moment().add(5, 'days').format('DD/MM/YYYY')
+        };
+
+        const html = EmailTemplates.prefacturationContested(contestData);
+        await EmailService.send(industrialEmail, `[CONTESTATION] Prefacture ${prefacturation.prefacturationId}`, html);
+        console.log(`[DISPUTE] Email envoye a l'industriel: ${industrialEmail}`);
+      } catch (emailError) {
+        console.error('[DISPUTE] Erreur envoi email industriel:', emailError.message);
+      }
+    }
+
+    // Envoyer confirmation au transporteur
+    const transporterEmail = prefacturation.transporterEmail;
+    if (transporterEmail) {
+      try {
+        const confirmHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #1a237e; color: white; padding: 20px; text-align: center;">
+              <h1>SYMPHONI.A</h1>
+            </div>
+            <div style="padding: 30px; background: #f5f5f5;">
+              <h2 style="color: #1a237e;">Contestation enregistree</h2>
+              <p>Votre contestation pour la prefacture <strong>${prefacturation.prefacturationId}</strong> a bien ete enregistree.</p>
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p><strong>Reference contestation:</strong> ${dispute.disputeId}</p>
+                <p><strong>Categorie:</strong> ${category || 'Prix'}</p>
+                <p><strong>Montant conteste:</strong> ${disputeAmount.toFixed(2)} EUR</p>
+                <p><strong>Motif:</strong> ${reason}</p>
+              </div>
+              <p style="color: #666;">L'industriel dispose de 5 jours ouvrables pour examiner votre demande. Vous serez notifie par email de la resolution.</p>
+            </div>
+            <div style="background: #263238; color: white; padding: 15px; text-align: center; font-size: 12px;">
+              SYMPHONI.A - Plateforme Transport Intelligente
+            </div>
+          </div>
+        `;
+        await EmailService.send(transporterEmail, `Contestation enregistree - ${prefacturation.prefacturationId}`, confirmHtml);
+        console.log(`[DISPUTE] Confirmation envoyee au transporteur: ${transporterEmail}`);
+      } catch (emailError) {
+        console.error('[DISPUTE] Erreur envoi confirmation transporteur:', emailError.message);
+      }
+    }
+
+    res.json({ success: true, data: { prefacturation, dispute }, message: 'Contestation soumise avec succes' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -2398,6 +5628,256 @@ app.get('/api/billing/stats', authenticateToken, async (req, res) => {
           : 0,
         activeBlocks: blocksCount
       }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ===========================================
+// EMAIL ENDPOINTS
+// ===========================================
+
+// Envoyer un email de notification prefacturation
+app.post('/api/billing/email/send', authenticateToken, async (req, res) => {
+  try {
+    const { prefacturationId, type, additionalRecipients } = req.body;
+
+    if (!prefacturationId || !type) {
+      return res.status(400).json({ success: false, error: 'prefacturationId et type requis' });
+    }
+
+    const prefacturation = await Prefacturation.findOne({ prefacturationId });
+    if (!prefacturation) {
+      return res.status(404).json({ success: false, error: 'Prefacturation non trouvee' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'https://app.symphoni-a.com';
+    const emailData = {
+      prefacturationId: prefacturation.prefacturationId,
+      orderId: prefacturation.orderId,
+      transporterName: prefacturation.transporterName,
+      transporterEmail: prefacturation.transporterEmail,
+      clientName: prefacturation.clientName,
+      clientEmail: prefacturation.clientEmail,
+      pickupAddress: prefacturation.orderData?.pickupAddress || '',
+      deliveryAddress: prefacturation.orderData?.deliveryAddress || '',
+      deliveryDate: moment(prefacturation.orderData?.deliveryDate).format('DD/MM/YYYY'),
+      totalHT: prefacturation.calculation?.totalHT || 0,
+      tva: prefacturation.calculation?.tva || 0,
+      totalTTC: prefacturation.calculation?.totalTTC || 0,
+      validationUrl: `${frontendUrl}/billing/prefacturation/${prefacturation.prefacturationId}`,
+      validatedAt: moment().format('DD/MM/YYYY HH:mm'),
+      paymentTermDays: prefacturation.payment?.paymentTermDays || 30
+    };
+
+    let html, subject, recipients;
+
+    switch (type) {
+      case 'new_prefacturation_transporter':
+        html = EmailTemplates.newPrefacturationTransporter(emailData);
+        subject = `Nouvelle prefacturation ${prefacturation.prefacturationId} - Validation requise`;
+        recipients = [prefacturation.transporterEmail];
+        break;
+
+      case 'new_prefacturation_industrial':
+        html = EmailTemplates.newPrefacturationIndustrial(emailData);
+        subject = `Nouvelle prefacturation transport ${prefacturation.prefacturationId}`;
+        recipients = [prefacturation.clientEmail];
+        break;
+
+      case 'validated':
+        html = EmailTemplates.prefacturationValidatedTransporter(emailData);
+        subject = `Prefacturation ${prefacturation.prefacturationId} validee`;
+        recipients = [prefacturation.transporterEmail];
+        break;
+
+      case 'contested':
+        emailData.contestReason = req.body.contestReason || 'Non specifie';
+        emailData.disputeUrl = `${frontendUrl}/billing/dispute/${prefacturation.prefacturationId}`;
+        html = EmailTemplates.prefacturationContested(emailData);
+        subject = `Contestation prefacturation ${prefacturation.prefacturationId}`;
+        recipients = [prefacturation.clientEmail];
+        break;
+
+      case 'reminder':
+        const createdAt = moment(prefacturation.createdAt);
+        const deadline = createdAt.add(VALIDATION_TIMEOUT_DAYS, 'days');
+        emailData.daysPending = moment().diff(createdAt, 'days');
+        emailData.deadline = deadline.format('DD/MM/YYYY');
+        html = EmailTemplates.validationReminder(emailData);
+        subject = `Rappel: Prefacturation ${prefacturation.prefacturationId} en attente`;
+        recipients = [prefacturation.transporterEmail];
+        break;
+
+      default:
+        return res.status(400).json({ success: false, error: 'Type email inconnu' });
+    }
+
+    // Add additional recipients if provided
+    if (additionalRecipients && Array.isArray(additionalRecipients)) {
+      recipients = [...recipients, ...additionalRecipients];
+    }
+
+    // Filter out empty/invalid emails
+    recipients = recipients.filter(email => email && email.includes('@'));
+
+    if (recipients.length === 0) {
+      return res.status(400).json({ success: false, error: 'Aucun destinataire valide' });
+    }
+
+    await EmailService.send(recipients, subject, html);
+
+    // Log in audit trail
+    prefacturation.auditTrail.push({
+      action: 'email_sent',
+      timestamp: new Date(),
+      userId: req.user?.userId || 'system',
+      details: { type, recipients, subject }
+    });
+    await prefacturation.save();
+
+    res.json({
+      success: true,
+      message: 'Email envoye avec succes',
+      data: { recipients, type, subject }
+    });
+  } catch (error) {
+    console.error('[EMAIL] Error sending:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Envoyer un email de test
+app.post('/api/billing/email/test', authenticateToken, async (req, res) => {
+  try {
+    const { to, template } = req.body;
+
+    if (!to) {
+      return res.status(400).json({ success: false, error: 'Destinataire (to) requis' });
+    }
+
+    const testData = {
+      prefacturationId: 'PREF-2025-TEST',
+      orderId: 'CMD-2025-TEST',
+      transporterName: 'Test Transporteur SARL',
+      transporterEmail: to,
+      clientName: 'Test Client Industries',
+      clientEmail: to,
+      pickupAddress: 'Lyon 69001, France',
+      deliveryAddress: 'Paris 75001, France',
+      deliveryDate: moment().format('DD/MM/YYYY'),
+      totalHT: 1500,
+      tva: 300,
+      totalTTC: 1800,
+      validationUrl: 'https://app.symphoni-a.com/billing/test',
+      validatedAt: moment().format('DD/MM/YYYY HH:mm'),
+      paymentTermDays: 30,
+      contestReason: 'Ceci est un test de contestation',
+      disputeUrl: 'https://app.symphoni-a.com/billing/dispute/test',
+      daysPending: 5,
+      deadline: moment().add(2, 'days').format('DD/MM/YYYY')
+    };
+
+    let html, subject;
+    const templateName = template || 'new_prefacturation_transporter';
+
+    switch (templateName) {
+      case 'new_prefacturation_transporter':
+        html = EmailTemplates.newPrefacturationTransporter(testData);
+        subject = '[TEST] Nouvelle prefacturation - Validation requise';
+        break;
+      case 'new_prefacturation_industrial':
+        html = EmailTemplates.newPrefacturationIndustrial(testData);
+        subject = '[TEST] Nouvelle prefacturation transport';
+        break;
+      case 'validated':
+        html = EmailTemplates.prefacturationValidatedTransporter(testData);
+        subject = '[TEST] Prefacturation validee';
+        break;
+      case 'contested':
+        html = EmailTemplates.prefacturationContested(testData);
+        subject = '[TEST] Contestation prefacturation';
+        break;
+      case 'reminder':
+        html = EmailTemplates.validationReminder(testData);
+        subject = '[TEST] Rappel prefacturation';
+        break;
+      default:
+        html = EmailTemplates.newPrefacturationTransporter(testData);
+        subject = '[TEST] Email template test';
+    }
+
+    await EmailService.send(to, subject, html);
+
+    res.json({
+      success: true,
+      message: 'Email de test envoye',
+      data: { to, template: templateName, subject }
+    });
+  } catch (error) {
+    console.error('[EMAIL] Test error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Configuration email status
+app.get('/api/billing/email/status', authenticateToken, async (req, res) => {
+  try {
+    const status = {
+      sesConfigured: EMAIL_CONFIG.useSES && sesClient !== null,
+      smtpConfigured: smtpTransporter !== null,
+      from: EMAIL_CONFIG.from,
+      fromName: EMAIL_CONFIG.fromName,
+      replyTo: EMAIL_CONFIG.replyTo,
+      awsRegion: EMAIL_CONFIG.awsRegion,
+      smtpHost: EMAIL_CONFIG.smtp.host
+    };
+
+    // Test SMTP connection if configured
+    if (smtpTransporter) {
+      try {
+        await smtpTransporter.verify();
+        status.smtpStatus = 'connected';
+      } catch (err) {
+        status.smtpStatus = 'error: ' + err.message;
+      }
+    }
+
+    res.json({ success: true, data: status });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Envoyer emails en masse (batch)
+app.post('/api/billing/email/batch', authenticateToken, async (req, res) => {
+  try {
+    const { prefacturationIds, type } = req.body;
+
+    if (!prefacturationIds || !Array.isArray(prefacturationIds) || !type) {
+      return res.status(400).json({ success: false, error: 'prefacturationIds (array) et type requis' });
+    }
+
+    const results = [];
+    for (const prefacturationId of prefacturationIds) {
+      try {
+        const response = await axios.post(
+          `http://localhost:${PORT}/api/billing/email/send`,
+          { prefacturationId, type },
+          { headers: { Authorization: req.headers.authorization } }
+        );
+        results.push({ prefacturationId, success: true });
+      } catch (err) {
+        results.push({ prefacturationId, success: false, error: err.message });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    res.json({
+      success: true,
+      message: `${successCount}/${prefacturationIds.length} emails envoyes`,
+      data: results
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
