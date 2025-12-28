@@ -836,6 +836,281 @@ app.get('/api/palettes/health', (req, res) => {
   });
 });
 
+// Dashboard public - agregation des donnees pour affichage
+app.get('/api/palettes/dashboard', optionalAuth, async (req, res) => {
+  try {
+    const { companyId } = req.query;
+
+    // Get ledger for company (or global stats)
+    let ledger = null;
+    if (companyId) {
+      ledger = await PalletLedger.findOne({ companyId });
+    }
+
+    // Get recent cheques
+    const chequeFilter = companyId ? {
+      $or: [{ transporterId: companyId }, { destinationSiteId: { $regex: companyId } }]
+    } : {};
+    const cheques = await PalletCheque.find(chequeFilter)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // Get disputes
+    const disputeFilter = companyId ? {
+      $or: [{ initiatorId: companyId }, { respondentId: companyId }]
+    } : {};
+    const disputes = await PalletDispute.find(disputeFilter)
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+
+    // Get sites
+    const sites = await Site.find({ active: true }).lean();
+
+    // Get all companies
+    const companies = await Company.find({}).lean();
+
+    // Calculate stats
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const chequesThisMonth = cheques.filter(c => new Date(c.createdAt) >= startOfMonth).length;
+    const activeDisputes = disputes.filter(d => d.status !== 'resolu' && d.status !== 'ferme').length;
+    const totalPalettesRecu = cheques
+      .filter(c => c.status === 'RECU')
+      .reduce((sum, c) => sum + c.quantity, 0);
+
+    res.json({
+      success: true,
+      data: {
+        ledger: ledger || {
+          balances: { EURO_EPAL: 0, EURO_EPAL_2: 0, DEMI_PALETTE: 0, PALETTE_PERDUE: 0 },
+          adjustments: []
+        },
+        cheques,
+        disputes,
+        sites,
+        companies,
+        stats: {
+          chequesThisMonth,
+          activeDisputes,
+          totalPalettesRecu,
+          totalCheques: cheques.length,
+          totalSites: sites.length,
+          totalCompanies: companies.length
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Encours par transporteur - pour les industriels
+app.get('/api/palettes/encours-transporteurs', optionalAuth, async (req, res) => {
+  try {
+    const { industrialId } = req.query;
+
+    // Get all transporters with their ledgers
+    const transporters = await Company.find({ type: 'transporteur' }).lean();
+    const ledgers = await PalletLedger.find({
+      companyId: { $in: transporters.map(t => t.companyId) }
+    }).lean();
+
+    // Get cheques per transporter for this industrial (if specified)
+    const chequeFilter = industrialId ? {
+      $or: [
+        { 'metadata.industrialId': industrialId },
+        { destinationSiteId: { $regex: industrialId } }
+      ]
+    } : {};
+
+    const allCheques = await PalletCheque.find(chequeFilter).lean();
+
+    // Aggregate cheques by transporter
+    const chequesByTransporter = allCheques.reduce((acc, cheque) => {
+      const tid = cheque.transporterId;
+      if (!acc[tid]) {
+        acc[tid] = { total: 0, enCours: 0, recus: 0, litiges: 0, palettesTotal: 0 };
+      }
+      acc[tid].total++;
+      acc[tid].palettesTotal += cheque.quantity || 0;
+      if (cheque.status === 'EMIS' || cheque.status === 'EN_TRANSIT' || cheque.status === 'DEPOSE') {
+        acc[tid].enCours++;
+      } else if (cheque.status === 'RECU') {
+        acc[tid].recus++;
+      } else if (cheque.status === 'LITIGE') {
+        acc[tid].litiges++;
+      }
+      return acc;
+    }, {});
+
+    // Build response with transporter details
+    const encoursData = transporters.map(transporter => {
+      const ledger = ledgers.find(l => l.companyId === transporter.companyId);
+      const chequeStats = chequesByTransporter[transporter.companyId] || { total: 0, enCours: 0, recus: 0, litiges: 0, palettesTotal: 0 };
+
+      // Calculate total balance from ledger
+      const balance = ledger ? Object.values(ledger.balances).reduce((sum, val) => sum + (val || 0), 0) : 0;
+
+      return {
+        transporterId: transporter.companyId,
+        transporterName: transporter.name,
+        siret: transporter.siret,
+        contact: transporter.contact,
+        isReferenced: transporter.subscription?.active || false,
+        referenceDate: transporter.createdAt,
+        balance: {
+          total: balance,
+          details: ledger?.balances || { EURO_EPAL: 0, EURO_EPAL_2: 0, DEMI_PALETTE: 0, PALETTE_PERDUE: 0 }
+        },
+        cheques: chequeStats,
+        lastActivity: ledger?.lastUpdated || transporter.updatedAt || transporter.createdAt
+      };
+    });
+
+    // Sort by absolute balance (highest encours first)
+    encoursData.sort((a, b) => Math.abs(b.balance.total) - Math.abs(a.balance.total));
+
+    res.json({
+      success: true,
+      data: encoursData,
+      summary: {
+        totalTransporters: transporters.length,
+        transportersWithEncours: encoursData.filter(t => t.balance.total !== 0).length,
+        totalDebt: encoursData.filter(t => t.balance.total < 0).reduce((sum, t) => sum + Math.abs(t.balance.total), 0),
+        totalCredit: encoursData.filter(t => t.balance.total > 0).reduce((sum, t) => sum + t.balance.total, 0),
+        totalChequesEnCours: encoursData.reduce((sum, t) => sum + t.cheques.enCours, 0)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Encours par industriel - pour les transporteurs (vue inverse)
+app.get('/api/palettes/encours-industriels', optionalAuth, async (req, res) => {
+  try {
+    const { transporterId } = req.query;
+
+    // Get all industriels (clients) with their ledgers
+    const industriels = await Company.find({ type: 'industriel' }).lean();
+    const ledgers = await PalletLedger.find({
+      companyId: { $in: industriels.map(i => i.companyId) }
+    }).lean();
+
+    // Get all sites for reference
+    const allSites = await Site.find({ active: true }).lean();
+
+    // Get cheques for this transporter (if specified)
+    const chequeFilter = transporterId ? { transporterId } : {};
+    const allCheques = await PalletCheque.find(chequeFilter).lean();
+
+    // Map sites to their companies
+    const siteToCompany = {};
+    allSites.forEach(site => {
+      siteToCompany[site.siteId] = site.companyId;
+    });
+
+    // Aggregate cheques by industrial (destination site's company)
+    const chequesByIndustrial = allCheques.reduce((acc, cheque) => {
+      // Try to get industrial ID from site
+      const industrialId = siteToCompany[cheque.destinationSiteId] || cheque.destinationSiteId?.split('-')[0];
+      if (!industrialId) return acc;
+
+      if (!acc[industrialId]) {
+        acc[industrialId] = { total: 0, enCours: 0, recus: 0, litiges: 0, palettesTotal: 0 };
+      }
+      acc[industrialId].total++;
+      acc[industrialId].palettesTotal += cheque.quantity || 0;
+      if (cheque.status === 'EMIS' || cheque.status === 'EN_TRANSIT' || cheque.status === 'DEPOSE') {
+        acc[industrialId].enCours++;
+      } else if (cheque.status === 'RECU') {
+        acc[industrialId].recus++;
+      } else if (cheque.status === 'LITIGE') {
+        acc[industrialId].litiges++;
+      }
+      return acc;
+    }, {});
+
+    // Build response with industrial details
+    const encoursData = industriels.map(industrial => {
+      const ledger = ledgers.find(l => l.companyId === industrial.companyId);
+      const chequeStats = chequesByIndustrial[industrial.companyId] || { total: 0, enCours: 0, recus: 0, litiges: 0, palettesTotal: 0 };
+
+      // For transporter view: calculate what this transporter owes/is owed by this industrial
+      // Positive = industrial owes transporter (transporter has credit)
+      // Negative = transporter owes industrial (transporter has debt)
+      let transporterBalance = 0;
+      let transporterBalanceDetails = { EURO_EPAL: 0, EURO_EPAL_2: 0, DEMI_PALETTE: 0, PALETTE_PERDUE: 0 };
+
+      if (transporterId) {
+        // Get specific ledger for this transporter
+        // (In real scenario, you'd have per-pair ledger entries, for now we estimate from cheques)
+        const transporterCheques = allCheques.filter(c =>
+          c.transporterId === transporterId &&
+          (siteToCompany[c.destinationSiteId] === industrial.companyId || c.destinationSiteId?.includes(industrial.companyId))
+        );
+
+        transporterCheques.forEach(c => {
+          if (c.status === 'RECU') {
+            // Transporter delivered, so transporter has credit (industrial owes)
+            transporterBalance += c.quantity;
+            transporterBalanceDetails[c.palletType] = (transporterBalanceDetails[c.palletType] || 0) + c.quantity;
+          } else if (c.status === 'EMIS' || c.status === 'EN_TRANSIT' || c.status === 'DEPOSE') {
+            // Still in transit, count as pending
+          }
+        });
+      }
+
+      // Get sites belonging to this industrial
+      const industrialSites = allSites.filter(s => s.companyId === industrial.companyId);
+
+      return {
+        industrialId: industrial.companyId,
+        industrialName: industrial.name,
+        siret: industrial.siret,
+        contact: industrial.contact,
+        address: industrial.address,
+        isActive: industrial.subscription?.active || false,
+        sites: industrialSites.map(s => ({
+          siteId: s.siteId,
+          name: s.name,
+          city: s.address?.city,
+          quotaRemaining: (s.quota?.dailyMax || 100) - (s.quota?.currentDaily || 0)
+        })),
+        balance: {
+          total: transporterBalance,
+          details: transporterBalanceDetails
+        },
+        cheques: chequeStats,
+        lastActivity: ledger?.lastUpdated || industrial.updatedAt || industrial.createdAt
+      };
+    });
+
+    // Sort by cheque activity (most active first)
+    encoursData.sort((a, b) => b.cheques.total - a.cheques.total);
+
+    // Filter to only show industrials with some activity or relationship
+    const activeEncours = encoursData.filter(i => i.cheques.total > 0 || i.balance.total !== 0);
+
+    res.json({
+      success: true,
+      data: activeEncours.length > 0 ? activeEncours : encoursData.slice(0, 20), // Show top 20 if no activity
+      summary: {
+        totalIndustriels: industriels.length,
+        industrielsWithEncours: activeEncours.length,
+        totalDebt: activeEncours.filter(i => i.balance.total < 0).reduce((sum, i) => sum + Math.abs(i.balance.total), 0),
+        totalCredit: activeEncours.filter(i => i.balance.total > 0).reduce((sum, i) => sum + i.balance.total, 0),
+        totalChequesEnCours: activeEncours.reduce((sum, i) => sum + i.cheques.enCours, 0),
+        totalSites: allSites.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ===========================================
 // ROUTES API - COMPANIES
 // ===========================================
