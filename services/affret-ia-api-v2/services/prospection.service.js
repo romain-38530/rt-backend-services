@@ -27,6 +27,71 @@ class ProspectionService {
   }
 
   /**
+   * Extraire le nom/prenom depuis une adresse email
+   * Retourne null si le format n'est pas reconnu (ex: contact@, info@, exploit@)
+   */
+  parseContactNameFromEmail(email) {
+    if (!email) return null;
+
+    const localPart = email.split('@')[0];
+    if (!localPart) return null;
+
+    // Patterns a ignorer (emails generiques)
+    const genericPatterns = [
+      /^(contact|info|commercial|exploit|exploitation|affret|affretement|dispo|dispatch)$/i,
+      /^(admin|support|service|secretariat|direction|compta|comptabilite)$/i,
+      /^(transport|transports|logistique|logistic|office|bureau)$/i,
+      /^[a-z]{1,2}$/, // Initiales seules (ex: "jd@...")
+      /^\d+$/, // Que des chiffres
+      /^[a-z]+\d+$/i // Texte + chiffres (ex: "exploit04")
+    ];
+
+    for (const pattern of genericPatterns) {
+      if (pattern.test(localPart)) return null;
+    }
+
+    // Separateurs courants: point, underscore, tiret
+    const separators = /[._-]/;
+    const parts = localPart.split(separators).filter(p => p.length > 1);
+
+    if (parts.length >= 2) {
+      // Format prenom.nom ou nom.prenom
+      const firstName = this.capitalizeWord(parts[0]);
+      const lastName = this.capitalizeWord(parts[parts.length - 1]);
+
+      // Verifier que ca ressemble a des noms (pas de chiffres, longueur raisonnable)
+      if (this.isValidName(firstName) && this.isValidName(lastName)) {
+        return `${firstName} ${lastName.toUpperCase()}`;
+      }
+    } else if (parts.length === 1 && parts[0].length >= 3) {
+      // Un seul mot - pourrait etre un prenom seul
+      const name = this.capitalizeWord(parts[0]);
+      if (this.isValidName(name) && name.length >= 3) {
+        return name;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Capitaliser un mot (premiere lettre majuscule)
+   */
+  capitalizeWord(word) {
+    if (!word) return '';
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }
+
+  /**
+   * Verifier si une chaine ressemble a un nom/prenom valide
+   */
+  isValidName(str) {
+    if (!str || str.length < 2) return false;
+    // Que des lettres (avec accents) et tirets
+    return /^[a-zA-ZÀ-ÿ-]+$/.test(str);
+  }
+
+  /**
    * Connexion a la base B2PWeb scraping
    */
   async connectToB2PWeb() {
@@ -75,9 +140,12 @@ class ProspectionService {
         // Verifier si existe deja
         let prospect = await ProspectCarrier.findOne({ carrierEmail: carrier._id });
 
+        // Extraire le nom du contact depuis l'email (seulement si format reconnu)
+        const contactName = this.parseContactNameFromEmail(carrier._id);
+
         if (!prospect) {
           // Creer nouveau prospect
-          prospect = new ProspectCarrier({
+          const prospectData = {
             carrierName: carrier.carrier_name,
             carrierEmail: carrier._id,
             carrierPhone: carrier.carrier_phone,
@@ -88,7 +156,14 @@ class ProspectionService {
               interactionCount: carrier.interaction_count
             },
             activityZones: this.extractActivityZones(carrier.routes)
-          });
+          };
+
+          // Ajouter contactName seulement si detecte
+          if (contactName) {
+            prospectData.contactName = contactName;
+          }
+
+          prospect = new ProspectCarrier(prospectData);
           await prospect.save();
           created++;
         } else {
@@ -99,6 +174,12 @@ class ProspectionService {
             prospect.activityZones,
             this.extractActivityZones(carrier.routes)
           );
+
+          // Ajouter contactName si pas deja present et detecte
+          if (contactName && !prospect.contactName) {
+            prospect.contactName = contactName;
+          }
+
           await prospect.save();
           updated++;
         }

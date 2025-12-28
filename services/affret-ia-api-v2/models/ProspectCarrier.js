@@ -10,6 +10,7 @@ const prospectCarrierSchema = new mongoose.Schema({
   carrierName: { type: String, required: true },
   carrierEmail: { type: String, required: true, index: true },
   carrierPhone: { type: String },
+  contactName: { type: String }, // Nom/Prenom du contact (extrait de l'email si disponible)
 
   // Source des donnees
   source: {
