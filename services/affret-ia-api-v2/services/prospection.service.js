@@ -23,7 +23,7 @@ class ProspectionService {
     this.sesFromEmail = process.env.SES_FROM_EMAIL || 'affret-ia@symphonia-controltower.com';
     this.sesFromName = process.env.SES_FROM_NAME || 'AFFRET.IA SYMPHONI.A';
     this.b2pwebClient = null;
-    this.symphoniaUrl = process.env.SYMPHONIA_URL || 'https://d1tb834u144p4r.amplifyapp.com';
+    this.symphoniaUrl = process.env.SYMPHONIA_URL || 'https://transporteur.symphonia-controltower.com';
   }
 
   /**
