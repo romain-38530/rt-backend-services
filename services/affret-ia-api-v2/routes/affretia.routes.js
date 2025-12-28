@@ -252,4 +252,72 @@ router.delete('/blacklist/:carrierId', affretiaController.removeFromBlacklist);
  */
 router.get('/blacklist/:carrierId', affretiaController.checkBlacklist);
 
+// ==================== PROSPECTION COMMERCIALE ====================
+
+/**
+ * POST /api/v1/affretia/prospection/sync
+ * Synchroniser les transporteurs depuis B2PWeb
+ */
+router.post('/prospection/sync', affretiaController.syncProspects);
+
+/**
+ * GET /api/v1/affretia/prospection/prospects
+ * Liste des prospects avec filtres
+ */
+router.get('/prospection/prospects', affretiaController.getProspects);
+
+/**
+ * GET /api/v1/affretia/prospection/prospects/:id
+ * Details d'un prospect
+ */
+router.get('/prospection/prospects/:id', affretiaController.getProspect);
+
+/**
+ * POST /api/v1/affretia/prospection/find-matches
+ * Trouver des prospects pour un transport non pris
+ */
+router.post('/prospection/find-matches', affretiaController.findProspectMatches);
+
+/**
+ * POST /api/v1/affretia/prospection/campaign
+ * Lancer une campagne de prospection pour un transport
+ */
+router.post('/prospection/campaign', affretiaController.launchProspectionCampaign);
+
+/**
+ * POST /api/v1/affretia/prospection/email/:prospectId
+ * Envoyer un email de prospection a un prospect
+ */
+router.post('/prospection/email/:prospectId', affretiaController.sendProspectionEmail);
+
+/**
+ * POST /api/v1/affretia/prospection/trial/:prospectId/activate
+ * Activer l'essai gratuit pour un prospect
+ */
+router.post('/prospection/trial/:prospectId/activate', affretiaController.activateTrial);
+
+/**
+ * POST /api/v1/affretia/prospection/trial/:prospectId/use
+ * Utiliser un transport gratuit
+ */
+router.post('/prospection/trial/:prospectId/use', affretiaController.useTrialTransport);
+
+/**
+ * POST /api/v1/affretia/prospection/convert/:prospectId
+ * Convertir un prospect en Premium
+ */
+router.post('/prospection/convert/:prospectId', affretiaController.convertToPremium);
+
+/**
+ * POST /api/v1/affretia/prospection/conversion-email/:prospectId
+ * Envoyer email de relance conversion
+ */
+router.post('/prospection/conversion-email/:prospectId', affretiaController.sendConversionEmail);
+
+/**
+ * GET /api/v1/affretia/prospection/stats
+ * Statistiques de prospection
+ */
+router.get('/prospection/stats', affretiaController.getProspectionStats);
+
 module.exports = router;

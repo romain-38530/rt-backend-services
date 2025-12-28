@@ -9,10 +9,12 @@ const CarrierProposal = require('../models/CarrierProposal');
 const BroadcastCampaign = require('../models/BroadcastCampaign');
 const VigilanceCheck = require('../models/VigilanceCheck');
 const TrackingSession = require('../models/TrackingSession');
+const ProspectCarrier = require('../models/ProspectCarrier');
 const AIScoringEngine = require('../modules/ai-scoring-engine');
 const broadcastService = require('../services/broadcast.service');
 const negotiationService = require('../services/negotiation.service');
 const trackingService = require('../services/tracking.service');
+const prospectionService = require('../services/prospection.service');
 
 const scoringEngine = new AIScoringEngine();
 
@@ -1912,6 +1914,379 @@ exports.checkBlacklist = async (req, res) => {
 
   } catch (error) {
     console.error('[AFFRETIA CONTROLLER] Error checking blacklist:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ==================== PROSPECTION COMMERCIALE ====================
+
+/**
+ * POST /api/v1/affretia/prospection/sync
+ * Synchroniser les transporteurs depuis B2PWeb
+ */
+exports.syncProspects = async (req, res) => {
+  try {
+    const result = await prospectionService.syncCarriersFromB2PWeb();
+
+    res.json({
+      success: true,
+      data: result,
+      message: `Sync complete: ${result.created} created, ${result.updated} updated`
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error syncing prospects:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/prospection/prospects
+ * Liste des prospects avec filtres
+ */
+exports.getProspects = async (req, res) => {
+  try {
+    const { status, minScore, source, limit = 50, offset = 0 } = req.query;
+
+    const filters = {};
+    if (status) filters.prospectionStatus = status;
+    if (minScore) filters['engagementScore.value'] = { $gte: parseInt(minScore) };
+    if (source) filters['source.type'] = source;
+
+    const prospects = await ProspectCarrier.find(filters)
+      .sort({ 'engagementScore.value': -1, 'source.lastSeenAt': -1 })
+      .skip(parseInt(offset))
+      .limit(parseInt(limit));
+
+    const total = await ProspectCarrier.countDocuments(filters);
+
+    res.json({
+      success: true,
+      data: prospects,
+      pagination: {
+        total,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting prospects:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/prospection/prospects/:id
+ * Details d'un prospect
+ */
+exports.getProspect = async (req, res) => {
+  try {
+    const prospect = await ProspectCarrier.findById(req.params.id);
+
+    if (!prospect) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prospect not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: prospect
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting prospect:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/prospection/find-matches
+ * Trouver des prospects pour un transport non pris
+ */
+exports.findProspectMatches = async (req, res) => {
+  try {
+    const { pickupCity, pickupPostalCode, deliveryCity, deliveryPostalCode, weight, vehicleType } = req.body;
+
+    if (!pickupCity && !pickupPostalCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'pickupCity or pickupPostalCode required'
+      });
+    }
+
+    const prospects = await prospectionService.findProspectsForTransport({
+      pickupCity,
+      pickupPostalCode,
+      deliveryCity,
+      deliveryPostalCode,
+      weight,
+      vehicleType
+    });
+
+    res.json({
+      success: true,
+      data: prospects,
+      count: prospects.length
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error finding prospect matches:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/prospection/campaign
+ * Lancer une campagne de prospection pour un transport
+ */
+exports.launchProspectionCampaign = async (req, res) => {
+  try {
+    const { transport, maxProspects = 10 } = req.body;
+
+    if (!transport || (!transport.pickupCity && !transport.pickupPostalCode)) {
+      return res.status(400).json({
+        success: false,
+        error: 'transport with pickupCity or pickupPostalCode required'
+      });
+    }
+
+    const result = await prospectionService.launchProspectionCampaign(transport, maxProspects);
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error launching campaign:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/prospection/email/:prospectId
+ * Envoyer un email de prospection a un prospect
+ */
+exports.sendProspectionEmail = async (req, res) => {
+  try {
+    const { prospectId } = req.params;
+    const { transport } = req.body;
+
+    const result = await prospectionService.sendProspectionEmail(prospectId, transport);
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error sending prospection email:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/prospection/trial/:prospectId/activate
+ * Activer l'essai gratuit pour un prospect
+ */
+exports.activateTrial = async (req, res) => {
+  try {
+    const { prospectId } = req.params;
+    const { daysValid = 30 } = req.body;
+
+    const prospect = await ProspectCarrier.findById(prospectId);
+    if (!prospect) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prospect not found'
+      });
+    }
+
+    if (prospect.trialOffer.activated) {
+      return res.status(400).json({
+        success: false,
+        error: 'Trial already activated'
+      });
+    }
+
+    prospect.activateTrial(daysValid);
+    await prospect.save();
+
+    // Emettre evenement
+    global.emitEvent?.('prospect.trial.activated', {
+      prospectId: prospect._id,
+      carrierEmail: prospect.carrierEmail,
+      carrierName: prospect.carrierName,
+      expiresAt: prospect.trialOffer.expiresAt
+    });
+
+    res.json({
+      success: true,
+      data: {
+        prospectId: prospect._id,
+        trialOffer: prospect.trialOffer,
+        message: `Trial activated with ${prospect.trialOffer.transportsLimit} free transports for ${daysValid} days`
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error activating trial:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/prospection/trial/:prospectId/use
+ * Utiliser un transport gratuit
+ */
+exports.useTrialTransport = async (req, res) => {
+  try {
+    const { prospectId } = req.params;
+    const { orderId, reference, route, price } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'orderId required'
+      });
+    }
+
+    const prospect = await ProspectCarrier.findById(prospectId);
+    if (!prospect) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prospect not found'
+      });
+    }
+
+    if (!prospect.canUseTrial()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Trial not available or expired',
+        remaining: 0
+      });
+    }
+
+    prospect.useTrialTransport(orderId, reference, route, price);
+    await prospect.save();
+
+    const remaining = prospect.trialOffer.transportsLimit - prospect.trialOffer.transportsUsed;
+
+    // Emettre evenement
+    global.emitEvent?.('prospect.trial.used', {
+      prospectId: prospect._id,
+      orderId,
+      transportsUsed: prospect.trialOffer.transportsUsed,
+      remaining
+    });
+
+    // Envoyer email de conversion si proche de la fin
+    if (remaining <= 3 && remaining > 0) {
+      try {
+        await prospectionService.sendConversionEmail(prospectId);
+      } catch (e) {
+        console.warn('[PROSPECTION] Could not send conversion email:', e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        used: prospect.trialOffer.transportsUsed,
+        remaining,
+        expiresAt: prospect.trialOffer.expiresAt
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error using trial transport:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/prospection/convert/:prospectId
+ * Convertir un prospect en Premium
+ */
+exports.convertToPremium = async (req, res) => {
+  try {
+    const { prospectId } = req.params;
+    const { plan, monthlyValue, source } = req.body;
+
+    const prospect = await ProspectCarrier.findById(prospectId);
+    if (!prospect) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prospect not found'
+      });
+    }
+
+    prospect.convertToPremium(plan || 'premium_standard', monthlyValue || 99, source || 'affretia');
+    await prospect.save();
+
+    // Emettre evenement
+    global.emitEvent?.('prospect.converted', {
+      prospectId: prospect._id,
+      carrierEmail: prospect.carrierEmail,
+      carrierName: prospect.carrierName,
+      plan,
+      monthlyValue
+    });
+
+    res.json({
+      success: true,
+      data: {
+        prospectId: prospect._id,
+        status: prospect.prospectionStatus,
+        conversionTracking: prospect.conversionTracking
+      }
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error converting to premium:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/prospection/conversion-email/:prospectId
+ * Envoyer email de relance conversion
+ */
+exports.sendConversionEmail = async (req, res) => {
+  try {
+    const { prospectId } = req.params;
+
+    const result = await prospectionService.sendConversionEmail(prospectId);
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error sending conversion email:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/prospection/stats
+ * Statistiques de prospection
+ */
+exports.getProspectionStats = async (req, res) => {
+  try {
+    const stats = await prospectionService.getProspectionStats();
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting prospection stats:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

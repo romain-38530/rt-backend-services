@@ -1,6 +1,6 @@
 {
   "name": "affret-ia-api-v2",
-  "version": "2.0.0",
+  "version": "2.2.1",
   "description": "API Affret.IA intelligente pour recherche et affectation automatique des transporteurs",
   "main": "index.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "axios": "^1.6.2",
-    "socket.io-client": "^4.7.2"
+    "socket.io-client": "^4.7.2",
+    "@aws-sdk/client-ses": "^3.450.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

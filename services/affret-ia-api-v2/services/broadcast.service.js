@@ -1,17 +1,29 @@
 /**
  * Service de Diffusion Multi-Canal AFFRET.IA
- * Gere l'envoi Email, Bourse publique, Push notifications
+ * Gere l'envoi Email (AWS SES), Bourse publique, Push notifications
  */
 
 const axios = require('axios');
 const BroadcastCampaign = require('../models/BroadcastCampaign');
 
+// AWS SES SDK
+let sesClient = null;
+try {
+  const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+  sesClient = new SESClient({
+    region: process.env.AWS_REGION || 'eu-central-1'
+  });
+} catch (err) {
+  console.warn('[BROADCAST SERVICE] AWS SES SDK not available, email sending disabled');
+}
+
 class BroadcastService {
   constructor() {
     this.notificationsApiUrl = process.env.NOTIFICATIONS_API_URL;
-    this.sendgridApiKey = process.env.SENDGRID_API_KEY;
-    this.sendgridFromEmail = process.env.SENDGRID_FROM_EMAIL || 'affret@symphonia.com';
+    this.sesFromEmail = process.env.SES_FROM_EMAIL || 'noreply@rt-technologie.com';
+    this.sesFromName = process.env.SES_FROM_NAME || 'AFFRET.IA SYMPHONI.A';
     this.bourseBaseUrl = process.env.BOURSE_BASE_URL || 'https://bourse.affretia.com';
+    this.sesEnabled = !!sesClient;
   }
 
   /**
@@ -139,7 +151,7 @@ class BroadcastService {
   }
 
   /**
-   * Envoyer des emails aux transporteurs
+   * Envoyer des emails aux transporteurs via AWS SES
    */
   async sendEmailBroadcast(campaign, orderData) {
     let sent = 0;
@@ -151,8 +163,22 @@ class BroadcastService {
       try {
         const emailContent = this.generateEmailContent(orderData, campaign);
 
-        // Utiliser le service de notifications
-        if (this.notificationsApiUrl) {
+        // Utiliser AWS SES pour l'envoi
+        if (this.sesEnabled) {
+          await this.sendEmailViaSES(
+            recipient.contactEmail,
+            emailContent.subject,
+            emailContent.html,
+            emailContent.text,
+            {
+              campaignId: campaign.campaignId,
+              sessionId: campaign.sessionId,
+              carrierId: recipient.carrierId
+            }
+          );
+          console.log(`[BROADCAST SERVICE] Email sent via SES to ${recipient.contactEmail}`);
+        } else if (this.notificationsApiUrl) {
+          // Fallback sur le service notifications
           await axios.post(`${this.notificationsApiUrl}/api/v1/notifications/send`, {
             type: 'email',
             to: recipient.contactEmail,
@@ -166,7 +192,8 @@ class BroadcastService {
             }
           });
         } else {
-          console.warn('[BROADCAST SERVICE] Notifications API not configured, skipping email');
+          console.warn('[BROADCAST SERVICE] No email service configured, skipping email');
+          continue;
         }
 
         campaign.markRecipientSent(recipient.carrierId);
@@ -182,6 +209,53 @@ class BroadcastService {
     await campaign.save();
 
     return { sent, failed, total: emailRecipients.length };
+  }
+
+  /**
+   * Envoyer un email via AWS SES
+   */
+  async sendEmailViaSES(to, subject, htmlBody, textBody, metadata = {}) {
+    if (!sesClient) {
+      throw new Error('AWS SES client not initialized');
+    }
+
+    const { SendEmailCommand } = require('@aws-sdk/client-ses');
+
+    const params = {
+      Source: `${this.sesFromName} <${this.sesFromEmail}>`,
+      Destination: {
+        ToAddresses: [to]
+      },
+      Message: {
+        Subject: {
+          Data: subject,
+          Charset: 'UTF-8'
+        },
+        Body: {
+          Html: {
+            Data: htmlBody,
+            Charset: 'UTF-8'
+          },
+          Text: {
+            Data: textBody,
+            Charset: 'UTF-8'
+          }
+        }
+      },
+      Tags: [
+        { Name: 'Application', Value: 'AFFRET-IA' },
+        { Name: 'CampaignId', Value: metadata.campaignId || 'unknown' },
+        { Name: 'SessionId', Value: metadata.sessionId || 'unknown' }
+      ]
+    };
+
+    const command = new SendEmailCommand(params);
+    const response = await sesClient.send(command);
+
+    return {
+      messageId: response.MessageId,
+      success: true
+    };
   }
 
   /**

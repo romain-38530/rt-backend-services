@@ -205,7 +205,90 @@ async function selectBestCarrier(carriers, algorithm = 'balanced') {
 // ==================== ROUTES ====================
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', service: 'affret-ia-api-v2', version: '2.0.0' });
+  res.json({ status: 'healthy', service: 'affret-ia-api-v2', version: '2.2.0' });
+});
+
+// ==================== TEST SES ====================
+// Endpoint de test pour verifier la configuration AWS SES
+app.post('/api/v1/test-ses', async (req, res) => {
+  try {
+    const { to } = req.body;
+
+    if (!to) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email "to" is required'
+      });
+    }
+
+    const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+    const sesClient = new SESClient({
+      region: process.env.AWS_REGION || 'eu-central-1'
+    });
+
+    const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@rt-technologie.com';
+    const fromName = process.env.SES_FROM_NAME || 'AFFRET.IA SYMPHONI.A';
+
+    const params = {
+      Source: `${fromName} <${fromEmail}>`,
+      Destination: {
+        ToAddresses: [to]
+      },
+      Message: {
+        Subject: {
+          Data: 'Test Email AFFRET.IA - Configuration SES',
+          Charset: 'UTF-8'
+        },
+        Body: {
+          Html: {
+            Data: `
+              <html>
+                <body style="font-family: Arial, sans-serif; padding: 20px;">
+                  <h1 style="color: #2563eb;">Test Email AFFRET.IA</h1>
+                  <p>Si vous recevez cet email, la configuration AWS SES fonctionne correctement.</p>
+                  <p><strong>From:</strong> ${fromEmail}</p>
+                  <p><strong>Region:</strong> ${process.env.AWS_REGION || 'eu-central-1'}</p>
+                  <p><strong>Date:</strong> ${new Date().toISOString()}</p>
+                  <hr>
+                  <p style="color: #666; font-size: 12px;">SYMPHONI.A - AFFRET.IA Email Broadcast System</p>
+                </body>
+              </html>
+            `,
+            Charset: 'UTF-8'
+          },
+          Text: {
+            Data: `Test Email AFFRET.IA\n\nSi vous recevez cet email, la configuration AWS SES fonctionne correctement.\n\nFrom: ${fromEmail}\nRegion: ${process.env.AWS_REGION || 'eu-central-1'}\nDate: ${new Date().toISOString()}`,
+            Charset: 'UTF-8'
+          }
+        }
+      },
+      Tags: [
+        { Name: 'Application', Value: 'AFFRET-IA' },
+        { Name: 'Type', Value: 'TEST' }
+      ]
+    };
+
+    const command = new SendEmailCommand(params);
+    const response = await sesClient.send(command);
+
+    res.json({
+      success: true,
+      data: {
+        messageId: response.MessageId,
+        from: fromEmail,
+        to: to,
+        region: process.env.AWS_REGION || 'eu-central-1'
+      }
+    });
+
+  } catch (error) {
+    console.error('[TEST SES] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: error.Code || error.code
+    });
+  }
 });
 
 // ==================== AFFRET.IA ROUTES ====================
