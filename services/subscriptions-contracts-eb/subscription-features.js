@@ -333,7 +333,8 @@ const PAID_OPTIONS = {
     unitPrice: 4,
     unit: 'vehicule',
     pricingType: 'per_unit_monthly',
-    stripePriceId: null, // A creer
+    stripePriceId: 'price_1SjkOqRvJiyzt2LnNJCPX9sJ',
+    stripeProductId: 'prod_Th8gCeQBesjrEC',
     availableFor: ['industriel_pro', 'industriel_enterprise']
   },
   emailTrackingMailgun: {
@@ -342,7 +343,8 @@ const PAID_OPTIONS = {
     description: 'Notifications email illimitees',
     monthlyPrice: 50,
     pricingType: 'fixed_monthly',
-    stripePriceId: null, // A creer
+    stripePriceId: 'price_1SjkOrRvJiyzt2LnUju7kM5C',
+    stripeProductId: 'prod_Th8gYk745eacwU',
     availableFor: ['industriel_pro', 'industriel_enterprise']
   },
   ocrDocuments: {
@@ -352,7 +354,9 @@ const PAID_OPTIONS = {
     unitPrice: 0.10,
     unit: 'page',
     pricingType: 'per_usage',
-    stripePriceId: null, // A creer (metered)
+    stripePriceId: 'price_1Sjl36RvJiyzt2LnL15H3uxL',
+    stripeProductId: 'prod_Th8gQeBvXhy4fm',
+    stripeMeterId: 'mtr_test_61Tt8OxlYOirANuQK41RvJiyzt2LnK9Q',
     availableFor: ['industriel_pro', 'industriel_enterprise']
   },
   smsNotifications: {
@@ -362,7 +366,9 @@ const PAID_OPTIONS = {
     unitPrice: 0.05,
     unit: 'SMS',
     pricingType: 'per_usage',
-    stripePriceId: null, // A creer (metered)
+    stripePriceId: 'price_1Sjl37RvJiyzt2LnDjbRXHfg',
+    stripeProductId: 'prod_Th8gT88qQ0B7og',
+    stripeMeterId: 'mtr_test_61Tt8OxLUxuqnUcAp41RvJiyzt2LnCSe',
     availableFor: ['industriel_pro', 'industriel_enterprise']
   },
   stockageDocuments: {
@@ -372,7 +378,8 @@ const PAID_OPTIONS = {
     unitPrice: 5,
     unit: '10GB',
     pricingType: 'per_unit_monthly',
-    stripePriceId: null, // A creer
+    stripePriceId: 'price_1SjkOsRvJiyzt2LnKE9KQFYt',
+    stripeProductId: 'prod_Th8gfyDXN2SRGZ',
     availableFor: ['industriel_pro', 'industriel_enterprise']
   }
 };
