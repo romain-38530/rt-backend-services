@@ -48,7 +48,7 @@ const TRANSPORTEUR_PLANS = {
     id: 'transporteur_starter',
     name: 'Transporteur Starter',
     price: 200,
-    stripePriceId: null, // A creer dans Stripe
+    stripePriceId: 'price_1SjkAORvJiyzt2LnU3jD82sS',
     maxUsers: 1,
     maxVehicles: 0,
     features: {
@@ -84,7 +84,7 @@ const TRANSPORTEUR_PLANS = {
     id: 'transporteur_premium',
     name: 'Transporteur Premium',
     price: 399,
-    stripePriceId: 'price_1Sjaq3RvJiyzt2LnlyeWcUMb', // A mettre a jour
+    stripePriceId: 'price_1SjkAPRvJiyzt2LnBu3UG295',
     maxUsers: 3,
     maxVehicles: 10,
     features: {
@@ -122,7 +122,7 @@ const TRANSPORTEUR_PLANS = {
     id: 'transporteur_business',
     name: 'Transporteur Business',
     price: 499,
-    stripePriceId: 'price_1Sjaq3RvJiyzt2LnGgCu0QPZ', // A mettre a jour
+    stripePriceId: 'price_1SjkAPRvJiyzt2LnaE1kBYEO',
     maxUsers: -1, // Illimite
     maxVehicles: -1, // Illimite
     features: {
@@ -160,7 +160,7 @@ const TRANSPORTEUR_PLANS = {
     id: 'transporteur_elite',
     name: 'Transporteur Elite',
     price: 699,
-    stripePriceId: null, // A creer dans Stripe
+    stripePriceId: 'price_1SjkAQRvJiyzt2LnqWQVuJEW',
     maxUsers: -1, // Illimite
     maxVehicles: -1, // Illimite
     features: {
@@ -239,7 +239,7 @@ const INDUSTRIEL_PLANS = {
     id: 'industriel_pro',
     name: 'Industriel Pro',
     price: 499,
-    stripePriceId: 'price_1Sjaq4RvJiyzt2LnUPkeahlA', // A mettre a jour
+    stripePriceId: 'price_1SjkAQRvJiyzt2LnIK2ZNO6l',
     maxUsers: 10,
     maxSites: 5,
     features: {
@@ -284,7 +284,7 @@ const INDUSTRIEL_PLANS = {
     id: 'industriel_enterprise',
     name: 'Industriel Enterprise',
     price: 699,
-    stripePriceId: 'price_1Sjaq4RvJiyzt2LnKNllGUcJ', // A mettre a jour
+    stripePriceId: 'price_1SjkARRvJiyzt2LnTxSBc8WR',
     maxUsers: -1, // Illimite
     maxSites: -1, // Illimite
     features: {
