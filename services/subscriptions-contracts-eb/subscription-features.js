@@ -1,135 +1,191 @@
 /**
  * SYMPHONI.A - Subscription Features Configuration
  * Definit les features disponibles par plan d'abonnement
- * Version 2.0.0 - Systeme d'activation et de blocage
+ * Version 3.0.0 - Nouvelle politique tarifaire Dec 2025
  */
 
 // ==================== PLANS TRANSPORTEUR ====================
 
 const TRANSPORTEUR_PLANS = {
-  // Plan Gratuit - Acces basique limite
-  FREE: {
-    id: 'transporteur_free',
-    name: 'Transporteur Free',
+  // Plan Gratuit - 0 EUR/mois
+  GRATUIT: {
+    id: 'transporteur_gratuit',
+    name: 'Transporteur Gratuit',
     price: 0,
     stripePriceId: null,
     maxUsers: 1,
-    maxVehicles: 3,
-    maxOrders: 20, // par mois
+    maxVehicles: 0,
     features: {
-      // Core
+      // Core - Inclus
       dashboard: true,
-      orderManagement: true,
-      basicTracking: true,
+      profilEntreprise: true,
+      consultationMarketplace: true,
+      reponseAppelsOffres: 10, // 10 gratuites
 
       // Modules bloques
-      affretIA: false,
+      gpsTracking: false,
       ecmr: false,
-      geofencing: false,
-      telematics: false,
-      advancedTracking: false,
-      boursePrivee: false,
-      vigilance: false,
-      ocrDocuments: false,
-      webhooks: false,
-      archivageLegal: false,
+      gestionFlotte: false,
+      facturationAuto: false,
+      palettesEurope: false,
+      statistiquesAvancees: false,
+      supportPrioritaire: false,
       apiAccess: false,
-      analytics: false,
-      smsNotifications: false,
-      signatureQualifiee: false,
-      multiSite: false,
-      planningRdv: false,
-      exportReports: false
+      marqueBlanche: false,
+
+      // Acces aux fonctions industrielles
+      accessIndustriel: true
     },
     limits: {
-      ordersPerMonth: 20,
-      trackingUpdatesPerDay: 10,
-      documentsStorage: '100MB',
-      dataRetention: '30 days'
+      reponseAppelsOffres: 10,
+      multiUtilisateurs: 1,
+      vehiculesTracking: 0
     }
   },
 
-  // Plan Premium - 99 EUR/mois
+  // Plan Starter - 200 EUR/mois
+  STARTER: {
+    id: 'transporteur_starter',
+    name: 'Transporteur Starter',
+    price: 200,
+    stripePriceId: null, // A creer dans Stripe
+    maxUsers: 1,
+    maxVehicles: 0,
+    features: {
+      // Core - Inclus
+      dashboard: true,
+      profilEntreprise: true,
+      consultationMarketplace: true,
+      reponseAppelsOffres: true, // Illimite
+
+      // Modules bloques
+      gpsTracking: false,
+      ecmr: false,
+      gestionFlotte: false,
+      facturationAuto: false,
+      palettesEurope: false,
+      statistiquesAvancees: false,
+      supportPrioritaire: false,
+      apiAccess: false,
+      marqueBlanche: false,
+
+      // Acces aux fonctions industrielles
+      accessIndustriel: true
+    },
+    limits: {
+      reponseAppelsOffres: -1, // Illimite
+      multiUtilisateurs: 1,
+      vehiculesTracking: 0
+    }
+  },
+
+  // Plan Premium - 399 EUR/mois
   PREMIUM: {
     id: 'transporteur_premium',
     name: 'Transporteur Premium',
-    price: 99,
-    stripePriceId: 'price_1Sjaq3RvJiyzt2LnlyeWcUMb',
-    maxUsers: 5,
-    maxVehicles: 20,
-    maxOrders: 200, // par mois
+    price: 399,
+    stripePriceId: 'price_1Sjaq3RvJiyzt2LnlyeWcUMb', // A mettre a jour
+    maxUsers: 3,
+    maxVehicles: 10,
     features: {
-      // Core
+      // Core - Inclus
       dashboard: true,
-      orderManagement: true,
-      basicTracking: true,
+      profilEntreprise: true,
+      consultationMarketplace: true,
+      reponseAppelsOffres: true, // Illimite
 
       // Modules inclus Premium
+      gpsTracking: true, // 10 vehicules
       ecmr: true,
-      geofencing: true,
-      advancedTracking: true,
-      vigilance: true,
-      analytics: true,
-      exportReports: true,
-      planningRdv: true,
+      gestionFlotte: true,
+      facturationAuto: true,
+      palettesEurope: true,
+      statistiquesAvancees: true,
+      supportPrioritaire: true,
 
-      // Modules bloques (options payantes)
-      affretIA: false, // +200 EUR/mois
-      telematics: false, // +19 EUR/camion
-      boursePrivee: false, // +149 EUR/mois
-      ocrDocuments: false, // +39 EUR/mois
-      webhooks: false, // +59 EUR/mois
-      archivageLegal: false, // +19 EUR/mois
+      // Modules bloques
       apiAccess: false,
-      smsNotifications: false, // 0.07 EUR/SMS
-      signatureQualifiee: false, // 2 EUR/signature
-      multiSite: false
+      marqueBlanche: false,
+
+      // Acces aux fonctions industrielles
+      accessIndustriel: true
     },
     limits: {
-      ordersPerMonth: 200,
-      trackingUpdatesPerDay: 100,
-      documentsStorage: '5GB',
-      dataRetention: '1 year'
+      reponseAppelsOffres: -1, // Illimite
+      multiUtilisateurs: 3,
+      vehiculesTracking: 10
     }
   },
 
-  // Plan Business - 299 EUR/mois
+  // Plan Business - 499 EUR/mois
   BUSINESS: {
     id: 'transporteur_business',
     name: 'Transporteur Business',
-    price: 299,
-    stripePriceId: 'price_1Sjaq3RvJiyzt2LnGgCu0QPZ',
-    maxUsers: 20,
-    maxVehicles: 100,
-    maxOrders: -1, // illimite
+    price: 499,
+    stripePriceId: 'price_1Sjaq3RvJiyzt2LnGgCu0QPZ', // A mettre a jour
+    maxUsers: -1, // Illimite
+    maxVehicles: -1, // Illimite
+    features: {
+      // Core - Inclus
+      dashboard: true,
+      profilEntreprise: true,
+      consultationMarketplace: true,
+      reponseAppelsOffres: true, // Illimite
+
+      // Modules inclus Business
+      gpsTracking: true, // Illimite
+      ecmr: true,
+      gestionFlotte: true,
+      facturationAuto: true,
+      palettesEurope: true,
+      statistiquesAvancees: true,
+      supportPrioritaire: true,
+      apiAccess: true,
+
+      // Modules bloques
+      marqueBlanche: false,
+
+      // Acces aux fonctions industrielles
+      accessIndustriel: true
+    },
+    limits: {
+      reponseAppelsOffres: -1, // Illimite
+      multiUtilisateurs: -1, // Illimite
+      vehiculesTracking: -1 // Illimite
+    }
+  },
+
+  // Plan Elite - 699 EUR/mois
+  ELITE: {
+    id: 'transporteur_elite',
+    name: 'Transporteur Elite',
+    price: 699,
+    stripePriceId: null, // A creer dans Stripe
+    maxUsers: -1, // Illimite
+    maxVehicles: -1, // Illimite
     features: {
       // TOUT INCLUS
       dashboard: true,
-      orderManagement: true,
-      basicTracking: true,
+      profilEntreprise: true,
+      consultationMarketplace: true,
+      reponseAppelsOffres: true, // Illimite
+      gpsTracking: true, // Illimite
       ecmr: true,
-      geofencing: true,
-      advancedTracking: true,
-      vigilance: true,
-      analytics: true,
-      exportReports: true,
-      planningRdv: true,
-      affretIA: true,
-      telematics: true,
-      boursePrivee: true,
-      ocrDocuments: true,
-      webhooks: true,
-      archivageLegal: true,
+      gestionFlotte: true,
+      facturationAuto: true,
+      palettesEurope: true,
+      statistiquesAvancees: true,
+      supportPrioritaire: true,
       apiAccess: true,
-      smsNotifications: true,
-      signatureQualifiee: true,
-      multiSite: true
+      marqueBlanche: false, // Non disponible meme en Elite
+
+      // Acces aux fonctions industrielles
+      accessIndustriel: true
     },
     limits: {
-      ordersPerMonth: -1, // illimite
-      trackingUpdatesPerDay: -1,
-      documentsStorage: '50GB',
-      dataRetention: '10 years'
+      reponseAppelsOffres: -1, // Illimite
+      multiUtilisateurs: -1, // Illimite
+      vehiculesTracking: -1 // Illimite
     }
   }
 };
@@ -137,352 +193,362 @@ const TRANSPORTEUR_PLANS = {
 // ==================== PLANS INDUSTRIEL ====================
 
 const INDUSTRIEL_PLANS = {
-  // Plan Starter - Gratuit ou essai
+  // Plan Starter - 0 EUR/mois (essai/demo)
   STARTER: {
     id: 'industriel_starter',
     name: 'Industriel Starter',
     price: 0,
     stripePriceId: null,
     maxUsers: 2,
-    maxOrders: 30,
+    maxSites: 1,
     features: {
-      // Core
-      dashboard: true,
-      orderManagement: true,
-      basicTracking: true,
-      quoteRequests: true,
-
-      // Modules bloques
+      // Tout bloque en Starter
+      dashboard: false,
+      commandesIndustrielles: false,
+      indicateursKpi: false,
+      alertesCritiques: false,
+      demandesTransport: false,
+      facturation: false,
+      palettesEurope: false,
+      bourseStockage: false,
+      formationTraining: false,
       affretIA: false,
+      referencementTransporteurs: false,
+      grillesTarifaires: false,
       ecmr: false,
-      geofencing: false,
-      advancedTracking: false,
-      boursePrivee: false,
-      vigilance: false,
-      ocrDocuments: false,
-      webhooks: false,
-      archivageLegal: false,
+      trackingTempsReel: false,
+      chatbotIA: false,
+      planningChargement: false,
+      vigilanceDocuments: false,
       apiAccess: false,
-      analytics: false,
-      tmsIntegration: false,
-      erpIntegration: false,
-      multiSite: false,
-      planningRdv: false,
-      exportReports: false,
-      dedicatedSupport: false,
-      customBranding: false
+      gpsTrackingTomtom: false,
+      emailTrackingMailgun: false,
+      ocrDocuments: false,
+      smsNotifications: false,
+      stockageDocuments: false
     },
     limits: {
-      ordersPerMonth: 30,
-      carriersInPool: 5,
-      documentsStorage: '200MB',
-      dataRetention: '30 days'
+      multiSites: 1,
+      multiUtilisateurs: 2,
+      transporteursReferences: 0
     }
   },
 
-  // Plan Pro - 199 EUR/mois
+  // Plan Pro - 499 EUR/mois
   PRO: {
     id: 'industriel_pro',
     name: 'Industriel Pro',
-    price: 199,
-    stripePriceId: 'price_1Sjaq4RvJiyzt2LnUPkeahlA',
+    price: 499,
+    stripePriceId: 'price_1Sjaq4RvJiyzt2LnUPkeahlA', // A mettre a jour
     maxUsers: 10,
-    maxOrders: 500,
+    maxSites: 5,
     features: {
-      // Core
-      dashboard: true,
-      orderManagement: true,
-      basicTracking: true,
-      quoteRequests: true,
-
       // Modules inclus Pro
+      dashboard: true,
+      commandesIndustrielles: true, // Illimite
+      indicateursKpi: true, // Complet
+      alertesCritiques: true,
+      demandesTransport: true, // Illimite
+      facturation: true,
+      palettesEurope: true,
+      bourseStockage: true,
+      formationTraining: true,
+      referencementTransporteurs: true, // 50 transporteurs
+      grillesTarifaires: true,
       ecmr: true,
-      geofencing: true,
-      advancedTracking: true,
-      vigilance: true,
-      analytics: true,
-      exportReports: true,
-      planningRdv: true,
-      multiSite: true,
+      trackingTempsReel: 'email', // Par Mail
+      planningChargement: true,
+      vigilanceDocuments: true,
 
-      // Modules bloques (options payantes)
-      affretIA: false, // +200 EUR/mois
-      boursePrivee: false, // +149 EUR/mois
-      ocrDocuments: false, // +39 EUR/mois
-      webhooks: false, // +59 EUR/mois
-      archivageLegal: false, // +19 EUR/mois
-      apiAccess: false, // +89 EUR/mois
-      tmsIntegration: false, // +89 EUR/mois
-      erpIntegration: false, // +89 EUR/mois
-      dedicatedSupport: false,
-      customBranding: false
+      // Modules bloques ou en option
+      affretIA: false,
+      chatbotIA: false,
+      apiAccess: false,
+      gpsTrackingTomtom: false, // Option payante
+
+      // Options payantes disponibles
+      emailTrackingMailgun: 'option',
+      ocrDocuments: 'option',
+      smsNotifications: 'option',
+      stockageDocuments: 'option'
     },
     limits: {
-      ordersPerMonth: 500,
-      carriersInPool: 30,
-      documentsStorage: '10GB',
-      dataRetention: '2 years'
+      multiSites: 5,
+      multiUtilisateurs: 10,
+      transporteursReferences: 50
     }
   },
 
-  // Plan Enterprise - 499 EUR/mois
+  // Plan Enterprise - 699 EUR/mois
   ENTERPRISE: {
     id: 'industriel_enterprise',
     name: 'Industriel Enterprise',
-    price: 499,
-    stripePriceId: 'price_1Sjaq4RvJiyzt2LnKNllGUcJ',
-    maxUsers: -1, // illimite
-    maxOrders: -1,
+    price: 699,
+    stripePriceId: 'price_1Sjaq4RvJiyzt2LnKNllGUcJ', // A mettre a jour
+    maxUsers: -1, // Illimite
+    maxSites: -1, // Illimite
     features: {
-      // TOUT INCLUS
+      // Modules inclus Enterprise
       dashboard: true,
-      orderManagement: true,
-      basicTracking: true,
-      quoteRequests: true,
+      commandesIndustrielles: true, // Illimite
+      indicateursKpi: true, // Complet
+      alertesCritiques: true,
+      demandesTransport: true, // Illimite
+      facturation: true,
+      palettesEurope: true,
+      bourseStockage: true,
+      formationTraining: true,
+      affretIA: true, // Inclus
+      referencementTransporteurs: true, // Illimite
+      grillesTarifaires: true,
       ecmr: true,
-      geofencing: true,
-      advancedTracking: true,
-      vigilance: true,
-      analytics: true,
-      exportReports: true,
-      planningRdv: true,
-      multiSite: true,
-      affretIA: true,
-      boursePrivee: true,
-      ocrDocuments: true,
-      webhooks: true,
-      archivageLegal: true,
-      apiAccess: true,
-      tmsIntegration: true,
-      erpIntegration: true,
-      dedicatedSupport: true,
-      customBranding: true
+      trackingTempsReel: 'email', // Par Mail
+      chatbotIA: true, // Avance
+      planningChargement: true,
+      vigilanceDocuments: true,
+      apiAccess: true, // Inclus
+
+      // Options payantes disponibles
+      gpsTrackingTomtom: 'option', // Si option souscrite
+      emailTrackingMailgun: 'option',
+      ocrDocuments: 'option',
+      smsNotifications: 'option',
+      stockageDocuments: 'option'
     },
     limits: {
-      ordersPerMonth: -1,
-      carriersInPool: -1,
-      documentsStorage: '100GB',
-      dataRetention: '10 years'
+      multiSites: -1, // Illimite
+      multiUtilisateurs: -1, // Illimite
+      transporteursReferences: -1 // Illimite
     }
   }
 };
 
-// ==================== OPTIONS PAYANTES ====================
+// ==================== ADD-ONS / OPTIONS PAYANTES ====================
 
 const PAID_OPTIONS = {
-  affretIA: {
-    id: 'affretIA',
-    name: 'AFFRET.IA Premium',
-    description: 'Matching automatique avec IA pour trouver les meilleurs transporteurs',
-    monthlyPrice: 200,
-    stripePriceId: 'price_1Sa0Q9RzJcFnHbQGo9MPpKLL',
-    type: 'monthly',
-    availableFor: ['PREMIUM', 'PRO'] // Plans qui peuvent acheter cette option
+  gpsTrackingTomtom: {
+    id: 'gpsTrackingTomtom',
+    name: 'GPS Tracking TomTom',
+    description: 'Suivi temps reel des vehicules',
+    unitPrice: 4,
+    unit: 'vehicule',
+    pricingType: 'per_unit_monthly',
+    stripePriceId: null, // A creer
+    availableFor: ['industriel_pro', 'industriel_enterprise']
   },
-  boursePrivee: {
-    id: 'boursePrivee',
-    name: 'Bourse Privee Transporteurs',
-    description: 'Acces a votre reseau prive de transporteurs',
-    monthlyPrice: 149,
-    stripePriceId: 'price_1Sa0QBRzJcFnHbQGj4oDShX6',
-    type: 'monthly',
-    availableFor: ['PREMIUM', 'PRO']
+  emailTrackingMailgun: {
+    id: 'emailTrackingMailgun',
+    name: 'Email Tracking Mailgun',
+    description: 'Notifications email illimitees',
+    monthlyPrice: 50,
+    pricingType: 'fixed_monthly',
+    stripePriceId: null, // A creer
+    availableFor: ['industriel_pro', 'industriel_enterprise']
   },
   ocrDocuments: {
     id: 'ocrDocuments',
     name: 'OCR Documents',
-    description: 'Extraction automatique des donnees des documents',
-    monthlyPrice: 39,
-    stripePriceId: 'price_1Sa0QBRzJcFnHbQG1wucZp7t',
-    type: 'monthly',
-    availableFor: ['PREMIUM', 'PRO']
-  },
-  webhooks: {
-    id: 'webhooks',
-    name: 'Webhooks Temps Reel',
-    description: 'Notifications en temps reel vers vos systemes',
-    monthlyPrice: 59,
-    stripePriceId: 'price_1Sa0QCRzJcFnHbQGUbeuvkxL',
-    type: 'monthly',
-    availableFor: ['PREMIUM', 'PRO']
-  },
-  archivageLegal: {
-    id: 'archivageLegal',
-    name: 'Archivage Legal 10 ans',
-    description: 'Conservation legale des documents pendant 10 ans',
-    monthlyPrice: 19,
-    stripePriceId: 'price_1Sa0QCRzJcFnHbQGBWVtBqwC',
-    type: 'monthly',
-    availableFor: ['FREE', 'PREMIUM', 'STARTER', 'PRO']
-  },
-  apiAccess: {
-    id: 'apiAccess',
-    name: 'Connexion API / Outil Tiers',
-    description: 'Integration avec vos systemes via API REST',
-    monthlyPrice: 89,
-    stripePriceId: 'price_1Sa0Q9RzJcFnHbQGkRbuRWZw',
-    type: 'monthly',
-    availableFor: ['PREMIUM', 'PRO']
-  },
-  telematics: {
-    id: 'telematics',
-    name: 'Connexion Telematique',
-    description: 'Integration avec les boitiers telematiques',
-    unitPrice: 19,
-    unit: 'camion',
-    stripePriceId: 'price_1Sa0QDRzJcFnHbQGoYJAtJHT',
-    type: 'per_unit',
-    availableFor: ['PREMIUM', 'PRO']
+    description: 'AWS Textract + Google Vision',
+    unitPrice: 0.10,
+    unit: 'page',
+    pricingType: 'per_usage',
+    stripePriceId: null, // A creer (metered)
+    availableFor: ['industriel_pro', 'industriel_enterprise']
   },
   smsNotifications: {
     id: 'smsNotifications',
-    name: 'Notifications SMS',
-    description: 'Envoi de SMS aux chauffeurs et clients',
-    unitPrice: 0.07,
+    name: 'SMS Notifications',
+    description: 'Alertes SMS clients/chauffeurs',
+    unitPrice: 0.05,
     unit: 'SMS',
-    stripePriceId: 'price_1Sa0QERzJcFnHbQGcqYGnCCf',
-    type: 'metered',
-    availableFor: ['FREE', 'PREMIUM', 'STARTER', 'PRO']
+    pricingType: 'per_usage',
+    stripePriceId: null, // A creer (metered)
+    availableFor: ['industriel_pro', 'industriel_enterprise']
   },
-  signatureQualifiee: {
-    id: 'signatureQualifiee',
-    name: 'Signature Electronique Qualifiee',
-    description: 'Signature electronique valeur legale (eIDAS)',
-    unitPrice: 2,
-    unit: 'signature',
-    stripePriceId: 'price_1Sa0QFRzJcFnHbQGqqLYiMvV',
-    type: 'metered',
-    availableFor: ['FREE', 'PREMIUM', 'STARTER', 'PRO']
+  stockageDocuments: {
+    id: 'stockageDocuments',
+    name: 'Stockage Documents',
+    description: 'Au-dela du quota inclus',
+    unitPrice: 5,
+    unit: '10GB',
+    pricingType: 'per_unit_monthly',
+    stripePriceId: null, // A creer
+    availableFor: ['industriel_pro', 'industriel_enterprise']
   }
 };
 
 // ==================== FEATURE DESCRIPTIONS ====================
 
 const FEATURE_DESCRIPTIONS = {
+  // Transporteur
   dashboard: {
-    name: 'Tableau de bord',
-    description: 'Vue d\'ensemble de votre activite',
+    name: 'Dashboard de base',
+    description: 'Tableau de bord avec vue d\'ensemble',
     icon: 'LayoutDashboard'
   },
-  orderManagement: {
-    name: 'Gestion des commandes',
-    description: 'Creation et suivi des commandes de transport',
-    icon: 'ClipboardList'
+  profilEntreprise: {
+    name: 'Profil entreprise',
+    description: 'Gestion du profil et informations entreprise',
+    icon: 'Building2'
   },
-  basicTracking: {
-    name: 'Tracking basique',
-    description: 'Suivi des livraisons en temps reel',
+  consultationMarketplace: {
+    name: 'Consultation Marketplace AFFRET.IA',
+    description: 'Consultation des offres sur la marketplace',
+    icon: 'Search'
+  },
+  reponseAppelsOffres: {
+    name: 'Reponse aux appels d\'offres',
+    description: 'Repondre aux appels d\'offres AFFRET.IA',
+    icon: 'Send'
+  },
+  gpsTracking: {
+    name: 'GPS Tracking TomTom',
+    description: 'Suivi temps reel des vehicules',
     icon: 'MapPin'
   },
-  advancedTracking: {
-    name: 'Tracking Premium GPS',
-    description: 'Suivi GPS temps reel avec historique',
-    icon: 'Satellite'
-  },
-  affretIA: {
-    name: 'AFFRET.IA',
-    description: 'Intelligence artificielle pour le matching transporteurs',
-    icon: 'Brain'
-  },
   ecmr: {
-    name: 'e-CMR',
+    name: 'eCMR Electronique',
     description: 'Lettre de voiture electronique legale',
     icon: 'FileText'
   },
-  geofencing: {
-    name: 'Geofencing',
-    description: 'Alertes de zone et detection automatique',
-    icon: 'Target'
+  gestionFlotte: {
+    name: 'Gestion Flotte',
+    description: 'Gestion complete de la flotte de vehicules',
+    icon: 'Truck'
   },
-  telematics: {
-    name: 'Telematique',
-    description: 'Integration boitiers telematiques vehicules',
-    icon: 'Radio'
+  facturationAuto: {
+    name: 'Facturation Automatique',
+    description: 'Generation automatique des factures',
+    icon: 'Receipt'
   },
-  boursePrivee: {
-    name: 'Bourse Privee',
-    description: 'Reseau prive de transporteurs partenaires',
-    icon: 'Users'
+  palettesEurope: {
+    name: 'Palettes Europe',
+    description: 'Gestion du pool de palettes Europe',
+    icon: 'Package'
   },
-  vigilance: {
-    name: 'Vigilance Conformite',
-    description: 'Verification automatique des documents transporteurs',
-    icon: 'ShieldCheck'
+  statistiquesAvancees: {
+    name: 'Statistiques Avancees',
+    description: 'Rapports et analyses detaillees',
+    icon: 'BarChart3'
   },
-  ocrDocuments: {
-    name: 'OCR Documents',
-    description: 'Lecture automatique des documents',
-    icon: 'Scan'
-  },
-  webhooks: {
-    name: 'Webhooks',
-    description: 'Notifications temps reel vers vos systemes',
-    icon: 'Webhook'
-  },
-  archivageLegal: {
-    name: 'Archivage Legal',
-    description: 'Conservation documents 10 ans',
-    icon: 'Archive'
+  supportPrioritaire: {
+    name: 'Support Prioritaire',
+    description: 'Support client prioritaire',
+    icon: 'HeadphonesIcon'
   },
   apiAccess: {
     name: 'Acces API',
     description: 'Integration via API REST',
     icon: 'Code'
   },
-  analytics: {
-    name: 'Analytics',
-    description: 'Rapports et analyses avancees',
-    icon: 'BarChart3'
-  },
-  planningRdv: {
-    name: 'Planning RDV',
-    description: 'Gestion des rendez-vous chargement/livraison',
-    icon: 'Calendar'
-  },
-  exportReports: {
-    name: 'Export Rapports',
-    description: 'Export PDF et Excel des rapports',
-    icon: 'Download'
-  },
-  multiSite: {
-    name: 'Multi-Sites',
-    description: 'Gestion de plusieurs sites/agences',
-    icon: 'Building2'
-  },
-  tmsIntegration: {
-    name: 'Integration TMS',
-    description: 'Connexion avec votre TMS existant',
-    icon: 'Link'
-  },
-  erpIntegration: {
-    name: 'Integration ERP',
-    description: 'Connexion avec votre ERP',
-    icon: 'Database'
-  },
-  dedicatedSupport: {
-    name: 'Support Dedie',
-    description: 'Account manager dedie',
-    icon: 'Headphones'
-  },
-  customBranding: {
-    name: 'Personnalisation',
-    description: 'Branding personnalise (logo, couleurs)',
+  marqueBlanche: {
+    name: 'Marque Blanche',
+    description: 'Personnalisation complete de la plateforme',
     icon: 'Palette'
   },
-  quoteRequests: {
-    name: 'Demandes de devis',
-    description: 'Envoi de demandes de cotation',
+  accessIndustriel: {
+    name: 'Acces Fonctions Industrielles',
+    description: 'Acces aux memes fonctions que les industriels',
+    icon: 'Factory'
+  },
+
+  // Industriel
+  commandesIndustrielles: {
+    name: 'Commandes Industrielles',
+    description: 'Gestion des commandes de transport',
+    icon: 'ClipboardList'
+  },
+  indicateursKpi: {
+    name: 'Indicateurs KPI',
+    description: 'Tableau de bord avec KPIs complets',
+    icon: 'Activity'
+  },
+  alertesCritiques: {
+    name: 'Alertes Critiques',
+    description: 'Notifications temps reel des incidents',
+    icon: 'AlertTriangle'
+  },
+  demandesTransport: {
+    name: 'Demandes Transport',
+    description: 'Creation de demandes de transport',
     icon: 'FileQuestion'
   },
+  facturation: {
+    name: 'Facturation',
+    description: 'Module de facturation et prefacturation',
+    icon: 'Euro'
+  },
+  bourseStockage: {
+    name: 'Bourse de Stockage',
+    description: 'Acces a la bourse de stockage',
+    icon: 'Warehouse'
+  },
+  formationTraining: {
+    name: 'Formation & Training',
+    description: 'Modules de formation en ligne',
+    icon: 'GraduationCap'
+  },
+  affretIA: {
+    name: 'AFFRET.IA',
+    description: 'Module d\'affretement intelligent automatise',
+    icon: 'Brain'
+  },
+  referencementTransporteurs: {
+    name: 'Referencement Transporteurs',
+    description: 'Pool de transporteurs references',
+    icon: 'Users'
+  },
+  grillesTarifaires: {
+    name: 'Grilles Tarifaires',
+    description: 'Gestion des grilles de prix',
+    icon: 'Table'
+  },
+  trackingTempsReel: {
+    name: 'Tracking Temps Reel',
+    description: 'Suivi en temps reel des livraisons',
+    icon: 'Radio'
+  },
+  chatbotIA: {
+    name: 'Chatbot IA',
+    description: 'Assistant intelligent avance',
+    icon: 'Bot'
+  },
+  planningChargement: {
+    name: 'Planning Chargement/Livraison',
+    description: 'Gestion des RDV chargement et livraison',
+    icon: 'Calendar'
+  },
+  vigilanceDocuments: {
+    name: 'Vigilance Documents',
+    description: 'Verification automatique des documents',
+    icon: 'ShieldCheck'
+  },
+
+  // Add-Ons
+  gpsTrackingTomtom: {
+    name: 'GPS Tracking TomTom',
+    description: 'Suivi GPS temps reel (4EUR/vehicule)',
+    icon: 'Navigation'
+  },
+  emailTrackingMailgun: {
+    name: 'Email Tracking Mailgun',
+    description: 'Notifications email illimitees (50EUR/mois)',
+    icon: 'Mail'
+  },
+  ocrDocuments: {
+    name: 'OCR Documents',
+    description: 'Extraction automatique (0.10EUR/page)',
+    icon: 'Scan'
+  },
   smsNotifications: {
-    name: 'SMS',
-    description: 'Notifications SMS',
+    name: 'SMS Notifications',
+    description: 'Alertes SMS (0.05EUR/SMS)',
     icon: 'MessageSquare'
   },
-  signatureQualifiee: {
-    name: 'Signature Qualifiee',
-    description: 'Signature electronique eIDAS',
-    icon: 'PenTool'
+  stockageDocuments: {
+    name: 'Stockage Documents',
+    description: 'Stockage supplementaire (5EUR/10GB)',
+    icon: 'HardDrive'
   }
 };
 
@@ -493,7 +559,7 @@ const FEATURE_DESCRIPTIONS = {
  */
 function getPlanConfig(userType, planLevel) {
   if (userType === 'transporteur') {
-    return TRANSPORTEUR_PLANS[planLevel] || TRANSPORTEUR_PLANS.FREE;
+    return TRANSPORTEUR_PLANS[planLevel] || TRANSPORTEUR_PLANS.GRATUIT;
   } else if (userType === 'industriel') {
     return INDUSTRIEL_PLANS[planLevel] || INDUSTRIEL_PLANS.STARTER;
   }
@@ -507,8 +573,15 @@ function isFeatureAvailable(userType, planLevel, featureName, activeOptions = []
   const plan = getPlanConfig(userType, planLevel);
   if (!plan) return false;
 
-  // Feature incluse dans le plan
-  if (plan.features[featureName] === true) {
+  const featureValue = plan.features[featureName];
+
+  // Feature incluse dans le plan (true ou valeur numerique > 0)
+  if (featureValue === true || (typeof featureValue === 'number' && featureValue > 0)) {
+    return true;
+  }
+
+  // Feature est une option ('option') et est active
+  if (featureValue === 'option' && activeOptions.includes(featureName)) {
     return true;
   }
 
@@ -527,12 +600,17 @@ function getUserFeatures(userType, planLevel, activeOptions = []) {
   const plan = getPlanConfig(userType, planLevel);
   if (!plan) return {};
 
-  const features = { ...plan.features };
+  const features = {};
 
-  // Ajouter les options actives
-  for (const option of activeOptions) {
-    if (features.hasOwnProperty(option)) {
-      features[option] = true;
+  for (const [key, value] of Object.entries(plan.features)) {
+    if (value === true || (typeof value === 'number' && value > 0)) {
+      features[key] = true;
+    } else if (value === 'option' && activeOptions.includes(key)) {
+      features[key] = true;
+    } else if (activeOptions.includes(key)) {
+      features[key] = true;
+    } else {
+      features[key] = false;
     }
   }
 
@@ -567,12 +645,13 @@ function getAvailableOptions(userType, planLevel) {
   if (!plan) return [];
 
   const available = [];
+  const planId = plan.id;
 
   for (const [optionId, option] of Object.entries(PAID_OPTIONS)) {
-    // L'option n'est pas deja incluse dans le plan
-    if (plan.features[optionId] !== true) {
-      // L'option est disponible pour ce niveau de plan
-      if (option.availableFor.includes(planLevel)) {
+    // L'option est disponible pour ce plan
+    if (option.availableFor.includes(planId)) {
+      // Et la feature est en mode 'option' dans le plan
+      if (plan.features[optionId] === 'option' || plan.features[optionId] === false) {
         available.push({
           ...option,
           description: FEATURE_DESCRIPTIONS[optionId]?.description || option.description
@@ -590,22 +669,30 @@ function getAvailableOptions(userType, planLevel) {
 function getBlockedFeatureMessage(featureName, userType, planLevel) {
   const featureInfo = FEATURE_DESCRIPTIONS[featureName] || { name: featureName };
   const option = PAID_OPTIONS[featureName];
+  const plan = getPlanConfig(userType, planLevel);
 
   let message = `La fonctionnalite "${featureInfo.name}" n'est pas disponible dans votre abonnement actuel.`;
 
-  if (option) {
-    if (option.type === 'monthly') {
+  // Verifier si c'est une option disponible
+  if (option && plan?.features[featureName] === 'option') {
+    if (option.pricingType === 'fixed_monthly') {
       message += ` Vous pouvez l'ajouter pour ${option.monthlyPrice} EUR/mois.`;
-    } else if (option.type === 'per_unit') {
+    } else if (option.pricingType === 'per_unit_monthly') {
+      message += ` Vous pouvez l'ajouter pour ${option.unitPrice} EUR/${option.unit}/mois.`;
+    } else if (option.pricingType === 'per_usage') {
       message += ` Vous pouvez l'ajouter pour ${option.unitPrice} EUR/${option.unit}.`;
     }
   } else {
     // Feature disponible uniquement dans un plan superieur
     if (userType === 'transporteur') {
-      if (planLevel === 'FREE') {
-        message += ' Passez au plan Premium ou Business pour y acceder.';
+      if (planLevel === 'GRATUIT') {
+        message += ' Passez au plan Starter, Premium, Business ou Elite pour y acceder.';
+      } else if (planLevel === 'STARTER') {
+        message += ' Passez au plan Premium, Business ou Elite pour y acceder.';
       } else if (planLevel === 'PREMIUM') {
-        message += ' Passez au plan Business pour y acceder.';
+        message += ' Passez au plan Business ou Elite pour y acceder.';
+      } else if (planLevel === 'BUSINESS') {
+        message += ' Passez au plan Elite pour y acceder.';
       }
     } else if (userType === 'industriel') {
       if (planLevel === 'STARTER') {
@@ -625,6 +712,33 @@ function getBlockedFeatureMessage(featureName, userType, planLevel) {
   };
 }
 
+/**
+ * Obtenir le resume des plans pour affichage
+ */
+function getPlansOverview() {
+  return {
+    transporteur: {
+      GRATUIT: { price: 0, name: 'Gratuit', users: 1, highlight: '10 reponses gratuites' },
+      STARTER: { price: 200, name: 'Starter', users: 1, highlight: 'Reponses illimitees' },
+      PREMIUM: { price: 399, name: 'Premium', users: 3, highlight: 'GPS + eCMR + Flotte' },
+      BUSINESS: { price: 499, name: 'Business', users: -1, highlight: 'API + Utilisateurs illimites' },
+      ELITE: { price: 699, name: 'Elite', users: -1, highlight: 'Tout inclus' }
+    },
+    industriel: {
+      STARTER: { price: 0, name: 'Starter', users: 2, sites: 1, highlight: 'Demo/Essai' },
+      PRO: { price: 499, name: 'Pro', users: 10, sites: 5, highlight: 'KPI + Planning + 50 transporteurs' },
+      ENTERPRISE: { price: 699, name: 'Enterprise', users: -1, sites: -1, highlight: 'AFFRET.IA + API + Illimite' }
+    },
+    addOns: [
+      { id: 'gpsTrackingTomtom', name: 'GPS TomTom', price: '4 EUR/vehicule' },
+      { id: 'emailTrackingMailgun', name: 'Email Mailgun', price: '50 EUR/mois' },
+      { id: 'ocrDocuments', name: 'OCR Documents', price: '0.10 EUR/page' },
+      { id: 'smsNotifications', name: 'SMS', price: '0.05 EUR/SMS' },
+      { id: 'stockageDocuments', name: 'Stockage', price: '5 EUR/10GB' }
+    ]
+  };
+}
+
 module.exports = {
   TRANSPORTEUR_PLANS,
   INDUSTRIEL_PLANS,
@@ -635,5 +749,6 @@ module.exports = {
   getUserFeatures,
   checkUsageLimit,
   getAvailableOptions,
-  getBlockedFeatureMessage
+  getBlockedFeatureMessage,
+  getPlansOverview
 };
