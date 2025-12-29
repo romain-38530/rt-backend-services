@@ -17,6 +17,7 @@ const createPricingGridsRoutes = require('./pricing-grids-routes');
 const createIndustrialTransportConfigRoutes = require('./industrial-transport-config-routes');
 const createAuthRoutes = require('./auth-routes');
 const createStripeRoutes = require('./stripe-routes');
+const createSubscriptionManagementRoutes = require('./subscription-management-routes');
 const createTransportOrdersRoutes = require('./transport-orders-routes');
 const scheduledJobs = require('./scheduled-jobs');
 const notificationService = require('./notification-service');
@@ -937,6 +938,15 @@ async function startServer() {
     console.log('✅ Stripe payment routes mounted successfully');
   } else {
     console.warn('⚠️  Stripe payment routes not mounted - MongoDB not connected');
+  }
+
+  // Mount Subscription Management routes (plans, features, activation/blocking)
+  if (mongoConnected) {
+    const subscriptionManagementRouter = createSubscriptionManagementRoutes(mongoClient, mongoConnected);
+    app.use('/api/subscriptions', subscriptionManagementRouter);
+    console.log('✅ Subscription management routes mounted successfully');
+  } else {
+    console.warn('⚠️  Subscription management routes not mounted - MongoDB not connected');
   }
 
   // Mount Flux Commande routes after MongoDB connection is established
