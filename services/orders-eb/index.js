@@ -649,6 +649,195 @@ app.delete('/api/v1/orders/:id', async (req, res) => {
   }
 });
 
+// ==================== AUTO-DISPATCH v1 ROUTES ====================
+// POST /api/v1/orders/:id/auto-dispatch - Start automatic dispatch (v1 alias)
+app.post('/api/v1/orders/:id/auto-dispatch', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+
+  try {
+    const orderId = req.params.id;
+
+    // Get the order
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(orderId) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: orderId });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Check if order can be dispatched
+    if (!['created', 'pending', 'draft'].includes(order.status)) {
+      return res.status(400).json({
+        error: 'Order cannot be dispatched',
+        currentStatus: order.status
+      });
+    }
+
+    // Get top carriers
+    const carriers = await getTopCarriers(order, db);
+
+    if (carriers.length === 0) {
+      return res.status(400).json({ error: 'No carriers available' });
+    }
+
+    // Timeout configuration (default 45 minutes = 2700 seconds)
+    const timeoutSeconds = req.body.timeoutSeconds || 2700;
+    const now = new Date();
+    const timeoutAt = new Date(now.getTime() + timeoutSeconds * 1000);
+
+    // Create dispatch chain
+    const dispatchChain = carriers.map((carrier, index) => ({
+      ...carrier,
+      position: index + 1,
+      status: index === 0 ? 'sent' : 'pending',
+      sentAt: index === 0 ? now : null,
+      timeoutAt: index === 0 ? timeoutAt : null,
+      respondedAt: null,
+      response: null,
+      reason: null
+    }));
+
+    // Update order with dispatch chain and new status
+    await db.collection('orders').updateOne(
+      { _id: order._id },
+      {
+        $set: {
+          status: 'planification_auto',
+          dispatchChain,
+          dispatchConfig: {
+            timeoutSeconds,
+            maxCarriers: carriers.length,
+            startedAt: now
+          },
+          currentDispatchIndex: 0,
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    // Add start event
+    await addOrderEvent(order._id.toString(), {
+      type: 'auto_dispatch_started',
+      details: `Planification automatique demarree avec ${carriers.length} transporteur(s)`,
+      carriersCount: carriers.length
+    }, db);
+
+    // Add sent to first carrier event
+    const firstCarrier = carriers[0];
+    await addOrderEvent(order._id.toString(), {
+      type: 'sent_to_carrier',
+      carrierId: firstCarrier.carrierId,
+      carrierName: firstCarrier.carrierName,
+      details: `Envoye a ${firstCarrier.carrierName} (score: ${firstCarrier.score}/100)`,
+      score: firstCarrier.score
+    }, db);
+
+    // Update KPI - carrier received order
+    await updateCarrierKPI(firstCarrier.carrierId, 'received', null, null);
+
+    // Send email notifications (async, don't block response)
+    const enrichedOrder = await enrichOrder(order, db);
+    const timeoutMinutes = Math.floor(timeoutSeconds / 60);
+
+    // Email to first carrier
+    if (firstCarrier.carrierEmail) {
+      emailOrders.sendDispatchNotificationToCarrier(
+        firstCarrier.carrierEmail,
+        firstCarrier.carrierName,
+        { ...order, ...enrichedOrder },
+        timeoutMinutes
+      ).catch(err => console.error('Email to carrier failed:', err.message));
+    }
+
+    // Email to industrial
+    if (enrichedOrder.industrialEmail) {
+      emailOrders.sendAutoDispatchStartedToIndustrial(
+        enrichedOrder.industrialEmail,
+        enrichedOrder.industrialName || 'Client',
+        { ...order, ...enrichedOrder },
+        carriers
+      ).catch(err => console.error('Email to industrial failed:', err.message));
+    }
+
+    res.json({
+      success: true,
+      message: 'Auto-dispatch started',
+      data: {
+        orderId: order._id.toString(),
+        status: 'planification_auto',
+        dispatchChain: dispatchChain.map(c => ({
+          carrierName: c.carrierName,
+          score: c.score,
+          status: c.status,
+          position: c.position
+        })),
+        currentCarrier: firstCarrier.carrierName
+      }
+    });
+
+  } catch (error) {
+    console.error('Auto-dispatch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/v1/orders/:id/dispatch-status - Get dispatch status (v1 alias)
+app.get('/api/v1/orders/:id/dispatch-status', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+
+  try {
+    const orderId = req.params.id;
+
+    // Get the order
+    let order;
+    try {
+      order = await db.collection('orders').findOne({ _id: new ObjectId(orderId) });
+    } catch (e) {
+      order = await db.collection('orders').findOne({ reference: orderId });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Get recent events for this order
+    const events = await db.collection('order_events')
+      .find({ orderId: order._id.toString() })
+      .sort({ timestamp: -1 })
+      .limit(20)
+      .toArray();
+
+    res.json({
+      success: true,
+      data: {
+        orderId: order._id.toString(),
+        status: order.status,
+        dispatchChain: order.dispatchChain || [],
+        currentDispatchIndex: order.currentDispatchIndex || 0,
+        events: events.map(e => ({
+          type: e.type,
+          details: e.details,
+          timestamp: e.timestamp,
+          carrierId: e.carrierId,
+          carrierName: e.carrierName
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Dispatch status error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== END ORDERS CRUD ====================
 
 // ==================== ALIAS ROUTES (without /v1) ====================
