@@ -1,10 +1,11 @@
 // Créer un ZIP avec chemins Unix pour AWS Linux
-// Version 2.2.0 - Bugfix pricing-grids routes order + e-CMR PDF download
+// Version 2.5.3 - AWS SES Email Migration + Anti-Spam Headers
 const fs = require('fs');
 const path = require('path');
-const archiver = require('archiver');
+// Utiliser le chemin absolu pour pnpm
+const archiver = require('c:/Users/rtard/rt-backend-services/node_modules/.pnpm/archiver@7.0.1/node_modules/archiver');
 
-const VERSION = 'v2.2.6-clean-anthropic';
+const VERSION = 'v4.0.0-compliance';
 const outputPath = path.join(__dirname, 'bundle', `deploy-${VERSION}.zip`);
 
 // Créer le dossier bundle s'il n'existe pas
@@ -99,6 +100,38 @@ const files = [
   'ecmr-pdf.js',
   'ecmr-yousign.js',
   'ecmr-archive.js',
+  // Subscription Management System
+  'subscription-features.js',
+  'subscription-guard.middleware.js',
+  'subscription-management-routes.js',
+  // Logisticien Delegation System
+  'logisticien-models.js',
+  'logisticien-routes.js',
+  'logisticien-portal-routes.js',
+  'logisticien-email.js',
+  // Security Enhancements v2.5.0
+  'email-verification-service.js',
+  'rate-limiter-middleware.js',
+  'invitation-token-service.js',
+  'webhook-service.js',
+  // Security v3.0.0 - 2FA & AWS SES
+  'two-factor-auth-service.js',
+  'aws-ses-email-service.js',
+  'security-utils.js',
+  // Validation v3.1.0 - Joi
+  'validation-schemas.js',
+  'validation-middleware.js',
+  // v4.0.0 - Compliance & Security
+  'gdpr-service.js',
+  'gdpr-routes.js',
+  'consent-service.js',
+  'secure-logger.js',
+  'token-rotation-service.js',
+  'websocket-auth-service.js',
+  'redis-cache-service.js',
+  'driving-time-service.js',
+  'carbon-footprint-service.js',
+  'error-handler.js',
 ];
 
 console.log('');
@@ -132,13 +165,9 @@ directories.forEach(dir => {
   }
 });
 
-// Ajouter node_modules (critique pour le déploiement)
-const nodeModulesPath = path.join(__dirname, 'node_modules');
-if (fs.existsSync(nodeModulesPath)) {
-  console.log('  📦 Ajout de node_modules (peut prendre un moment)...');
-  archive.directory(nodeModulesPath, 'node_modules/', { data: { date: new Date() } });
-  console.log('  ✅ node_modules/');
-}
+// NOTE: Ne pas inclure node_modules - EB installera les dépendances via npm install
+// Cela évite les problèmes de symlinks pnpm et de chemins Windows
+console.log('  ℹ️ node_modules EXCLU - EB fera npm install au déploiement');
 
 console.log('');
 console.log(`📊 Résumé: ${included} fichiers inclus, ${missing} manquants`);

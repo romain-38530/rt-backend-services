@@ -99,8 +99,9 @@ const authLimiter = rateLimit({
 // ============================================================================
 
 /**
- * CORS configuration
- * Permet les requêtes depuis les domaines autorisés
+ * CORS configuration - SÉCURISÉE
+ * Permet les requêtes depuis les domaines autorisés uniquement.
+ * SECURITY FIX: Le bypass a été corrigé - les origines non autorisées sont rejetées.
  */
 const corsOptions = {
   origin: function (origin, callback) {
@@ -111,36 +112,52 @@ const corsOptions = {
           'http://localhost:3000',
           'http://localhost:3001',
           'https://industrie.symphonia-controltower.com',
-          'https://transporteur.symphonia-controltower.com'
+          'https://transporteur.symphonia-controltower.com',
+          'https://logisticien.symphonia-controltower.com',
+          'https://symphonia-controltower.com'
         ];
 
-    // Autoriser les requêtes sans origin (Postman, curl, mobile apps)
+    // En production, exiger un header Origin
     if (!origin) {
+      if (process.env.NODE_ENV === 'production') {
+        // Bloquer les requêtes sans Origin en production (sauf si explicitement autorisé)
+        if (process.env.CORS_ALLOW_NO_ORIGIN === 'true') {
+          return callback(null, true);
+        }
+        console.warn('[SECURITY] CORS blocked request without Origin header in production');
+        return callback(new Error('Origin header required'), false);
+      }
+      // En développement, autoriser les requêtes sans Origin (Postman, curl)
       return callback(null, true);
     }
 
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+    // Vérifier si l'origine est autorisée
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
       callback(null, true);
     } else {
-      console.warn(`CORS blocked request from origin: ${origin}`);
-      console.warn(); callback(null, true);
+      // SECURITY FIX: Rejeter les origines non autorisées (correction du bypass)
+      console.warn(`[SECURITY] CORS blocked request from unauthorized origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'), false);
     }
   },
-  credentials: process.env.CORS_CREDENTIALS === 'true' || true,
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
     'Authorization',
     'X-Requested-With',
     'X-API-Key',
+    'X-CSRF-Token',
     'Accept'
   ],
   exposedHeaders: [
     'X-RateLimit-Limit',
     'X-RateLimit-Remaining',
-    'X-RateLimit-Reset'
+    'X-RateLimit-Reset',
+    'Retry-After'
   ],
-  maxAge: 86400 // 24 hours
+  maxAge: 86400, // 24 hours
+  optionsSuccessStatus: 204
 };
 
 // ============================================================================

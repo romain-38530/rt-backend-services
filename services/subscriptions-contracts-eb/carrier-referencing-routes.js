@@ -1,5 +1,5 @@
 // Carrier Referencing Routes - API REST pour gestion transporteurs
-// RT Backend Services - Version 1.0.0
+// RT Backend Services - Version 2.5.2 - Security Enhancements
 
 const express = require('express');
 const { ObjectId } = require('mongodb');
@@ -16,8 +16,33 @@ const {
   getDispatchPriority
 } = require('./carrier-referencing-models');
 
+// Security Enhancements v2.5.0 + SEC-013
+const { RateLimiterManager } = require('./rate-limiter-middleware');
+const { createInvitationTokenService, TokenType } = require('./invitation-token-service');
+const { createWebhookService, WebhookEvent } = require('./webhook-service');
+
 function createCarrierReferencingRoutes(mongoClient, mongoConnected) {
   const router = express.Router();
+
+  // Security Services v2.5.0 + SEC-013
+  let rateLimiterManager = null;
+  let invitationTokenService = null;
+  let webhookService = null;
+
+  const initSecurityServices = async () => {
+    if (mongoConnected && mongoClient) {
+      try {
+        const db = mongoClient.db();
+        rateLimiterManager = new RateLimiterManager(db);
+        invitationTokenService = createInvitationTokenService(mongoClient);
+        webhookService = createWebhookService(mongoClient);
+        console.log('[CARRIERS] Security services initialized (rate limiting, invitation tokens, webhooks)');
+      } catch (error) {
+        console.error('[CARRIERS] Failed to init security services:', error.message);
+      }
+    }
+  };
+  initSecurityServices();
 
   // Middleware pour vérifier MongoDB
   const checkMongoDB = (req, res, next) => {
@@ -33,13 +58,34 @@ function createCarrierReferencingRoutes(mongoClient, mongoConnected) {
     next();
   };
 
+  // Rate limiting pour invitations transporteurs
+  const rateLimitInvite = async (req, res, next) => {
+    if (!rateLimiterManager) return next();
+    try {
+      const key = req.body.industrialId || req.ip;
+      await rateLimiterManager.consume('carriers:invite', key);
+      next();
+    } catch (rateLimiterRes) {
+      const retryAfter = Math.ceil(rateLimiterRes.msBeforeNext / 1000);
+      res.set('Retry-After', retryAfter);
+      return res.status(429).json({
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: 'Too many invitation requests. Please try again later.',
+          retryAfter
+        }
+      });
+    }
+  };
+
   // ==================== RÉFÉRENCEMENT ====================
 
   /**
    * POST /api/carriers/invite
    * Inviter un transporteur (référencement direct)
    */
-  router.post('/invite', checkMongoDB, async (req, res) => {
+  router.post('/invite', rateLimitInvite, checkMongoDB, async (req, res) => {
     try {
       const {
         industrialId,
@@ -887,6 +933,112 @@ function createCarrierReferencingRoutes(mongoClient, mongoConnected) {
           message: error.message
         }
       });
+    }
+  });
+
+  // ==================== REVOCATION D'INVITATION ====================
+
+  /**
+   * POST /api/carriers/:id/cancel-invitation
+   * Révoquer une invitation transporteur (SEC-013)
+   *
+   * Body: {
+   *   industrialId: string (obligatoire),
+   *   reason: string (optionnel)
+   * }
+   */
+  router.post('/:id/cancel-invitation', checkMongoDB, async (req, res) => {
+    try {
+      const carrierId = req.params.id;
+      const { industrialId, reason = 'manual' } = req.body;
+
+      if (!industrialId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'MISSING_INDUSTRIAL_ID', message: 'industrialId est requis' }
+        });
+      }
+
+      const db = mongoClient.db();
+      const carriersCollection = db.collection('carriers');
+
+      // Trouver le transporteur
+      const carrier = await carriersCollection.findOne({
+        _id: new ObjectId(carrierId)
+      });
+
+      if (!carrier) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'CARRIER_NOT_FOUND', message: 'Transporteur non trouvé' }
+        });
+      }
+
+      // Vérifier que l'industriel est bien l'inviteur
+      if (carrier.industrialId?.toString() !== industrialId) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'NOT_INVITER', message: 'Vous n\'êtes pas l\'inviteur de ce transporteur' }
+        });
+      }
+
+      // Vérifier que l'invitation n'est pas déjà acceptée
+      if (carrier.status === CarrierStatus.ACTIVE || carrier.status === CarrierStatus.VERIFIED) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVITATION_ALREADY_ACCEPTED', message: 'L\'invitation a déjà été acceptée' }
+        });
+      }
+
+      // Révoquer le token d'invitation si le service est disponible
+      if (invitationTokenService && carrier.invitationToken) {
+        await invitationTokenService.revokeToken(
+          carrier.invitationToken,
+          industrialId,
+          reason
+        );
+      }
+
+      // Mettre à jour le statut du transporteur
+      const now = new Date();
+      await carriersCollection.updateOne(
+        { _id: new ObjectId(carrierId) },
+        {
+          $set: {
+            status: CarrierStatus.CANCELLED,
+            cancelledAt: now,
+            cancelledBy: industrialId,
+            cancelReason: reason
+          }
+        }
+      );
+
+      // Envoyer webhook de notification
+      if (webhookService) {
+        await webhookService.send(WebhookEvent.INVITATION_CANCELLED, {
+          type: 'carrier',
+          id: carrierId,
+          email: carrier.email,
+          companyName: carrier.companyName,
+          cancelledAt: now,
+          reason
+        }, industrialId);
+      }
+
+      res.json({
+        success: true,
+        message: 'Invitation révoquée avec succès',
+        data: {
+          id: carrierId,
+          email: carrier.email,
+          status: 'cancelled',
+          cancelledAt: now
+        }
+      });
+
+    } catch (error) {
+      console.error('[POST /api/carriers/:id/cancel-invitation] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 

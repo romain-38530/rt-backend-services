@@ -1,38 +1,131 @@
 // JWT Authentication Middleware
-// RT Backend Services - Version 1.0.0
+// RT Backend Services - Version 2.0.0 - Security Enhanced
+// SECURITY: Les secrets ne sont plus exportés
 
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
-// Configuration - Ces valeurs devraient être dans des variables d'environnement
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-change-in-production';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+// ============================================================================
+// CONFIGURATION SÉCURISÉE
+// ============================================================================
+
+// Configuration JWT (les secrets restent privés dans ce module)
+const JWT_CONFIG = {
+  algorithm: 'HS256',
+  issuer: 'symphonia-api',
+  audience: 'symphonia-client',
+  accessTokenExpiry: process.env.JWT_EXPIRES_IN || '15m',
+  refreshTokenExpiry: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+};
+
+// Secrets (privés - ne jamais exporter)
+let _jwtSecret = null;
+let _jwtRefreshSecret = null;
+
+/**
+ * Initialise et valide les secrets JWT
+ * @throws {Error} Si les secrets sont invalides
+ */
+function initializeSecrets() {
+  _jwtSecret = process.env.JWT_SECRET;
+  _jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
+
+  // Liste des secrets par défaut à bloquer
+  const defaultSecrets = [
+    'your-secret-key-change-in-production',
+    'your-refresh-secret-change-in-production',
+    'dev-secret-jwt-key-change-in-production',
+    'secret',
+    'changeme',
+    'password'
+  ];
+
+  // Validation en production
+  if (process.env.NODE_ENV === 'production') {
+    if (!_jwtSecret || _jwtSecret.length < 32) {
+      throw new Error('[SECURITY] JWT_SECRET must be at least 32 characters in production');
+    }
+
+    if (!_jwtRefreshSecret || _jwtRefreshSecret.length < 32) {
+      throw new Error('[SECURITY] JWT_REFRESH_SECRET must be at least 32 characters in production');
+    }
+
+    if (defaultSecrets.some(ds => _jwtSecret.toLowerCase().includes(ds.toLowerCase()))) {
+      throw new Error('[SECURITY] JWT_SECRET contains a default/weak value');
+    }
+
+    if (defaultSecrets.some(ds => _jwtRefreshSecret.toLowerCase().includes(ds.toLowerCase()))) {
+      throw new Error('[SECURITY] JWT_REFRESH_SECRET contains a default/weak value');
+    }
+
+    console.log('[AUTH] JWT secrets validated successfully');
+  } else {
+    // En développement, utiliser des valeurs par défaut avec avertissement
+    if (!_jwtSecret) {
+      _jwtSecret = 'dev-only-secret-key-do-not-use-in-production-' + crypto.randomBytes(16).toString('hex');
+      console.warn('[AUTH] WARNING: Using generated JWT_SECRET for development');
+    }
+    if (!_jwtRefreshSecret) {
+      _jwtRefreshSecret = 'dev-only-refresh-key-do-not-use-in-production-' + crypto.randomBytes(16).toString('hex');
+      console.warn('[AUTH] WARNING: Using generated JWT_REFRESH_SECRET for development');
+    }
+  }
+}
+
+// Initialiser les secrets au chargement du module
+try {
+  initializeSecrets();
+} catch (error) {
+  console.error('[AUTH] FATAL:', error.message);
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1); // Arrêter le serveur si secrets invalides en production
+  }
+}
+
+// Conserver pour compatibilité (mais ne pas exporter les vraies valeurs)
+const JWT_EXPIRES_IN = JWT_CONFIG.accessTokenExpiry;
+const JWT_REFRESH_EXPIRES_IN = JWT_CONFIG.refreshTokenExpiry;
 
 /**
  * Génère un token JWT d'accès
+ * @param {Object} payload - Données à inclure dans le token
+ * @returns {string} Token JWT signé
  */
 function generateAccessToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN
+  return jwt.sign(payload, _jwtSecret, {
+    expiresIn: JWT_CONFIG.accessTokenExpiry,
+    algorithm: JWT_CONFIG.algorithm,
+    issuer: JWT_CONFIG.issuer,
+    audience: JWT_CONFIG.audience
   });
 }
 
 /**
  * Génère un token JWT de rafraîchissement
+ * @param {Object} payload - Données à inclure dans le token
+ * @returns {string} Token JWT signé
  */
 function generateRefreshToken(payload) {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, {
-    expiresIn: JWT_REFRESH_EXPIRES_IN
+  return jwt.sign(payload, _jwtRefreshSecret, {
+    expiresIn: JWT_CONFIG.refreshTokenExpiry,
+    algorithm: JWT_CONFIG.algorithm,
+    issuer: JWT_CONFIG.issuer
   });
 }
 
 /**
  * Vérifie un token JWT d'accès
+ * @param {string} token - Token à vérifier
+ * @returns {Object} Payload décodé
+ * @throws {Error} Si le token est invalide
  */
 function verifyAccessToken(token) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, _jwtSecret, {
+      algorithms: [JWT_CONFIG.algorithm],
+      issuer: JWT_CONFIG.issuer,
+      audience: JWT_CONFIG.audience
+    });
   } catch (error) {
     throw new Error('Invalid or expired access token');
   }
@@ -40,10 +133,16 @@ function verifyAccessToken(token) {
 
 /**
  * Vérifie un token JWT de rafraîchissement
+ * @param {string} token - Token à vérifier
+ * @returns {Object} Payload décodé
+ * @throws {Error} Si le token est invalide
  */
 function verifyRefreshToken(token) {
   try {
-    return jwt.verify(token, JWT_REFRESH_SECRET);
+    return jwt.verify(token, _jwtRefreshSecret, {
+      algorithms: [JWT_CONFIG.algorithm],
+      issuer: JWT_CONFIG.issuer
+    });
   } catch (error) {
     throw new Error('Invalid or expired refresh token');
   }
@@ -141,17 +240,38 @@ function optionalAuth(req, res, next) {
   next();
 }
 
+// ============================================================================
+// EXPORTS SÉCURISÉS
+// ============================================================================
+// SECURITY: Les secrets JWT ne sont plus exportés pour éviter les fuites.
+// Seules les fonctions de génération et vérification sont exposées.
+
 module.exports = {
-  JWT_SECRET,
-  JWT_REFRESH_SECRET,
+  // Configuration (sans secrets)
   JWT_EXPIRES_IN,
   JWT_REFRESH_EXPIRES_IN,
+  JWT_CONFIG: {
+    algorithm: JWT_CONFIG.algorithm,
+    issuer: JWT_CONFIG.issuer,
+    audience: JWT_CONFIG.audience,
+    accessTokenExpiry: JWT_CONFIG.accessTokenExpiry,
+    refreshTokenExpiry: JWT_CONFIG.refreshTokenExpiry
+  },
+
+  // Fonctions de génération de tokens
   generateAccessToken,
   generateRefreshToken,
+
+  // Fonctions de vérification de tokens
   verifyAccessToken,
   verifyRefreshToken,
+
+  // Middlewares d'authentification
   authenticateToken,
   requireRole,
   requireAdmin,
-  optionalAuth
+  optionalAuth,
+
+  // Utilitaire pour réinitialiser les secrets (tests uniquement)
+  _reinitializeSecrets: process.env.NODE_ENV === 'test' ? initializeSecrets : undefined
 };

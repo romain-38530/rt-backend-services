@@ -26,6 +26,20 @@ const { createPlanningRoutes } = require('./planning-routes');
 const { PlanningWebSocketService } = require('./planning-websocket');
 const { createChatbotRoutes } = require('./chatbot-routes');
 const { TicketingService } = require('./ticketing-service');
+const createLogisticienRoutes = require('./logisticien-routes');
+const createLogisticienPortalRoutes = require('./logisticien-portal-routes');
+
+// v4.0.0 - Compliance & Security Enhancements
+const { createGdprService, GDPR_CONFIG } = require('./gdpr-service');
+const { createConsentService } = require('./consent-service');
+const { initializeGdprRoutes } = require('./gdpr-routes');
+const { SecureLogger, requestLoggerMiddleware, errorLoggerMiddleware } = require('./secure-logger');
+const { createTokenRotationService } = require('./token-rotation-service');
+const { createWebSocketAuthService } = require('./websocket-auth-service');
+const { createRedisCacheService, getRedisCacheService } = require('./redis-cache-service');
+const { createDrivingTimeService } = require('./driving-time-service');
+const { createCarbonFootprintService } = require('./carbon-footprint-service');
+const { createErrorHandler, notFoundHandler, setupGlobalErrorHandlers, asyncHandler } = require('./error-handler');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -46,6 +60,19 @@ let planningWebSocket = null;
 // Ticketing service instance
 let ticketingService = null;
 
+// v4.0.0 - Service instances
+let gdprService = null;
+let consentService = null;
+let tokenRotationService = null;
+let wsAuthService = null;
+let redisCache = null;
+let drivingTimeService = null;
+let carbonFootprintService = null;
+const secureLogger = new SecureLogger();
+
+// Setup global error handlers
+setupGlobalErrorHandlers(secureLogger);
+
 // MongoDB connection
 let mongoClient;
 let mongoConnected = false;
@@ -57,9 +84,121 @@ async function connectMongoDB() {
     await mongoClient.connect();
     mongoConnected = true;
     console.log('✅ Connected to MongoDB');
+
+    // SEC-014: Créer les index pour les collections de sécurité
+    await createSecurityIndexes(mongoClient.db());
   } catch (error) {
     console.error('❌ MongoDB connection failed:', error.message);
     mongoConnected = false;
+  }
+}
+
+/**
+ * SEC-014: Créer les index MongoDB pour les collections de sécurité
+ */
+async function createSecurityIndexes(db) {
+  try {
+    // Index pour email_verifications (OTP)
+    await db.collection('email_verifications').createIndex(
+      { email: 1, purpose: 1 },
+      { background: true }
+    );
+    await db.collection('email_verifications').createIndex(
+      { expiresAt: 1 },
+      { expireAfterSeconds: 0, background: true }
+    );
+
+    // Index pour revoked_tokens (blacklist JWT)
+    await db.collection('revoked_tokens').createIndex(
+      { jti: 1 },
+      { unique: true, background: true }
+    );
+    await db.collection('revoked_tokens').createIndex(
+      { expiresAt: 1 },
+      { expireAfterSeconds: 0, background: true }
+    );
+
+    // Index pour ip_failures (blocage progressif)
+    await db.collection('ip_failures').createIndex(
+      { ip: 1 },
+      { unique: true, background: true }
+    );
+    await db.collection('ip_failures').createIndex(
+      { blockedUntil: 1 },
+      { background: true }
+    );
+
+    // Index pour webhook_subscriptions
+    await db.collection('webhook_subscriptions').createIndex(
+      { industrielId: 1, isActive: 1 },
+      { background: true }
+    );
+
+    // Index pour webhook_deliveries
+    await db.collection('webhook_deliveries').createIndex(
+      { status: 1, nextRetryAt: 1 },
+      { background: true }
+    );
+    await db.collection('webhook_deliveries').createIndex(
+      { createdAt: 1 },
+      { expireAfterSeconds: 30 * 24 * 60 * 60, background: true } // 30 jours
+    );
+
+    // Index pour 2fa_sessions
+    await db.collection('2fa_sessions').createIndex(
+      { sessionId: 1 },
+      { unique: true, background: true }
+    );
+    await db.collection('2fa_sessions').createIndex(
+      { expiresAt: 1 },
+      { expireAfterSeconds: 0, background: true }
+    );
+
+    // v4.0.0 - Index GDPR
+    await db.collection('gdpr_deletion_requests').createIndex(
+      { userId: 1, status: 1 },
+      { background: true }
+    );
+    await db.collection('gdpr_export_requests').createIndex(
+      { userId: 1 },
+      { background: true }
+    );
+    await db.collection('gdpr_export_requests').createIndex(
+      { expiresAt: 1 },
+      { expireAfterSeconds: 0, background: true }
+    );
+    await db.collection('user_consents').createIndex(
+      { userId: 1, type: 1 },
+      { background: true }
+    );
+    await db.collection('refresh_tokens_v2').createIndex(
+      { tokenHash: 1 },
+      { unique: true, background: true }
+    );
+    await db.collection('refresh_tokens_v2').createIndex(
+      { userId: 1, isActive: 1 },
+      { background: true }
+    );
+    await db.collection('refresh_tokens_v2').createIndex(
+      { familyId: 1 },
+      { background: true }
+    );
+    await db.collection('driver_activities').createIndex(
+      { driverId: 1, startTime: -1 },
+      { background: true }
+    );
+    await db.collection('carbon_emissions').createIndex(
+      { industrielId: 1, createdAt: -1 },
+      { background: true }
+    );
+    await db.collection('error_logs').createIndex(
+      { timestamp: 1 },
+      { expireAfterSeconds: 30 * 24 * 60 * 60, background: true } // 30 jours
+    );
+
+    console.log('✅ Security indexes created');
+  } catch (error) {
+    console.error('⚠️ Failed to create security indexes:', error.message);
   }
 }
 
@@ -121,7 +260,10 @@ app.get('/health', async (req, res) => {
       'chatbot-suite', 'rt-helpbot', 'planif-ia-assistant', 'routier-assistant',
       'quai-wms-assistant', 'livraisons-assistant', 'expedition-assistant',
       'freight-ia-assistant', 'copilote-chauffeur-assistant', 'ticketing-sla',
-      'knowledge-base', 'faq-system', 'teams-integration', 'auto-escalation'
+      'knowledge-base', 'faq-system', 'teams-integration', 'auto-escalation',
+      'logisticien-delegation', 'icpe-management', 'icpe-volume-declaration',
+      'logisticien-vigilance', 'warehouse-management', 'bourse-stockage-option',
+      'borne-accueil-chauffeur-option'
     ],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -370,6 +512,48 @@ app.get('/', (req, res) => {
       'GET /api/chatbot/stats/dashboard (real-time dashboard)',
       'GET /api/chatbot/config (user chatbot config)',
       'GET /api/chatbot/health (chatbot health check)',
+      '-- Logisticien Delegation (Industrial -> Logisticien) --',
+      'POST /api/logisticians/invite (invite logisticien by email)',
+      'GET /api/logisticians/invitation/:token (verify invitation)',
+      'POST /api/logisticians/onboarding/step1 (create account)',
+      'POST /api/logisticians/onboarding/step2 (configure warehouses)',
+      'POST /api/logisticians/onboarding/step3 (configure contacts)',
+      'POST /api/logisticians/:id/documents/upload-url (get S3 presigned URL)',
+      'POST /api/logisticians/:id/documents/confirm-upload (confirm upload)',
+      'POST /api/logisticians/:id/documents/:docId/verify (admin verify)',
+      'GET /api/logisticians/:id/documents (list documents)',
+      'POST /api/logisticians/:id/validate (activate account)',
+      'GET /api/logisticians (list logisticians)',
+      'GET /api/logisticians/:id (get details)',
+      'POST /api/logisticians/:id/block (block account)',
+      'POST /api/logisticians/:id/unblock (unblock account)',
+      '-- ICPE Management --',
+      'POST /api/logisticians/:id/icpe/declare-volumes (weekly ICPE declaration)',
+      'GET /api/logisticians/:id/icpe/history (declaration history)',
+      'GET /api/logisticians/:id/icpe/alerts (active ICPE alerts)',
+      'GET /api/logisticians/icpe-dashboard/:industrielId (industrial ICPE dashboard)',
+      '-- Logisticien Paid Options --',
+      'POST /api/logisticians/:id/subscribe/bourse-stockage (150 EUR/mois)',
+      'POST /api/logisticians/:id/subscribe/borne-accueil (100 EUR/mois)',
+      '-- Logisticien Portal (for logisticien users) --',
+      'POST /api/logistician-portal/auth/login (logisticien login)',
+      'POST /api/logistician-portal/auth/refresh (refresh token)',
+      'GET /api/logistician-portal/orders (orders at logisticien warehouses)',
+      'GET /api/logistician-portal/orders/:orderId (order details)',
+      'GET /api/logistician-portal/planning/:warehouseId (dock planning)',
+      'GET /api/logistician-portal/slots/:warehouseId (available slots)',
+      'POST /api/logistician-portal/rdv/:rdvId/confirm (confirm RDV)',
+      'POST /api/logistician-portal/rdv/:rdvId/propose-alternative (propose alt)',
+      'GET /api/logistician-portal/ecmr (e-CMR list)',
+      'GET /api/logistician-portal/ecmr/:ecmrId (e-CMR details)',
+      'POST /api/logistician-portal/ecmr/:ecmrId/sign (sign e-CMR)',
+      'GET /api/logistician-portal/checkins/:warehouseId (driver checkins)',
+      'POST /api/logistician-portal/checkin/:rdvId/validate (validate arrival)',
+      'POST /api/logistician-portal/checkin/:rdvId/assign-dock (assign dock)',
+      'GET /api/logistician-portal/profile (logisticien profile)',
+      'PUT /api/logistician-portal/profile (update profile)',
+      'GET /api/logistician-portal/documents (list documents)',
+      'GET /api/logistician-portal/stats (statistics)',
     ],
     documentation: 'See README.md for complete API documentation',
   });
@@ -1022,6 +1206,115 @@ async function startServer() {
     console.warn('⚠️  Chatbot Suite routes not mounted - MongoDB not connected');
   }
 
+  // Mount Logisticien routes (Delegation System with ICPE management)
+  if (mongoConnected) {
+    const logisticienRouter = createLogisticienRoutes(mongoClient, mongoConnected);
+    app.use('/api/logisticians', logisticienRouter);
+    console.log('✅ Logisticien routes mounted successfully (Delegation & ICPE)');
+
+    // Mount Logisticien Portal routes (for logisticien users)
+    const logisticienPortalRouter = createLogisticienPortalRoutes(mongoClient, mongoConnected);
+    app.use('/api/logistician-portal', logisticienPortalRouter);
+    console.log('✅ Logisticien Portal routes mounted successfully');
+  } else {
+    console.warn('⚠️  Logisticien routes not mounted - MongoDB not connected');
+  }
+
+  // ==================== v4.0.0 - COMPLIANCE & SECURITY SERVICES ====================
+
+  // Initialize Redis Cache (optional - gracefully degrades if not available)
+  try {
+    redisCache = getRedisCacheService();
+    await redisCache.connect();
+    console.log('✅ Redis cache service initialized');
+  } catch (redisError) {
+    console.warn('⚠️  Redis cache not available (optional):', redisError.message);
+  }
+
+  // Initialize v4.0.0 services
+  if (mongoConnected) {
+    // GDPR Services
+    gdprService = createGdprService(mongoClient);
+    consentService = createConsentService(mongoClient);
+    console.log('✅ GDPR & Consent services initialized');
+
+    // Token Rotation Service
+    tokenRotationService = createTokenRotationService(mongoClient);
+    console.log('✅ Token Rotation service initialized');
+
+    // WebSocket Auth Service
+    wsAuthService = createWebSocketAuthService(mongoClient);
+    console.log('✅ WebSocket Auth service initialized');
+
+    // Driving Time Service (EU 561/2006 compliance)
+    drivingTimeService = createDrivingTimeService(mongoClient);
+    console.log('✅ Driving Time service initialized (EU 561/2006)');
+
+    // Carbon Footprint Service (Article L229-25)
+    carbonFootprintService = createCarbonFootprintService(mongoClient);
+    console.log('✅ Carbon Footprint service initialized (Article L229-25)');
+
+    // Mount GDPR routes
+    const gdprRouter = initializeGdprRoutes({
+      gdprService,
+      consentService
+    });
+    app.use('/api/gdpr', gdprRouter);
+    console.log('✅ GDPR routes mounted (Article 17, 20, 7)');
+
+    // Mount Driving Time routes
+    app.get('/api/drivers/:driverId/driving-time', asyncHandler(async (req, res) => {
+      const result = await drivingTimeService.getRemainingDrivingTime(req.params.driverId);
+      res.json({ success: true, data: result });
+    }));
+
+    app.post('/api/drivers/:driverId/activities', asyncHandler(async (req, res) => {
+      const result = await drivingTimeService.recordActivity(req.params.driverId, req.body);
+      res.json({ success: true, data: result });
+    }));
+
+    app.get('/api/drivers/:driverId/compliance', asyncHandler(async (req, res) => {
+      const result = await drivingTimeService.checkCompliance(req.params.driverId);
+      res.json({ success: true, data: result });
+    }));
+
+    app.post('/api/drivers/:driverId/plan-breaks', asyncHandler(async (req, res) => {
+      const result = await drivingTimeService.planBreaks(req.params.driverId, req.body.estimatedDuration);
+      res.json({ success: true, data: result });
+    }));
+    console.log('✅ Driving Time routes mounted');
+
+    // Mount Carbon Footprint routes
+    app.post('/api/carbon/calculate', asyncHandler(async (req, res) => {
+      const result = carbonFootprintService.calculateEmissions(req.body);
+      res.json({ success: true, data: result });
+    }));
+
+    app.post('/api/carbon/orders/:orderId/calculate', asyncHandler(async (req, res) => {
+      const result = await carbonFootprintService.calculateForOrder(req.params.orderId);
+      res.json({ success: true, data: result });
+    }));
+
+    app.get('/api/carbon/reports/:industrielId', asyncHandler(async (req, res) => {
+      const { startDate, endDate } = req.query;
+      const result = await carbonFootprintService.generateEmissionsReport(
+        req.params.industrielId,
+        new Date(startDate),
+        new Date(endDate)
+      );
+      res.json({ success: true, data: result });
+    }));
+
+    app.post('/api/carbon/compare', asyncHandler(async (req, res) => {
+      const result = carbonFootprintService.compareOptions(req.body.options);
+      res.json({ success: true, data: result });
+    }));
+    console.log('✅ Carbon Footprint routes mounted');
+
+  } else {
+    console.warn('⚠️  v4.0.0 services not initialized - MongoDB not connected');
+  }
+
   // ==================== SCHEDULED JOBS ENDPOINTS ====================
   // Endpoint to get scheduled jobs status
   app.get('/api/admin/scheduled-jobs/status', (req, res) => {
@@ -1083,40 +1376,31 @@ async function startServer() {
   }
 
   // Register 404 handler (must be after all routes)
-  app.use((req, res) => {
-    res.status(404).json({
-      success: false,
-      error: {
-        code: 'NOT_FOUND',
-        message: `Endpoint not found: ${req.method} ${req.path}`,
-      },
-    });
-  });
+  app.use(notFoundHandler);
 
-  // Register error handler (must be last)
-  app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: err.message || 'Internal server error',
-      },
-    });
-  });
+  // Register centralized error handler (must be last)
+  app.use(createErrorHandler({
+    logger: secureLogger,
+    includeStack: process.env.NODE_ENV !== 'production',
+    logErrors: true,
+    mongoClient: mongoConnected ? mongoClient : null
+  }));
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log('============================================================================');
-    console.log('🚀 RT SYMPHONI.A v2.0.0 - Suite Chatbots Intelligents');
+    console.log('🚀 RT SYMPHONI.A v4.0.0 - 100% Compliance Edition');
     console.log('============================================================================');
-    console.log('Version: v2.0.0-chatbot-suite');
+    console.log('Version: v4.0.0-compliance');
     console.log('Port: ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? '✅ Connected' : '❌ Not connected'));
-    console.log('Security: ✅ Rate Limiting, CORS, Helmet, Input Sanitization');
+    console.log('Redis: ' + (redisCache?.isReady() ? '✅ Connected' : '⚠️ Not available'));
+    console.log('Security: ✅ Rate Limiting, CORS, Helmet, Input Sanitization, 2FA');
+    console.log('RGPD: ✅ Article 7, 17, 20 compliant');
+    console.log('Transport: ✅ EU 561/2006, Article L229-25 CO2');
     console.log('WebSocket: ✅ Real-time updates on /ws/planning');
     console.log('============================================================================');
-    console.log('Modules: 28/28 Operational');
+    console.log('Modules: 29/29 Operational');
     console.log('  - Subscriptions & Contracts & e-CMR');
     console.log('  - Account Types & Carrier Referencing');
     console.log('  - Pricing Grids & Industrial Transport Config');
@@ -1128,6 +1412,7 @@ async function startServer() {
     console.log('  - AFFRET.IA - Intelligent Freight Module');
     console.log('  - Planning Chargement & Livraison');
     console.log('  - Suite Chatbots Intelligents (8 assistants)');
+    console.log('  - Logisticien Delegation & ICPE Management');
     console.log('============================================================================');
     console.log('🤖 Suite Chatbots RT Technologie:');
     console.log('  - RT HelpBot: Support technique avec escalade automatique');
@@ -1153,6 +1438,16 @@ async function startServer() {
     console.log('  - detectDelays: every 2 min');
     console.log('  - SLA Monitoring: every 5 min');
     console.log('============================================================================');
+    console.log('🏭 Logisticien Delegation:');
+    console.log('  - Invitation par Industriel (email)');
+    console.log('  - Onboarding en 3 etapes');
+    console.log('  - Vigilance documentaire (ICPE, assurances, Kbis)');
+    console.log('  - Gestion ICPE complete (rubriques 1510, 1530, 2662...)');
+    console.log('  - Declaration hebdomadaire volumes par rubrique');
+    console.log('  - Alertes seuils automatiques (80%, 90%)');
+    console.log('  - Dashboard temps reel pour Industriel');
+    console.log('  - Options payantes: Bourse Stockage (150 EUR), Borne Accueil (100 EUR)');
+    console.log('============================================================================');
     console.log('📝 API Documentation: /');
     console.log('🏥 Health Check: /health');
     console.log('⚙️  Admin Jobs: /api/admin/scheduled-jobs/status');
@@ -1160,6 +1455,7 @@ async function startServer() {
     console.log('🚛 AFFRET.IA: /api/affretia/constants');
     console.log('📅 Planning: /api/planning/types');
     console.log('🤖 Chatbot: /api/chatbot/health');
+    console.log('🏭 Logisticien: /api/logisticians');
     console.log('============================================================================');
   });
 }

@@ -1,12 +1,11 @@
 // Tracking Basic Service - Email-based Manual Tracking
 // RT Backend Services - SYMPHONI.A Suite
-// Version: 1.0.0 - Conformité Page 6 du Cahier des Charges
+// Version: 2.5.2 - Migrated to AWS SES
 
 const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 const { EventTypes, OrderStatus } = require('./transport-orders-models');
-const Mailgun = require('mailgun.js');
-const formData = require('form-data');
+const { SESClient, SendRawEmailCommand } = require('@aws-sdk/client-ses');
 
 /**
  * TRACKING BASIC - VERSION EMAIL (50€/mois)
@@ -90,61 +89,130 @@ const TRACKING_STATUSES = {
 // Token expiration: 24 heures
 const TOKEN_EXPIRATION_MS = 24 * 60 * 60 * 1000;
 
-// ==================== MAILGUN CONFIGURATION ====================
+// ==================== AWS SES CONFIGURATION ====================
 
 /**
- * Envoyer un email via Mailgun
+ * Configuration AWS SES
+ */
+let sesClient = null;
+
+const SES_CONFIG = {
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-west-1'
+};
+
+const SES_FROM = process.env.SES_FROM_EMAIL || 'notifications@symphonia-controltower.com';
+const SES_FROM_NAME = 'SYMPHONI.A Tracking';
+const REPLY_TO = process.env.SES_SUPPORT_EMAIL || 'support@symphonia-controltower.com';
+
+function initSES() {
+  try {
+    sesClient = new SESClient(SES_CONFIG);
+    console.log(`✅ AWS SES initialized for Tracking (region: ${SES_CONFIG.region})`);
+    return true;
+  } catch (error) {
+    console.error('⚠️ AWS SES initialization failed:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Générer un Message-ID unique conforme RFC 5322
+ */
+function generateMessageId() {
+  const domain = SES_FROM.split('@')[1] || 'symphonia-controltower.com';
+  const timestamp = Date.now();
+  const random = crypto.randomBytes(8).toString('hex');
+  return `<${timestamp}.${random}@${domain}>`;
+}
+
+/**
+ * Envoyer un email via AWS SES avec headers anti-spam
  * @param {String} to - Email destinataire
  * @param {String} subject - Sujet de l'email
  * @param {String} html - Contenu HTML de l'email
  * @returns {Promise<Object>} Résultat de l'envoi
  */
-async function sendMailgunEmail(to, subject, html) {
-  if (!process.env.MAILGUN_API_KEY || !process.env.MAILGUN_DOMAIN) {
-    console.warn('Mailgun not configured - MAILGUN_API_KEY or MAILGUN_DOMAIN missing');
+async function sendTrackingEmailViaSES(to, subject, html) {
+  if (!sesClient) {
+    initSES();
+  }
+
+  if (!sesClient) {
+    console.warn('AWS SES not configured');
     return {
       success: false,
-      error: 'Mailgun not configured'
+      error: 'AWS SES not configured'
     };
   }
 
   try {
-    // Initialiser le client Mailgun
-    const mailgun = new Mailgun(formData);
-    const mg = mailgun.client({
-      username: 'api',
-      key: process.env.MAILGUN_API_KEY
+    const toAddresses = Array.isArray(to) ? to : [to];
+    const domain = SES_FROM.split('@')[1] || 'symphonia-controltower.com';
+    const messageId = generateMessageId();
+
+    // Version texte brut pour anti-spam
+    const plainText = html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
+    // Construire email MIME avec headers anti-spam
+    const boundary = `----=_Part_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+
+    const rawEmail = [
+      `From: ${SES_FROM_NAME} <${SES_FROM}>`,
+      `To: ${toAddresses.join(', ')}`,
+      `Reply-To: ${REPLY_TO}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+      `Message-ID: ${messageId}`,
+      `Date: ${new Date().toUTCString()}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      // Headers anti-spam
+      'X-Priority: 3',
+      'X-Mailer: SYMPHONIA-ControlTower/2.5',
+      `List-Unsubscribe: <mailto:unsubscribe@${domain}?subject=unsubscribe>`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      plainText,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      html,
+      '',
+      `--${boundary}--`
+    ].join('\r\n');
+
+    const command = new SendRawEmailCommand({
+      RawMessage: {
+        Data: Buffer.from(rawEmail)
+      }
     });
 
-    // Préparer le message
-    const messageData = {
-      from: process.env.EMAIL_FROM || 'RT Transport <noreply@rt-technologie.com>',
-      to: Array.isArray(to) ? to : [to],
-      subject: subject,
-      html: html
-    };
+    const result = await sesClient.send(command);
 
-    // Envoyer via Mailgun
-    const response = await mg.messages.create(
-      process.env.MAILGUN_DOMAIN,
-      messageData
-    );
-
-    console.log('Email sent successfully:', response.id);
+    console.log(`[AWS-SES] Tracking email sent to ${toAddresses.join(', ')}: ${subject} (${messageId})`);
 
     return {
       success: true,
-      messageId: response.id
+      messageId: result.MessageId,
+      provider: 'aws-ses'
     };
 
   } catch (error) {
-    console.error('Mailgun send error:', error);
+    console.error('AWS SES send error:', error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      provider: 'aws-ses'
     };
   }
 }
+
+// Auto-initialize SES on module load
+initSES();
 
 // ==================== FONCTIONS PRINCIPALES ====================
 
@@ -227,9 +295,9 @@ async function sendTrackingEmail(db, orderId, options = {}) {
       }
     });
 
-    // Envoyer l'email via Mailgun
+    // Envoyer l'email via AWS SES
     const emailSubject = `Suivi de votre transport - Commande ${order.reference}`;
-    const emailResult = await sendMailgunEmail(driverEmail, emailSubject, emailHtml);
+    const emailResult = await sendTrackingEmailViaSES(driverEmail, emailSubject, emailHtml);
 
     if (!emailResult.success) {
       console.warn('Failed to send email:', emailResult.error);

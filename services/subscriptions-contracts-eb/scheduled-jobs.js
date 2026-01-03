@@ -9,6 +9,12 @@ const dispatchService = require('./dispatch-service');
 const etaMonitoringService = require('./eta-monitoring-service');
 const notificationService = require('./notification-service');
 
+// SEC-015: Services de sécurité pour cleanup
+const { createEmailVerificationService } = require('./email-verification-service');
+const { createInvitationTokenService } = require('./invitation-token-service');
+const { createWebhookService } = require('./webhook-service');
+const { ProgressiveIPBlocker } = require('./rate-limiter-middleware');
+
 /**
  * Configuration des intervalles (en millisecondes)
  */
@@ -16,7 +22,9 @@ const INTERVALS = {
   CHECK_TIMEOUTS: 5 * 60 * 1000,      // 5 minutes
   MONITOR_ETA: 1 * 60 * 1000,          // 1 minute
   DETECT_DELAYS: 2 * 60 * 1000,        // 2 minutes
-  CLEANUP_OLD_TRACKING: 60 * 60 * 1000 // 1 heure
+  CLEANUP_OLD_TRACKING: 60 * 60 * 1000, // 1 heure
+  CLEANUP_SECURITY: 6 * 60 * 60 * 1000, // 6 heures - SEC-015
+  RETRY_WEBHOOKS: 5 * 60 * 1000         // 5 minutes - SEC-015
 };
 
 /**
@@ -193,6 +201,165 @@ async function runCleanupOldTracking() {
   }
 }
 
+// ============================================================================
+// SEC-015: JOBS DE SÉCURITÉ
+// ============================================================================
+
+/**
+ * SEC-015: Nettoyer les données de sécurité expirées
+ * - OTP expirés
+ * - Tokens révoqués expirés
+ * - Échecs IP expirés
+ * Exécuté toutes les 6 heures
+ */
+async function runCleanupSecurity() {
+  if (!db) {
+    console.warn('⚠️ [CRON] cleanupSecurity: Database not connected');
+    return;
+  }
+
+  try {
+    console.log('🔄 [CRON] Running cleanupSecurity...');
+    const now = new Date();
+    let totalCleaned = 0;
+
+    // 1. Nettoyer les OTP expirés (24h+)
+    const otpCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const otpResult = await db.collection('email_verifications').deleteMany({
+      $or: [
+        { expiresAt: { $lt: otpCutoff } },
+        { verified: true, verifiedAt: { $lt: otpCutoff } }
+      ]
+    });
+    totalCleaned += otpResult.deletedCount;
+
+    // 2. Nettoyer les tokens révoqués expirés
+    const tokenResult = await db.collection('revoked_tokens').deleteMany({
+      expiresAt: { $lt: now }
+    });
+    totalCleaned += tokenResult.deletedCount;
+
+    // 3. Nettoyer les échecs IP expirés (24h sans blocage actif)
+    const ipCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const ipResult = await db.collection('ip_failures').deleteMany({
+      lastFailure: { $lt: ipCutoff },
+      $or: [
+        { blockedUntil: { $exists: false } },
+        { blockedUntil: { $lt: now } }
+      ]
+    });
+    totalCleaned += ipResult.deletedCount;
+
+    // 4. Nettoyer les sessions 2FA expirées
+    const tfaResult = await db.collection('2fa_sessions').deleteMany({
+      expiresAt: { $lt: now }
+    });
+    totalCleaned += tfaResult.deletedCount;
+
+    console.log(`✅ [CRON] cleanupSecurity: ${totalCleaned} expired records removed`);
+    console.log(`   - OTP: ${otpResult.deletedCount}`);
+    console.log(`   - Revoked tokens: ${tokenResult.deletedCount}`);
+    console.log(`   - IP failures: ${ipResult.deletedCount}`);
+    console.log(`   - 2FA sessions: ${tfaResult.deletedCount}`);
+
+  } catch (error) {
+    console.error('❌ [CRON] cleanupSecurity error:', error.message);
+  }
+}
+
+/**
+ * SEC-015: Réessayer les webhooks en échec
+ * Exécuté toutes les 5 minutes
+ */
+async function runRetryWebhooks() {
+  if (!db) {
+    console.warn('⚠️ [CRON] retryWebhooks: Database not connected');
+    return;
+  }
+
+  try {
+    console.log('🔄 [CRON] Running retryWebhooks...');
+
+    const now = new Date();
+
+    // Trouver les webhooks à réessayer
+    const deliveries = await db.collection('webhook_deliveries').find({
+      status: 'retrying',
+      nextRetryAt: { $lte: now }
+    }).limit(50).toArray();
+
+    if (deliveries.length === 0) {
+      console.log('✅ [CRON] retryWebhooks: No pending retries');
+      return;
+    }
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const delivery of deliveries) {
+      const subscription = await db.collection('webhook_subscriptions').findOne({
+        _id: delivery.subscriptionId
+      });
+
+      if (!subscription || !subscription.isActive) {
+        // Marquer comme échoué si subscription inactive
+        await db.collection('webhook_deliveries').updateOne(
+          { _id: delivery._id },
+          { $set: { status: 'failed', failedAt: now, failedReason: 'subscription_inactive' } }
+        );
+        failed++;
+        continue;
+      }
+
+      // Tenter la livraison (simplifié - le service webhook gère le détail)
+      try {
+        const axios = require('axios');
+        await axios.post(subscription.url, delivery.payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Signature': delivery.signature,
+            'X-Webhook-Event': delivery.event,
+            'User-Agent': 'SYMPHONIA-Webhook/1.0'
+          },
+          timeout: 5000
+        });
+
+        // Succès
+        await db.collection('webhook_deliveries').updateOne(
+          { _id: delivery._id },
+          { $set: { status: 'delivered', deliveredAt: now } }
+        );
+        succeeded++;
+
+      } catch (err) {
+        // Échec - calculer prochain retry
+        const attempts = (delivery.attempts?.length || 0) + 1;
+        const maxRetries = 5;
+
+        if (attempts >= maxRetries) {
+          await db.collection('webhook_deliveries').updateOne(
+            { _id: delivery._id },
+            { $set: { status: 'failed', failedAt: now } }
+          );
+        } else {
+          const retryDelays = [60, 300, 1800, 7200]; // 1min, 5min, 30min, 2h
+          const nextDelay = retryDelays[Math.min(attempts - 1, retryDelays.length - 1)];
+          await db.collection('webhook_deliveries').updateOne(
+            { _id: delivery._id },
+            { $set: { nextRetryAt: new Date(now.getTime() + nextDelay * 1000) } }
+          );
+        }
+        failed++;
+      }
+    }
+
+    console.log(`✅ [CRON] retryWebhooks: ${deliveries.length} processed, ${succeeded} succeeded, ${failed} failed`);
+
+  } catch (error) {
+    console.error('❌ [CRON] retryWebhooks error:', error.message);
+  }
+}
+
 /**
  * Démarrer tous les jobs planifiés
  * @param {Object} database - Instance MongoDB database
@@ -216,10 +383,16 @@ function startAllJobs(database) {
   jobIntervals.detectDelays = setInterval(runDetectDelays, INTERVALS.DETECT_DELAYS);
   jobIntervals.cleanupOldTracking = setInterval(runCleanupOldTracking, INTERVALS.CLEANUP_OLD_TRACKING);
 
+  // SEC-015: Jobs de sécurité
+  jobIntervals.cleanupSecurity = setInterval(runCleanupSecurity, INTERVALS.CLEANUP_SECURITY);
+  jobIntervals.retryWebhooks = setInterval(runRetryWebhooks, INTERVALS.RETRY_WEBHOOKS);
+
   console.log('✅ [CRON] checkTimeouts: every 5 minutes');
   console.log('✅ [CRON] monitorETA: every 1 minute');
   console.log('✅ [CRON] detectDelays: every 2 minutes');
   console.log('✅ [CRON] cleanupOldTracking: every 1 hour');
+  console.log('✅ [CRON] cleanupSecurity: every 6 hours (SEC-015)');
+  console.log('✅ [CRON] retryWebhooks: every 5 minutes (SEC-015)');
   console.log('============================================================================');
 
   // Exécuter immédiatement une première fois
@@ -276,6 +449,14 @@ function getJobsStatus() {
       cleanupOldTracking: {
         interval: '1 hour',
         active: !!jobIntervals.cleanupOldTracking
+      },
+      cleanupSecurity: {
+        interval: '6 hours',
+        active: !!jobIntervals.cleanupSecurity
+      },
+      retryWebhooks: {
+        interval: '5 minutes',
+        active: !!jobIntervals.retryWebhooks
       }
     }
   };
@@ -291,7 +472,9 @@ async function runJobManually(jobName) {
     checkTimeouts: runCheckTimeouts,
     monitorETA: runMonitorETA,
     detectDelays: runDetectDelays,
-    cleanupOldTracking: runCleanupOldTracking
+    cleanupOldTracking: runCleanupOldTracking,
+    cleanupSecurity: runCleanupSecurity,
+    retryWebhooks: runRetryWebhooks
   };
 
   if (!jobs[jobName]) {
@@ -329,5 +512,8 @@ module.exports = {
   runCheckTimeouts,
   runMonitorETA,
   runDetectDelays,
-  runCleanupOldTracking
+  runCleanupOldTracking,
+  // SEC-015: Security jobs
+  runCleanupSecurity,
+  runRetryWebhooks
 };

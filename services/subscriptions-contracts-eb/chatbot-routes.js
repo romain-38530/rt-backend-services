@@ -1,7 +1,7 @@
 /**
  * RT Technologie - Routes API Chatbots
  * Endpoints pour la Suite Chatbots intelligents
- * Version: 1.0.0
+ * Version: 1.1.0 - Security Enhanced
  */
 
 const express = require('express');
@@ -17,6 +17,9 @@ const {
   TicketStatus,
   RoleToChatbot
 } = require('./chatbot-models');
+
+// SECURITY: Import des utilitaires de sanitisation
+const { escapeRegex } = require('./security-utils');
 
 /**
  * Creer le router des chatbots
@@ -620,12 +623,14 @@ function createChatbotRoutes(db, eventEmitter = null) {
 
       let query = filter;
       if (q) {
+        // SECURITY: Échapper les caractères spéciaux regex pour prévenir ReDoS
+        const safeQuery = escapeRegex(q);
         query = {
           ...filter,
           $or: [
-            { title: { $regex: q, $options: 'i' } },
-            { keywords: { $in: q.toLowerCase().split(' ') } },
-            { content: { $regex: q, $options: 'i' } }
+            { title: { $regex: safeQuery, $options: 'i' } },
+            { keywords: { $in: q.toLowerCase().split(' ').map(k => k.trim()).filter(k => k.length > 0) } },
+            { content: { $regex: safeQuery, $options: 'i' } }
           ]
         };
       }

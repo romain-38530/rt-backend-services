@@ -1,10 +1,10 @@
 // Stripe Payment Routes - Checkout & Subscription Management
-// RT Backend Services - Version 1.1.0 - Invoicing & Subscriptions
+// RT Backend Services - Version 2.5.2 - Migrated to AWS SES
 
 const express = require('express');
 const { ObjectId } = require('mongodb');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_your_stripe_key');
-const nodemailer = require('nodemailer');
+const { SESClient, SendRawEmailCommand } = require('@aws-sdk/client-ses');
 const PDFDocument = require('pdfkit');
 const { authenticateToken } = require('./auth-middleware');
 
@@ -12,16 +12,13 @@ const { authenticateToken } = require('./auth-middleware');
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_your_webhook_secret';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-// Configuration Email OVH SMTP
-const SMTP_CONFIG = {
-  host: process.env.SMTP_HOST || 'ssl0.ovh.net',
-  port: parseInt(process.env.SMTP_PORT) || 587,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER || 'facturation@symphonia-controltower.com',
-    pass: process.env.SMTP_PASS || ''
-  }
+// Configuration AWS SES
+const SES_CONFIG = {
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-west-1'
 };
+
+const SES_BILLING_FROM = process.env.SES_BILLING_EMAIL || 'facturation@symphonia-controltower.com';
+const SES_BILLING_FROM_NAME = 'SYMPHONI.A Facturation';
 
 // Company info for invoices
 const COMPANY_INFO = {
@@ -154,13 +151,13 @@ const OPTION_PRICES = {
 function createStripeRoutes(mongoClient, mongoConnected) {
   const router = express.Router();
 
-  // SMTP Email transporter (OVH)
-  let emailTransporter = null;
-  if (SMTP_CONFIG.auth.pass) {
-    emailTransporter = nodemailer.createTransport(SMTP_CONFIG);
-    console.log('[Stripe] OVH SMTP email transporter configured');
-  } else {
-    console.log('[Stripe] SMTP not configured - SMTP_PASS missing');
+  // AWS SES Client for billing emails
+  let sesClient = null;
+  try {
+    sesClient = new SESClient(SES_CONFIG);
+    console.log(`[Stripe] AWS SES initialized for billing (region: ${SES_CONFIG.region})`);
+  } catch (error) {
+    console.error('[Stripe] AWS SES initialization failed:', error.message);
   }
 
   // Middleware pour vérifier la connexion MongoDB
@@ -339,20 +336,19 @@ function createStripeRoutes(mongoClient, mongoConnected) {
   }
 
   /**
-   * Send invoice by email
+   * Send invoice by email via AWS SES with PDF attachment
    */
   async function sendInvoiceEmail(invoice, client, pdfBuffer) {
-    if (!emailTransporter) {
-      console.log('[Invoice] Email not configured, skipping send');
-      return { success: false, error: 'Email not configured' };
+    if (!sesClient) {
+      console.log('[Invoice] AWS SES not configured, skipping send');
+      return { success: false, error: 'AWS SES not configured' };
     }
 
     try {
-      const mailOptions = {
-        from: `"SYMPHONI.A Facturation" <${COMPANY_INFO.email}>`,
-        to: client.email,
-        subject: `Facture ${invoice.invoiceNumber} - SYMPHONI.A`,
-        html: `
+      const sender = `${SES_BILLING_FROM_NAME} <${SES_BILLING_FROM}>`;
+      const subject = `Facture ${invoice.invoiceNumber} - SYMPHONI.A`;
+
+      const htmlBody = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #f97316 0%, #dc2626 100%); color: white; padding: 20px; text-align: center;">
               <h1 style="margin: 0;">SYMPHONI.A</h1>
@@ -403,20 +399,66 @@ function createStripeRoutes(mongoClient, mongoConnected) {
               <p style="margin: 5px 0 0 0;">${COMPANY_INFO.address}, ${COMPANY_INFO.postalCode} ${COMPANY_INFO.city}</p>
             </div>
           </div>
-        `,
-        attachments: [{
-          filename: `${invoice.invoiceNumber}.pdf`,
-          content: pdfBuffer,
-          contentType: 'application/pdf'
-        }]
-      };
+        `;
 
-      await emailTransporter.sendMail(mailOptions);
-      console.log(`[Invoice] Email sent to ${client.email} for invoice ${invoice.invoiceNumber}`);
-      return { success: true };
+      // Build MIME message with PDF attachment and anti-spam headers
+      const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      const pdfBase64 = pdfBuffer.toString('base64');
+      const domain = SES_BILLING_FROM.split('@')[1] || 'symphonia-controltower.com';
+      const messageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${domain}>`;
+      const replyTo = 'support@symphonia-controltower.com';
+
+      // Version texte brut pour anti-spam
+      const plainText = htmlBody.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
+      const rawMessage = [
+        `From: ${sender}`,
+        `To: ${client.email}`,
+        `Reply-To: ${replyTo}`,
+        `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+        `Message-ID: ${messageId}`,
+        `Date: ${new Date().toUTCString()}`,
+        'MIME-Version: 1.0',
+        `Content-Type: multipart/mixed; boundary="${boundary}"`,
+        // Headers anti-spam
+        'X-Priority: 3',
+        'X-Mailer: SYMPHONIA-ControlTower/2.5',
+        `List-Unsubscribe: <mailto:unsubscribe@${domain}?subject=unsubscribe>`,
+        '',
+        `--${boundary}`,
+        'Content-Type: text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding: quoted-printable',
+        '',
+        plainText,
+        '',
+        `--${boundary}`,
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: quoted-printable',
+        '',
+        htmlBody,
+        '',
+        `--${boundary}`,
+        'Content-Type: application/pdf',
+        'Content-Transfer-Encoding: base64',
+        `Content-Disposition: attachment; filename="${invoice.invoiceNumber}.pdf"`,
+        '',
+        pdfBase64,
+        '',
+        `--${boundary}--`
+      ].join('\r\n');
+
+      const command = new SendRawEmailCommand({
+        RawMessage: {
+          Data: Buffer.from(rawMessage)
+        }
+      });
+
+      const result = await sesClient.send(command);
+      console.log(`[AWS-SES] Invoice email sent to ${client.email} for ${invoice.invoiceNumber}`);
+      return { success: true, messageId: result.MessageId, provider: 'aws-ses' };
     } catch (error) {
-      console.error('[Invoice] Email send error:', error.message);
-      return { success: false, error: error.message };
+      console.error('[Invoice] AWS SES send error:', error.message);
+      return { success: false, error: error.message, provider: 'aws-ses' };
     }
   }
 

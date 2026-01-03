@@ -1,32 +1,35 @@
 // ============================================================================
 // Notification Service - Multi-Channel Notifications (Email + SMS)
 // ============================================================================
-// Version: 1.0.0
-// Description: Service de notifications via Email (Mailgun) et SMS (Twilio)
+// Version: 2.5.2 - Migrated to AWS SES
+// Description: Service de notifications via Email (AWS SES) et SMS (Twilio)
 // ============================================================================
 
 const { ObjectId } = require('mongodb');
-const Mailgun = require('mailgun.js');
-const formData = require('form-data');
+const { SESClient, SendRawEmailCommand } = require('@aws-sdk/client-ses');
+const crypto = require('crypto');
 
 /**
- * Configuration Mailgun
+ * Configuration AWS SES
  */
-const mailgun = new Mailgun(formData);
-let mgClient = null;
+let sesClient = null;
 
-function initMailgun() {
-  if (process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN) {
-    mgClient = mailgun.client({
-      username: 'api',
-      key: process.env.MAILGUN_API_KEY,
-      url: process.env.MAILGUN_HOST || 'https://api.eu.mailgun.net'
-    });
-    console.log('✅ Mailgun initialized');
+const SES_CONFIG = {
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-west-1'
+};
+
+const SES_FROM = process.env.SES_FROM_EMAIL || 'notifications@symphonia-controltower.com';
+const SES_FROM_NAME = 'SYMPHONI.A Notifications';
+
+function initSES() {
+  try {
+    sesClient = new SESClient(SES_CONFIG);
+    console.log(`✅ AWS SES initialized (region: ${SES_CONFIG.region})`);
     return true;
+  } catch (error) {
+    console.error('⚠️ AWS SES initialization failed:', error.message);
+    return false;
   }
-  console.warn('⚠️ Mailgun not configured - MAILGUN_API_KEY or MAILGUN_DOMAIN missing');
-  return false;
 }
 
 /**
@@ -164,41 +167,100 @@ const MessageTemplates = {
 };
 
 /**
- * Envoyer un email via Mailgun
+ * Générer un Message-ID unique conforme RFC 5322
+ */
+function generateMessageId(domain) {
+  const timestamp = Date.now();
+  const random = crypto.randomBytes(8).toString('hex');
+  return `<${timestamp}.${random}@${domain}>`;
+}
+
+/**
+ * Envoyer un email via AWS SES avec headers anti-spam
  * @param {Object} options - Options d'envoi
  * @returns {Promise<Object>} Résultat
  */
 async function sendEmail(options) {
-  const { to, subject, html, text, from } = options;
+  const { to, subject, html, text, from, replyTo } = options;
 
-  if (!mgClient) {
+  if (!sesClient) {
+    initSES();
+  }
+
+  if (!sesClient) {
     return {
       success: false,
-      error: 'Mailgun not configured',
+      error: 'AWS SES not configured',
       fallback: true
     };
   }
 
   try {
-    const result = await mgClient.messages.create(process.env.MAILGUN_DOMAIN, {
-      from: from || process.env.MAILGUN_FROM || 'RT SYMPHONI.A <notifications@rt-symphonia.eu>',
-      to: Array.isArray(to) ? to : [to],
-      subject,
-      html: html || undefined,
-      text: text || undefined
+    const toAddresses = Array.isArray(to) ? to : [to];
+    const sender = from || `${SES_FROM_NAME} <${SES_FROM}>`;
+    const domain = SES_FROM.split('@')[1] || 'symphonia-controltower.com';
+    const messageId = generateMessageId(domain);
+    const replyToAddress = replyTo || 'support@symphonia-controltower.com';
+
+    // Version texte brut (important pour anti-spam)
+    const plainText = text || html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
+    // Construire email MIME avec headers anti-spam
+    const boundary = `----=_Part_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+
+    const rawEmail = [
+      `From: ${sender}`,
+      `To: ${toAddresses.join(', ')}`,
+      `Reply-To: ${replyToAddress}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+      `Message-ID: ${messageId}`,
+      `Date: ${new Date().toUTCString()}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      // Headers anti-spam
+      'X-Priority: 3',
+      'X-Mailer: SYMPHONIA-ControlTower/2.5',
+      `List-Unsubscribe: <mailto:unsubscribe@${domain}?subject=unsubscribe>`,
+      'Precedence: bulk',
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      plainText,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      html || plainText,
+      '',
+      `--${boundary}--`
+    ].join('\r\n');
+
+    const command = new SendRawEmailCommand({
+      RawMessage: {
+        Data: Buffer.from(rawEmail)
+      }
     });
+
+    const result = await sesClient.send(command);
+
+    console.log(`[AWS-SES] Email sent to ${toAddresses.join(', ')}: ${subject} (${messageId})`);
 
     return {
       success: true,
-      messageId: result.id,
-      channel: 'email'
+      messageId: result.MessageId,
+      channel: 'email',
+      provider: 'aws-ses'
     };
   } catch (error) {
-    console.error('Error sending email:', error.message);
+    console.error('Error sending email via SES:', error.message);
     return {
       success: false,
       error: error.message,
-      channel: 'email'
+      channel: 'email',
+      provider: 'aws-ses'
     };
   }
 }
@@ -488,9 +550,10 @@ async function getNotificationHistory(db, filters = {}) {
 function getNotificationServicesStatus() {
   return {
     email: {
-      provider: 'Mailgun',
-      configured: !!mgClient,
-      domain: process.env.MAILGUN_DOMAIN || 'not set'
+      provider: 'AWS SES',
+      configured: !!sesClient,
+      region: SES_CONFIG.region,
+      from: SES_FROM
     },
     sms: {
       provider: 'Twilio',
@@ -503,7 +566,7 @@ function getNotificationServicesStatus() {
 // ==================== INITIALIZATION ====================
 
 // Auto-initialize on module load
-initMailgun();
+initSES();
 initTwilio();
 
 // ==================== EXPORTS ====================
@@ -511,7 +574,7 @@ initTwilio();
 module.exports = {
   NotificationTypes,
   MessageTemplates,
-  initMailgun,
+  initSES,
   initTwilio,
   sendEmail,
   sendSMS,

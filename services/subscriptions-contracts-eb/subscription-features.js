@@ -323,6 +323,81 @@ const INDUSTRIEL_PLANS = {
   }
 };
 
+// ==================== PLANS LOGISTICIEN ====================
+
+const LOGISTICIEN_PLANS = {
+  // Plan Gratuit - 0 EUR/mois (couvert par abonnement industriel)
+  FREE: {
+    id: 'logisticien_free',
+    name: 'Logisticien Gratuit',
+    price: 0,
+    stripePriceId: null,
+    billingNote: 'Couvert par abonnement Industriel',
+    maxWarehouses: 3,
+    maxIndustrialClients: 5,
+    features: {
+      // Fonctionnalites gratuites incluses
+      dashboard: true,
+      ordersVisibility: true,        // Voir commandes industriels lies
+      planningQuais: true,           // Gestion planning quais
+      rdvManagement: true,           // Gerer RDV
+      ecmrAccess: true,              // Acces e-CMR
+      documentUpload: true,          // Upload documents
+      notifications: true,           // Alertes email/push
+      icpeDeclarations: true,        // Declaration ICPE hebdomadaire
+      vigilanceDocuments: true,      // Gestion documents vigilance
+      driverCheckin: true,           // Check-in chauffeurs basique
+
+      // Fonctionnalites NON incluses
+      bourseDeStockage: false,       // Option payante 150 EUR/mois
+      borneAccueilChauffeur: false,  // Option payante 100 EUR/mois
+      apiAccess: false,
+      advancedAnalytics: false,
+      smsNotifications: false
+    },
+    limits: {
+      maxWarehouses: 3,
+      maxIndustrialClients: 5
+    }
+  }
+};
+
+// Options payantes Logisticien
+const LOGISTICIEN_PAID_OPTIONS = {
+  bourseDeStockage: {
+    id: 'bourseDeStockage',
+    name: 'Bourse de Stockage',
+    description: 'Acces a la marketplace de stockage pour proposer vos capacites',
+    monthlyPrice: 150,
+    pricingType: 'fixed_monthly',
+    stripePriceId: null, // A creer
+    stripeProductId: null,
+    features: {
+      publishCapacity: true,          // Publier capacites
+      respondToNeeds: true,           // Repondre aux besoins
+      aiRecommendations: true,        // Recommandations IA
+      marketplaceVisibility: true     // Visibilite marketplace
+    }
+  },
+  borneAccueilChauffeur: {
+    id: 'borneAccueilChauffeur',
+    name: 'Borne Accueil Chauffeur',
+    description: 'Automatisation de l\'accueil chauffeur avec borne/kiosque',
+    monthlyPrice: 100,
+    pricingType: 'fixed_monthly',
+    stripePriceId: null, // A creer
+    stripeProductId: null,
+    features: {
+      kioskMode: true,                // Mode kiosque
+      qrCodeCheckin: true,            // Check-in QR code
+      automaticDockAssignment: true,  // Attribution automatique quai
+      driverQueue: true,              // File d'attente chauffeurs
+      smsNotifications: true,         // SMS au chauffeur
+      waitTimeDisplay: true           // Affichage temps attente
+    }
+  }
+};
+
 // ==================== ADD-ONS / OPTIONS PAYANTES ====================
 
 const PAID_OPTIONS = {
@@ -556,6 +631,53 @@ const FEATURE_DESCRIPTIONS = {
     name: 'Stockage Documents',
     description: 'Stockage supplementaire (5EUR/10GB)',
     icon: 'HardDrive'
+  },
+
+  // Logisticien Features
+  ordersVisibility: {
+    name: 'Visibilite Commandes',
+    description: 'Voir les commandes des industriels partenaires',
+    icon: 'Eye'
+  },
+  planningQuais: {
+    name: 'Planning Quais',
+    description: 'Gestion des creneaux de chargement/dechargement',
+    icon: 'Calendar'
+  },
+  rdvManagement: {
+    name: 'Gestion RDV',
+    description: 'Planification des rendez-vous chauffeurs',
+    icon: 'Clock'
+  },
+  ecmrAccess: {
+    name: 'Acces e-CMR',
+    description: 'Reception et signature des e-CMR',
+    icon: 'FileSignature'
+  },
+  icpeDeclarations: {
+    name: 'Declarations ICPE',
+    description: 'Declaration hebdomadaire des volumes ICPE',
+    icon: 'FileCheck'
+  },
+  driverCheckin: {
+    name: 'Accueil Chauffeurs',
+    description: 'Enregistrement des chauffeurs a l\'arrivee',
+    icon: 'UserCheck'
+  },
+  bourseDeStockage: {
+    name: 'Bourse de Stockage',
+    description: 'Acces au marketplace de stockage (150EUR/mois)',
+    icon: 'Store'
+  },
+  borneAccueilChauffeur: {
+    name: 'Borne Accueil Chauffeur',
+    description: 'Automatisation accueil avec kiosque (100EUR/mois)',
+    icon: 'Monitor'
+  },
+  advancedAnalytics: {
+    name: 'Statistiques Avancees',
+    description: 'Rapports et analyses detailles',
+    icon: 'PieChart'
   }
 };
 
@@ -569,8 +691,17 @@ function getPlanConfig(userType, planLevel) {
     return TRANSPORTEUR_PLANS[planLevel] || TRANSPORTEUR_PLANS.GRATUIT;
   } else if (userType === 'industriel') {
     return INDUSTRIEL_PLANS[planLevel] || INDUSTRIEL_PLANS.STARTER;
+  } else if (userType === 'logisticien') {
+    return LOGISTICIEN_PLANS[planLevel] || LOGISTICIEN_PLANS.FREE;
   }
   return null;
+}
+
+/**
+ * Obtenir les options payantes logisticien
+ */
+function getLogisticienPaidOptions() {
+  return LOGISTICIEN_PAID_OPTIONS;
 }
 
 /**
@@ -736,6 +867,13 @@ function getPlansOverview() {
       PRO: { price: 499, name: 'Pro', users: 10, sites: 5, highlight: 'KPI + Planning + 50 transporteurs' },
       ENTERPRISE: { price: 699, name: 'Enterprise', users: -1, sites: -1, highlight: 'AFFRET.IA + API + Illimite' }
     },
+    logisticien: {
+      FREE: { price: 0, name: 'Gratuit', warehouses: 3, highlight: 'Couvert par abonnement industriel' }
+    },
+    logisticienOptions: [
+      { id: 'bourseDeStockage', name: 'Bourse de Stockage', price: '150 EUR/mois', highlight: 'Marketplace stockage' },
+      { id: 'borneAccueilChauffeur', name: 'Borne Accueil Chauffeur', price: '100 EUR/mois', highlight: 'Automatisation accueil' }
+    ],
     addOns: [
       { id: 'gpsTrackingTomtom', name: 'GPS TomTom', price: '4 EUR/vehicule' },
       { id: 'emailTrackingMailgun', name: 'Email Mailgun', price: '50 EUR/mois' },
@@ -747,15 +885,25 @@ function getPlansOverview() {
 }
 
 module.exports = {
+  // Plans
   TRANSPORTEUR_PLANS,
   INDUSTRIEL_PLANS,
+  LOGISTICIEN_PLANS,
+
+  // Options payantes
   PAID_OPTIONS,
+  LOGISTICIEN_PAID_OPTIONS,
+
+  // Descriptions
   FEATURE_DESCRIPTIONS,
+
+  // Fonctions
   getPlanConfig,
   isFeatureAvailable,
   getUserFeatures,
   checkUsageLimit,
   getAvailableOptions,
   getBlockedFeatureMessage,
-  getPlansOverview
+  getPlansOverview,
+  getLogisticienPaidOptions
 };

@@ -1,10 +1,11 @@
 {
   "name": "rt-subscriptions-contracts-api",
-  "version": "2.1.0",
-  "description": "RT SYMPHONI.A v2.1.0 - Subscriptions & Contracts API + Pricing Grids LTL/FTL/Messagerie + Excel Import",
+  "version": "4.0.0",
+  "description": "RT SYMPHONI.A v4.0.0 - 100% Compliance Edition (RGPD, EU 561/2006, Article L229-25)",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "create-bundle": "node create-deploy-bundle.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -20,18 +21,22 @@
     "pdfkit": "^0.15.0",
     "qrcode": "^1.5.3",
     "@aws-sdk/client-s3": "^3.490.0",
+    "@aws-sdk/s3-request-presigner": "^3.490.0",
     "@aws-sdk/client-glacier": "^3.490.0",
+    "@aws-sdk/client-textract": "^3.490.0",
+    "@aws-sdk/client-ses": "^3.490.0",
     "jsonwebtoken": "^9.0.2",
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
     "stripe": "^14.10.0",
-    "nodemailer": "^6.9.8",
-    "mailgun.js": "^9.4.1",
-    "form-data": "^4.0.0",
     "axios": "^1.6.2",
     "ovh": "^2.0.3",
     "twilio": "^4.23.0",
     "node-fetch": "^2.7.0",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "rate-limiter-flexible": "^5.0.0",
+    "joi": "^17.11.0",
+    "ioredis": "^5.3.2",
+    "socket.io": "^4.7.4"
   },
   "keywords": [
     "transport",
