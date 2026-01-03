@@ -166,6 +166,54 @@ const TransportConstraints = {
   LTL: 'LTL' // Less Than Truckload (groupage)
 };
 
+// ==================== TYPES DE DÉLÉGATION LOGISTIQUE ====================
+// Détermine qui reçoit les demandes de RDV selon la configuration
+
+const DelegatedLogisticsTypes = {
+  NONE: 'NONE',           // Pas de délégation - Industriel gère tout
+  '3PL': '3PL',           // Third-party logistics
+  '4PL': '4PL'            // Fourth-party logistics (orchestrateur)
+};
+
+const ManagedOperations = {
+  PICKUP: 'pickup',       // Logisticien gère le chargement
+  DELIVERY: 'delivery',   // Logisticien gère la livraison
+  BOTH: 'both'            // Logisticien gère les deux
+};
+
+// ==================== TYPES D'ORGANISATION ====================
+
+const OrganizationTypes = {
+  INDUSTRIAL: 'industrial',     // Donneur d'ordre (Industriel)
+  LOGISTICIAN: 'logistician',   // Logisticien (3PL/4PL)
+  CARRIER: 'carrier',           // Transporteur
+  SUPPLIER: 'supplier',         // Fournisseur
+  RECIPIENT: 'recipient'        // Destinataire
+};
+
+// ==================== SCHÉMA DÉLÉGATION LOGISTIQUE ====================
+/**
+ * Structure delegatedLogistics pour une commande:
+ * {
+ *   partnerId: string,           // ID du logisticien
+ *   partnerName: string,         // Nom du logisticien
+ *   partnerType: '3PL' | '4PL',  // Type de partenaire
+ *   managedOperations: ['pickup' | 'delivery' | 'both'],
+ *   partnerSites: string[],      // Sites gérés par le partenaire
+ *   contractStartDate: Date,
+ *   contractEndDate: Date,
+ *   isActive: boolean
+ * }
+ *
+ * Structure supplier pour une commande:
+ * {
+ *   supplierId: string,
+ *   supplierName: string,
+ *   siteId: string,
+ *   managedByIndustrial: boolean  // Si false, le fournisseur gère ses propres RDV
+ * }
+ */
+
 // ==================== TYPES D'INCIDENTS ====================
 
 const IncidentTypes = {
@@ -407,6 +455,9 @@ module.exports = {
   TrackingTypes,
   CreationChannels,
   TransportConstraints,
+  DelegatedLogisticsTypes,
+  ManagedOperations,
+  OrganizationTypes,
   IncidentTypes,
   ScoringCriteria,
   calculateCarrierScore,
