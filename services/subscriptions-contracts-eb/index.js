@@ -28,6 +28,7 @@ const { createChatbotRoutes } = require('./chatbot-routes');
 const { TicketingService } = require('./ticketing-service');
 const createLogisticienRoutes = require('./logisticien-routes');
 const createLogisticienPortalRoutes = require('./logisticien-portal-routes');
+const logisticsDelegationRoutes = require('./logistics-delegation-routes');
 
 // v4.0.0 - Compliance & Security Enhancements
 const { createGdprService, GDPR_CONFIG } = require('./gdpr-service');
@@ -1310,6 +1311,14 @@ async function startServer() {
       res.json({ success: true, data: result });
     }));
     console.log('✅ Carbon Footprint routes mounted');
+
+    // Mount Logistics Delegation routes (for industrials managing their 3PL/4PL partners)
+    logisticsDelegationRoutes.use((req, res, next) => {
+      req.app.locals.db = mongoClient.db();
+      next();
+    });
+    app.use('/api/logistics-delegation', logisticsDelegationRoutes);
+    console.log('✅ Logistics Delegation routes mounted (3PL/4PL management)');
 
   } else {
     console.warn('⚠️  v4.0.0 services not initialized - MongoDB not connected');
