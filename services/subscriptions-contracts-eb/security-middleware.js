@@ -109,12 +109,30 @@ const corsOptions = {
     const allowedOrigins = process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
       : [
+          // Development
           'http://localhost:3000',
           'http://localhost:3001',
+          'http://localhost:3002',
+          'http://localhost:3003',
+          // Production - SYMPHONI.A portals
           'https://industrie.symphonia-controltower.com',
+          'https://industry.symphonia-controltower.com',
+          'https://carrier.symphonia-controltower.com',
           'https://transporteur.symphonia-controltower.com',
+          'https://admin.symphonia-controltower.com',
+          'https://recipient.symphonia-controltower.com',
+          'https://destinataire.symphonia-controltower.com',
+          'https://supplier.symphonia-controltower.com',
+          'https://fournisseur.symphonia-controltower.com',
           'https://logisticien.symphonia-controltower.com',
-          'https://symphonia-controltower.com'
+          'https://symphonia-controltower.com',
+          'https://www.symphonia-controltower.com',
+          // Amplify domains
+          'https://main.d3k4ximjf1cdqf.amplifyapp.com',
+          'https://main.d2hfwey35xd9r9.amplifyapp.com',
+          'https://main.d1h6dwv7w3s7hf.amplifyapp.com',
+          'https://main.d3s1ysyzrjtwkq.amplifyapp.com',
+          'https://main.d2m7d79woxw4sk.amplifyapp.com'
         ];
 
     // En production, exiger un header Origin

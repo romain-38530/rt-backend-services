@@ -324,8 +324,8 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT Orders API',
-    version: '2.1.0',
-    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'CRUD Orders', 'Geocoding', 'Tracking'],
+    version: '4.1.0',
+    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'CRUD Orders', 'Geocoding', 'Tracking', 'Auto-Dispatch', 'Affret.IA'],
     endpoints: [
       'GET /health',
       'GET /',
@@ -337,9 +337,25 @@ app.get('/', (req, res) => {
       'GET /api/v1/orders/:id/tracking',
       'POST /api/v1/orders/:id/tracking',
       'POST /api/v1/orders/:id/geocode',
+      'POST /api/v1/orders/:id/auto-dispatch',
+      'GET /api/v1/orders/:id/dispatch-status',
       'POST /api/v1/orders/batch-geocode'
     ]
   });
+});
+
+// Debug endpoint to list all routes
+app.get('/debug/routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods)
+      });
+    }
+  });
+  res.json({ routes, total: routes.length });
 });
 
 // ==================== ORDERS CRUD ====================

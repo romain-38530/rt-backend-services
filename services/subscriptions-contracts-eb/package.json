@@ -1,6 +1,6 @@
 {
   "name": "rt-subscriptions-contracts-api",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "RT SYMPHONI.A v4.0.0 - 100% Compliance Edition (RGPD, EU 561/2006, Article L229-25)",
   "main": "index.js",
   "scripts": {

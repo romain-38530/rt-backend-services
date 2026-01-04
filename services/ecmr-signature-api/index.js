@@ -270,12 +270,25 @@ app.get('/api/v1/ecmr', async (req, res) => {
   }
 });
 
+// GET /api/v1/ecmr/order/:orderId - Get eCMR by Order ID
+app.get('/api/v1/ecmr/order/:orderId', async (req, res) => {
+  try {
+    const ecmr = await ECMR.findOne({ orderId: req.params.orderId });
+    if (!ecmr) {
+      return res.status(404).json({ success: false, error: 'Aucune eCMR trouvée pour cette commande' });
+    }
+    res.json({ success: true, data: ecmr });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/v1/ecmr/:id - Get eCMR by ID
 app.get('/api/v1/ecmr/:id', async (req, res) => {
   try {
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
     res.json({ success: true, data: ecmr });
   } catch (error) {
@@ -288,12 +301,12 @@ app.put('/api/v1/ecmr/:id', async (req, res) => {
   try {
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     // Cannot modify if already signed by all parties
     if (ecmr.status === 'completed') {
-      return res.status(400).json({ success: false, error: 'Cannot modify completed eCMR' });
+      return res.status(400).json({ success: false, error: 'Impossible de modifier une eCMR complétée' });
     }
 
     // Update allowed fields
@@ -340,25 +353,25 @@ app.post('/api/v1/ecmr/:id/sign', async (req, res) => {
     }
 
     if (!['shipper', 'carrier', 'consignee'].includes(signerType)) {
-      return res.status(400).json({ success: false, error: 'Invalid signer type. Use: shipper, carrier, or consignee' });
+      return res.status(400).json({ success: false, error: 'Type de signataire invalide. Utilisez: shipper, carrier, ou consignee' });
     }
 
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     // Validate signature order
     if (signerType === 'carrier' && !ecmr.shipper.signedAt) {
-      return res.status(400).json({ success: false, error: 'Shipper must sign first' });
+      return res.status(400).json({ success: false, error: 'L\'expéditeur doit signer en premier' });
     }
     if (signerType === 'consignee' && (!ecmr.shipper.signedAt || !ecmr.carrier.signedAt)) {
-      return res.status(400).json({ success: false, error: 'Shipper and carrier must sign first' });
+      return res.status(400).json({ success: false, error: 'L\'expéditeur et le transporteur doivent signer en premier' });
     }
 
     // Check if already signed
     if (ecmr[signerType].signedAt) {
-      return res.status(400).json({ success: false, error: `${signerType} already signed` });
+      return res.status(400).json({ success: false, error: 'Ce signataire a déjà signé' });
     }
 
     // Generate signature hash
@@ -413,7 +426,7 @@ app.post('/api/v1/ecmr/:id/validate', async (req, res) => {
   try {
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     const validation = {
@@ -465,7 +478,7 @@ app.get('/api/v1/ecmr/:id/download', async (req, res) => {
   try {
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     // Return PDF-ready data (actual PDF generation would be done client-side or with a PDF library)
@@ -963,7 +976,7 @@ app.get('/api/v1/ecmr/:id/pdf', async (req, res) => {
   try {
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     // Generate QR code for verification
@@ -1019,7 +1032,7 @@ app.post('/api/v1/ecmr/generate-pdf', async (req, res) => {
     const ecmr = req.body;
 
     if (!ecmr || !ecmr.id) {
-      return res.status(400).json({ success: false, error: 'eCMR data required' });
+      return res.status(400).json({ success: false, error: 'Données eCMR requises' });
     }
 
     // Normalize ecmr data to ensure ecmrId is set
@@ -1078,7 +1091,7 @@ app.get('/api/v1/ecmr/:id/history', async (req, res) => {
       .select('ecmrId compliance.auditTrail');
 
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     res.json({
@@ -1102,7 +1115,7 @@ app.post('/api/v1/ecmr/:id/reservation', async (req, res) => {
 
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     ecmr.reservations.push({
@@ -1134,7 +1147,7 @@ app.post('/api/v1/ecmr/:id/dispute', async (req, res) => {
     );
 
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     addAuditEntry(ecmr, 'disputed', disputedBy, `Dispute: ${reason}`, req.ip);
@@ -1155,7 +1168,7 @@ app.post('/api/v1/ecmr/:id/request-signature', async (req, res) => {
 
     const ecmr = await ECMR.findOne({ ecmrId: req.params.id });
     if (!ecmr) {
-      return res.status(404).json({ success: false, error: 'eCMR not found' });
+      return res.status(404).json({ success: false, error: 'eCMR non trouvée' });
     }
 
     const requestId = generateId('SIGN');
