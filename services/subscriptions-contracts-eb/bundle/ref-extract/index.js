@@ -28,20 +28,6 @@ const { createChatbotRoutes } = require('./chatbot-routes');
 const { TicketingService } = require('./ticketing-service');
 const createLogisticienRoutes = require('./logisticien-routes');
 const createLogisticienPortalRoutes = require('./logisticien-portal-routes');
-const logisticsDelegationRoutes = require('./logistics-delegation-routes');
-const icpeRoutes = require('./icpe-routes');
-
-// v4.0.0 - Compliance & Security Enhancements
-const { createGdprService, GDPR_CONFIG } = require('./gdpr-service');
-const { createConsentService } = require('./consent-service');
-const { initializeGdprRoutes } = require('./gdpr-routes');
-const { SecureLogger, requestLoggerMiddleware, errorLoggerMiddleware } = require('./secure-logger');
-const { createTokenRotationService } = require('./token-rotation-service');
-const { createWebSocketAuthService } = require('./websocket-auth-service');
-const { createRedisCacheService, getRedisCacheService } = require('./redis-cache-service');
-const { createDrivingTimeService } = require('./driving-time-service');
-const { createCarbonFootprintService } = require('./carbon-footprint-service');
-const { createErrorHandler, notFoundHandler, setupGlobalErrorHandlers, asyncHandler } = require('./error-handler');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -61,19 +47,6 @@ let planningWebSocket = null;
 
 // Ticketing service instance
 let ticketingService = null;
-
-// v4.0.0 - Service instances
-let gdprService = null;
-let consentService = null;
-let tokenRotationService = null;
-let wsAuthService = null;
-let redisCache = null;
-let drivingTimeService = null;
-let carbonFootprintService = null;
-const secureLogger = new SecureLogger();
-
-// Setup global error handlers
-setupGlobalErrorHandlers(secureLogger);
 
 // MongoDB connection
 let mongoClient;
@@ -154,48 +127,6 @@ async function createSecurityIndexes(db) {
     await db.collection('2fa_sessions').createIndex(
       { expiresAt: 1 },
       { expireAfterSeconds: 0, background: true }
-    );
-
-    // v4.0.0 - Index GDPR
-    await db.collection('gdpr_deletion_requests').createIndex(
-      { userId: 1, status: 1 },
-      { background: true }
-    );
-    await db.collection('gdpr_export_requests').createIndex(
-      { userId: 1 },
-      { background: true }
-    );
-    await db.collection('gdpr_export_requests').createIndex(
-      { expiresAt: 1 },
-      { expireAfterSeconds: 0, background: true }
-    );
-    await db.collection('user_consents').createIndex(
-      { userId: 1, type: 1 },
-      { background: true }
-    );
-    await db.collection('refresh_tokens_v2').createIndex(
-      { tokenHash: 1 },
-      { unique: true, background: true }
-    );
-    await db.collection('refresh_tokens_v2').createIndex(
-      { userId: 1, isActive: 1 },
-      { background: true }
-    );
-    await db.collection('refresh_tokens_v2').createIndex(
-      { familyId: 1 },
-      { background: true }
-    );
-    await db.collection('driver_activities').createIndex(
-      { driverId: 1, startTime: -1 },
-      { background: true }
-    );
-    await db.collection('carbon_emissions').createIndex(
-      { industrielId: 1, createdAt: -1 },
-      { background: true }
-    );
-    await db.collection('error_logs').createIndex(
-      { timestamp: 1 },
-      { expireAfterSeconds: 30 * 24 * 60 * 60, background: true } // 30 jours
     );
 
     console.log('✅ Security indexes created');
@@ -1222,117 +1153,6 @@ async function startServer() {
     console.warn('⚠️  Logisticien routes not mounted - MongoDB not connected');
   }
 
-  // ==================== v4.0.0 - COMPLIANCE & SECURITY SERVICES ====================
-
-  // Initialize Redis Cache (optional - gracefully degrades if not available)
-  try {
-    redisCache = getRedisCacheService();
-    await redisCache.connect();
-    console.log('✅ Redis cache service initialized');
-  } catch (redisError) {
-    console.warn('⚠️  Redis cache not available (optional):', redisError.message);
-  }
-
-  // Initialize v4.0.0 services
-  if (mongoConnected) {
-    // GDPR Services
-    gdprService = createGdprService(mongoClient);
-    consentService = createConsentService(mongoClient);
-    console.log('✅ GDPR & Consent services initialized');
-
-    // Token Rotation Service
-    tokenRotationService = createTokenRotationService(mongoClient);
-    console.log('✅ Token Rotation service initialized');
-
-    // WebSocket Auth Service
-    wsAuthService = createWebSocketAuthService(mongoClient);
-    console.log('✅ WebSocket Auth service initialized');
-
-    // Driving Time Service (EU 561/2006 compliance)
-    drivingTimeService = createDrivingTimeService(mongoClient);
-    console.log('✅ Driving Time service initialized (EU 561/2006)');
-
-    // Carbon Footprint Service (Article L229-25)
-    carbonFootprintService = createCarbonFootprintService(mongoClient);
-    console.log('✅ Carbon Footprint service initialized (Article L229-25)');
-
-    // Mount GDPR routes
-    const gdprRouter = initializeGdprRoutes({
-      gdprService,
-      consentService
-    });
-    app.use('/api/gdpr', gdprRouter);
-    console.log('✅ GDPR routes mounted (Article 17, 20, 7)');
-
-    // Mount Driving Time routes
-    app.get('/api/drivers/:driverId/driving-time', asyncHandler(async (req, res) => {
-      const result = await drivingTimeService.getRemainingDrivingTime(req.params.driverId);
-      res.json({ success: true, data: result });
-    }));
-
-    app.post('/api/drivers/:driverId/activities', asyncHandler(async (req, res) => {
-      const result = await drivingTimeService.recordActivity(req.params.driverId, req.body);
-      res.json({ success: true, data: result });
-    }));
-
-    app.get('/api/drivers/:driverId/compliance', asyncHandler(async (req, res) => {
-      const result = await drivingTimeService.checkCompliance(req.params.driverId);
-      res.json({ success: true, data: result });
-    }));
-
-    app.post('/api/drivers/:driverId/plan-breaks', asyncHandler(async (req, res) => {
-      const result = await drivingTimeService.planBreaks(req.params.driverId, req.body.estimatedDuration);
-      res.json({ success: true, data: result });
-    }));
-    console.log('✅ Driving Time routes mounted');
-
-    // Mount Carbon Footprint routes
-    app.post('/api/carbon/calculate', asyncHandler(async (req, res) => {
-      const result = carbonFootprintService.calculateEmissions(req.body);
-      res.json({ success: true, data: result });
-    }));
-
-    app.post('/api/carbon/orders/:orderId/calculate', asyncHandler(async (req, res) => {
-      const result = await carbonFootprintService.calculateForOrder(req.params.orderId);
-      res.json({ success: true, data: result });
-    }));
-
-    app.get('/api/carbon/reports/:industrielId', asyncHandler(async (req, res) => {
-      const { startDate, endDate } = req.query;
-      const result = await carbonFootprintService.generateEmissionsReport(
-        req.params.industrielId,
-        new Date(startDate),
-        new Date(endDate)
-      );
-      res.json({ success: true, data: result });
-    }));
-
-    app.post('/api/carbon/compare', asyncHandler(async (req, res) => {
-      const result = carbonFootprintService.compareOptions(req.body.options);
-      res.json({ success: true, data: result });
-    }));
-    console.log('✅ Carbon Footprint routes mounted');
-
-    // Mount Logistics Delegation routes (for industrials managing their 3PL/4PL partners)
-    logisticsDelegationRoutes.use((req, res, next) => {
-      req.app.locals.db = mongoClient.db();
-      next();
-    });
-    app.use('/api/logistics-delegation', logisticsDelegationRoutes);
-    console.log('✅ Logistics Delegation routes mounted (3PL/4PL management)');
-
-    // Mount ICPE routes (for logisticians and industrials managing ICPE compliance)
-    icpeRoutes.use((req, res, next) => {
-      req.app.locals.db = mongoClient.db();
-      next();
-    });
-    app.use('/api/icpe', icpeRoutes);
-    console.log('✅ ICPE routes mounted (Installations Classees)');
-
-  } else {
-    console.warn('⚠️  v4.0.0 services not initialized - MongoDB not connected');
-  }
-
   // ==================== SCHEDULED JOBS ENDPOINTS ====================
   // Endpoint to get scheduled jobs status
   app.get('/api/admin/scheduled-jobs/status', (req, res) => {
@@ -1394,28 +1214,37 @@ async function startServer() {
   }
 
   // Register 404 handler (must be after all routes)
-  app.use(notFoundHandler);
+  app.use((req, res) => {
+    res.status(404).json({
+      success: false,
+      error: {
+        code: 'NOT_FOUND',
+        message: `Endpoint not found: ${req.method} ${req.path}`,
+      },
+    });
+  });
 
-  // Register centralized error handler (must be last)
-  app.use(createErrorHandler({
-    logger: secureLogger,
-    includeStack: process.env.NODE_ENV !== 'production',
-    logErrors: true,
-    mongoClient: mongoConnected ? mongoClient : null
-  }));
+  // Register error handler (must be last)
+  app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: err.message || 'Internal server error',
+      },
+    });
+  });
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log('============================================================================');
-    console.log('🚀 RT SYMPHONI.A v4.0.0 - 100% Compliance Edition');
+    console.log('🚀 RT SYMPHONI.A v2.0.0 - Suite Chatbots Intelligents');
     console.log('============================================================================');
-    console.log('Version: v4.0.0-compliance');
+    console.log('Version: v2.0.0-chatbot-suite');
     console.log('Port: ' + PORT);
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? '✅ Connected' : '❌ Not connected'));
-    console.log('Redis: ' + (redisCache?.isReady() ? '✅ Connected' : '⚠️ Not available'));
-    console.log('Security: ✅ Rate Limiting, CORS, Helmet, Input Sanitization, 2FA');
-    console.log('RGPD: ✅ Article 7, 17, 20 compliant');
-    console.log('Transport: ✅ EU 561/2006, Article L229-25 CO2');
+    console.log('Security: ✅ Rate Limiting, CORS, Helmet, Input Sanitization');
     console.log('WebSocket: ✅ Real-time updates on /ws/planning');
     console.log('============================================================================');
     console.log('Modules: 29/29 Operational');
