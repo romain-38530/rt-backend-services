@@ -296,7 +296,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '1.0.0',
+    version: '4.2.2',
     features: ['express', 'cors', 'helmet', 'mongodb'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -325,7 +325,7 @@ app.get('/', (req, res) => {
   res.json({
     message: 'RT Orders API',
     version: '4.1.0',
-    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'CRUD Orders', 'Geocoding', 'Tracking', 'Auto-Dispatch', 'Affret.IA'],
+    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'CRUD Orders', 'Geocoding', 'Tracking', 'Auto-Dispatch', 'Affret.IA', 'Transport-Plan-Integration'],
     endpoints: [
       'GET /health',
       'GET /',
@@ -737,11 +737,18 @@ app.post('/api/v1/orders/:id/auto-dispatch', async (req, res) => {
       }
     );
 
+    // Check if using transport plan
+    const usingTransportPlan = carriers[0]?.fromTransportPlan === true;
+
     // Add start event
     await addOrderEvent(order._id.toString(), {
       type: 'auto_dispatch_started',
-      details: `Planification automatique demarree avec ${carriers.length} transporteur(s)`,
-      carriersCount: carriers.length
+      details: usingTransportPlan
+        ? `Planification automatique via Plan Transport Consolide avec ${carriers.length} transporteur(s)`
+        : `Planification automatique demarree avec ${carriers.length} transporteur(s)`,
+      carriersCount: carriers.length,
+      source: usingTransportPlan ? 'transport_plan' : 'database_scoring',
+      planId: carriers[0]?.planId || null
     }, db);
 
     // Add sent to first carrier event
@@ -750,8 +757,13 @@ app.post('/api/v1/orders/:id/auto-dispatch', async (req, res) => {
       type: 'sent_to_carrier',
       carrierId: firstCarrier.carrierId,
       carrierName: firstCarrier.carrierName,
-      details: `Envoye a ${firstCarrier.carrierName} (score: ${firstCarrier.score}/100)`,
-      score: firstCarrier.score
+      details: usingTransportPlan
+        ? `Envoye a ${firstCarrier.carrierName} (Plan Transport - prix: ${firstCarrier.pricePerKm}€/km)`
+        : `Envoye a ${firstCarrier.carrierName} (score: ${firstCarrier.score}/100)`,
+      score: firstCarrier.score,
+      fromTransportPlan: firstCarrier.fromTransportPlan || false,
+      gridId: firstCarrier.gridId || null,
+      pricePerKm: firstCarrier.pricePerKm || null
     }, db);
 
     // Update KPI - carrier received order
@@ -787,11 +799,15 @@ app.post('/api/v1/orders/:id/auto-dispatch', async (req, res) => {
       data: {
         orderId: order._id.toString(),
         status: 'planification_auto',
+        source: usingTransportPlan ? 'transport_plan' : 'database_scoring',
+        planId: carriers[0]?.planId || null,
         dispatchChain: dispatchChain.map(c => ({
           carrierName: c.carrierName,
           score: c.score,
           status: c.status,
-          position: c.position
+          position: c.position,
+          fromTransportPlan: c.fromTransportPlan || false,
+          pricePerKm: c.pricePerKm || null
         })),
         currentCarrier: firstCarrier.carrierName
       }
@@ -1597,6 +1613,93 @@ const AUTO_DISPATCH_MAX_CARRIERS = parseInt(process.env.AUTO_DISPATCH_MAX_CARRIE
 const SUBSCRIPTIONS_API_URL = process.env.SUBSCRIPTIONS_API_URL || 'https://d39uizi9hzozo8.cloudfront.net';
 const AFFRET_IA_API_URL = process.env.AFFRET_IA_API_URL || 'https://d393yiia4ig3bw.cloudfront.net/api';
 const KPI_API_URL = process.env.KPI_API_URL || 'https://d57lw7v3zgfpy.cloudfront.net';
+const PRICING_GRIDS_API_URL = process.env.PRICING_GRIDS_API_URL || 'https://dxakwgzrkhboh.cloudfront.net';
+
+// Helper: Get optimal carriers from consolidated transport plan
+async function getCarriersFromTransportPlan(order, limit = AUTO_DISPATCH_MAX_CARRIERS) {
+  try {
+    const industrialId = order.industrialId || order.createdBy;
+    if (!industrialId) {
+      console.log('[TransportPlan] No industrialId found in order');
+      return null;
+    }
+
+    // Build route key from order addresses
+    const originCity = order.pickupAddress?.city || order.pickup?.city || '';
+    const destCity = order.deliveryAddress?.city || order.delivery?.city || '';
+
+    if (!originCity || !destCity) {
+      console.log('[TransportPlan] Missing origin or destination city');
+      return null;
+    }
+
+    // Normalize cities for matching
+    const normalizeCity = (city) => city.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const origin = normalizeCity(originCity);
+    const destination = normalizeCity(destCity);
+
+    console.log(`[TransportPlan] Looking for optimal carrier: ${origin} -> ${destination} (industrial: ${industrialId})`);
+
+    // Call pricing-grids-api to get optimal carrier for this route
+    const response = await fetch(
+      `${PRICING_GRIDS_API_URL}/api/pricing-grids/dispatch/carrier?industrialId=${industrialId}&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+
+    if (!response.ok) {
+      console.log(`[TransportPlan] API returned ${response.status}`);
+      return null;
+    }
+
+    const result = await response.json();
+
+    if (!result.success || !result.carrier) {
+      console.log('[TransportPlan] No optimal carrier found in transport plan');
+      return null;
+    }
+
+    console.log(`[TransportPlan] Found optimal carrier from plan: ${result.carrier.carrierName} (score: ${result.carrier.combinedScore})`);
+
+    // Return the optimal carrier(s) from the transport plan
+    // The plan already has carriers ranked by combined score (price + transit + reliability)
+    const carriers = [{
+      carrierId: result.carrier.carrierId,
+      carrierName: result.carrier.carrierName,
+      carrierEmail: result.carrier.carrierEmail || '',
+      score: Math.round(result.carrier.combinedScore * 100), // Convert to 0-100 scale
+      fromTransportPlan: true,
+      planId: result.planId,
+      gridId: result.carrier.gridId,
+      pricePerKm: result.carrier.pricePerKm,
+      transitDays: result.carrier.transitDays
+    }];
+
+    // If we need more carriers (for fallback chain), get alternatives
+    if (limit > 1 && result.alternatives && result.alternatives.length > 0) {
+      result.alternatives.slice(0, limit - 1).forEach(alt => {
+        carriers.push({
+          carrierId: alt.carrierId,
+          carrierName: alt.carrierName,
+          carrierEmail: alt.carrierEmail || '',
+          score: Math.round(alt.combinedScore * 100),
+          fromTransportPlan: true,
+          planId: result.planId,
+          gridId: alt.gridId,
+          pricePerKm: alt.pricePerKm,
+          transitDays: alt.transitDays
+        });
+      });
+    }
+
+    return carriers;
+  } catch (error) {
+    console.error('[TransportPlan] Error fetching from transport plan:', error.message);
+    return null;
+  }
+}
 
 // Helper: Add event to order
 async function addOrderEvent(orderId, event, db) {
@@ -1709,9 +1812,37 @@ async function hasAffretIASubscription(userId) {
   return { hasSubscription: false, source: 'none', details: 'No active Affret IA subscription' };
 }
 
-// Helper: Get top carriers for an order (simplified scoring)
+// Helper: Get top carriers for an order (uses transport plan first, then fallback to DB scoring)
 async function getTopCarriers(order, db, limit = AUTO_DISPATCH_MAX_CARRIERS) {
   try {
+    // PRIORITY 1: Check if there's an active consolidated transport plan for this industrial
+    console.log('[getTopCarriers] Checking for consolidated transport plan...');
+    const planCarriers = await getCarriersFromTransportPlan(order, limit);
+
+    if (planCarriers && planCarriers.length > 0) {
+      console.log(`[getTopCarriers] Using ${planCarriers.length} carrier(s) from consolidated transport plan`);
+
+      // Enrich with email from auth database if missing
+      const usersDb = authDb || db;
+      for (const carrier of planCarriers) {
+        if (!carrier.carrierEmail) {
+          try {
+            const user = await usersDb.collection('users').findOne({ _id: new ObjectId(carrier.carrierId) });
+            if (user?.email) {
+              carrier.carrierEmail = user.email;
+            }
+          } catch (e) {
+            // Ignore lookup errors
+          }
+        }
+      }
+
+      return planCarriers;
+    }
+
+    console.log('[getTopCarriers] No transport plan found, falling back to database scoring...');
+
+    // PRIORITY 2: Fallback to traditional database-based carrier selection
     // Use authDb to query users (transporters are in rt-auth database, not rt-orders)
     const usersDb = authDb || db;
 
@@ -1751,7 +1882,8 @@ async function getTopCarriers(order, db, limit = AUTO_DISPATCH_MAX_CARRIERS) {
         carrierId: carrier._id.toString(),
         carrierName: carrierName,
         carrierEmail: carrier.email,
-        score: Math.min(100, score)
+        score: Math.min(100, score),
+        fromTransportPlan: false
       };
     });
 
@@ -1876,11 +2008,18 @@ app.post('/api/orders/:id/auto-dispatch', async (req, res) => {
       }
     );
 
+    // Check if using transport plan
+    const usingTransportPlan = carriers[0]?.fromTransportPlan === true;
+
     // Add start event
     await addOrderEvent(order._id.toString(), {
       type: 'auto_dispatch_started',
-      details: `Planification automatique demarree avec ${carriers.length} transporteur(s)`,
-      carriersCount: carriers.length
+      details: usingTransportPlan
+        ? `Planification automatique via Plan Transport Consolide avec ${carriers.length} transporteur(s)`
+        : `Planification automatique demarree avec ${carriers.length} transporteur(s)`,
+      carriersCount: carriers.length,
+      source: usingTransportPlan ? 'transport_plan' : 'database_scoring',
+      planId: carriers[0]?.planId || null
     }, db);
 
     // Add sent to first carrier event
@@ -1889,8 +2028,13 @@ app.post('/api/orders/:id/auto-dispatch', async (req, res) => {
       type: 'sent_to_carrier',
       carrierId: firstCarrier.carrierId,
       carrierName: firstCarrier.carrierName,
-      details: `Envoye a ${firstCarrier.carrierName} (score: ${firstCarrier.score}/100)`,
-      score: firstCarrier.score
+      details: usingTransportPlan
+        ? `Envoye a ${firstCarrier.carrierName} (Plan Transport - prix: ${firstCarrier.pricePerKm}€/km)`
+        : `Envoye a ${firstCarrier.carrierName} (score: ${firstCarrier.score}/100)`,
+      score: firstCarrier.score,
+      fromTransportPlan: firstCarrier.fromTransportPlan || false,
+      gridId: firstCarrier.gridId || null,
+      pricePerKm: firstCarrier.pricePerKm || null
     }, db);
 
     // Update KPI - carrier received order
@@ -1926,11 +2070,15 @@ app.post('/api/orders/:id/auto-dispatch', async (req, res) => {
       data: {
         orderId: order._id.toString(),
         status: 'planification_auto',
+        source: usingTransportPlan ? 'transport_plan' : 'database_scoring',
+        planId: carriers[0]?.planId || null,
         dispatchChain: dispatchChain.map(c => ({
           carrierName: c.carrierName,
           score: c.score,
           status: c.status,
-          position: c.position
+          position: c.position,
+          fromTransportPlan: c.fromTransportPlan || false,
+          pricePerKm: c.pricePerKm || null
         })),
         currentCarrier: firstCarrier.carrierName
       }

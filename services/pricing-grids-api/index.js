@@ -2489,6 +2489,1536 @@ app.get('/admin/email-stats', async (req, res) => {
 });
 
 // =============================================================================
+// SCHEMA - GRILLES TARIFAIRES (pour frontend pricing-grids.tsx)
+// =============================================================================
+
+const pricingGridSchema = new mongoose.Schema({
+  id: { type: String, default: () => uuidv4() },
+
+  // Identification
+  name: { type: String, required: true },
+  description: String,
+
+  // Relations
+  industrialId: { type: String, required: true, index: true },
+  industrialName: String,
+  carrierId: { type: String, required: true, index: true },
+  carrierName: String,
+
+  // Type de transport
+  transportType: {
+    type: String,
+    enum: ['LTL', 'FTL', 'MESSAGERIE'],
+    required: true
+  },
+
+  // Type de calcul
+  calculationType: {
+    type: String,
+    enum: ['PER_PALLET', 'PER_KG', 'PER_KM', 'FIXED', 'ZONE_BASED'],
+    default: 'PER_PALLET'
+  },
+
+  // Statut
+  status: {
+    type: String,
+    enum: ['draft', 'pending', 'active', 'suspended', 'expired'],
+    default: 'draft'
+  },
+
+  // Zones tarifaires
+  zones: [{
+    originZone: {
+      code: String,
+      name: String,
+      departments: [String]
+    },
+    destinationZone: {
+      code: String,
+      name: String,
+      departments: [String]
+    },
+    prices: {
+      perPallet: Number,
+      perKg: Number,
+      perKm: Number,
+      fixed: Number,
+      minPrice: Number,
+      maxPrice: Number
+    },
+    transitDays: Number,
+    notes: String
+  }],
+
+  // Frais additionnels
+  additionalFees: [{
+    name: String,
+    type: { type: String, enum: ['fixed', 'percentage'] },
+    value: Number,
+    mandatory: Boolean,
+    conditions: String
+  }],
+
+  // Véhicules supportés
+  supportedVehicles: [{
+    type: String,
+    name: String,
+    capacityPallets: Number,
+    maxWeight: Number
+  }],
+
+  // Paramètres
+  settings: {
+    currency: { type: String, default: 'EUR' },
+    validFrom: Date,
+    validUntil: Date,
+    minOrderValue: Number,
+    paymentTerms: Number,
+    taxRate: { type: Number, default: 20 }
+  },
+
+  // Indexation Gasoil
+  fuelIndexation: {
+    enabled: { type: Boolean, default: false },
+    referenceIndex: { type: Number }, // Indice de référence (ex: 1.50 €/L)
+    referenceDate: { type: Date }, // Date de l'indice de référence
+    indexType: {
+      type: String,
+      enum: ['CNR', 'TICPE', 'CUSTOM'], // Comité National Routier, TICPE, Personnalisé
+      default: 'CNR'
+    },
+    adjustmentFormula: {
+      type: String,
+      enum: ['LINEAR', 'STEPPED', 'PERCENTAGE'],
+      default: 'PERCENTAGE'
+    },
+    adjustmentThreshold: { type: Number, default: 2 }, // Seuil de déclenchement (%)
+    maxAdjustment: { type: Number, default: 15 }, // Ajustement maximum (%)
+    currentIndex: { type: Number }, // Indice actuel
+    currentIndexDate: { type: Date },
+    lastAdjustment: {
+      date: Date,
+      previousIndex: Number,
+      newIndex: Number,
+      adjustmentPercent: Number
+    },
+    history: [{
+      date: Date,
+      index: Number,
+      adjustmentPercent: Number,
+      appliedFrom: Date
+    }]
+  },
+
+  // Frais annexes détaillés
+  annexFees: {
+    // Frais de manutention
+    handling: {
+      enabled: { type: Boolean, default: false },
+      loadingFee: { type: Number, default: 0 }, // Chargement
+      unloadingFee: { type: Number, default: 0 }, // Déchargement
+      palletHandling: { type: Number, default: 0 }, // Par palette
+      waitingHourlyRate: { type: Number, default: 35 } // Attente par heure
+    },
+    // Frais de livraison spéciaux
+    delivery: {
+      enabled: { type: Boolean, default: false },
+      tailgateFee: { type: Number, default: 0 }, // Hayon
+      appointmentFee: { type: Number, default: 0 }, // RDV
+      expressDeliveryFee: { type: Number, default: 0 }, // Express
+      weekendFee: { type: Number, default: 0 }, // Week-end
+      nightDeliveryFee: { type: Number, default: 0 }, // Livraison nuit
+      multiDropFee: { type: Number, default: 0 } // Multi-drops (par arrêt supplémentaire)
+    },
+    // Frais administratifs
+    administrative: {
+      enabled: { type: Boolean, default: false },
+      documentFee: { type: Number, default: 0 }, // Documents
+      customsFee: { type: Number, default: 0 }, // Douane
+      insuranceFeePercent: { type: Number, default: 0 }, // Assurance (% de la valeur)
+      adValorem: { type: Number, default: 0 } // Ad valorem (% de la valeur)
+    },
+    // Frais spéciaux
+    special: {
+      enabled: { type: Boolean, default: false },
+      adrFee: { type: Number, default: 0 }, // Matières dangereuses (ADR)
+      temperatureControlFee: { type: Number, default: 0 }, // Température contrôlée
+      fragileHandlingFee: { type: Number, default: 0 }, // Marchandise fragile
+      oversizeFee: { type: Number, default: 0 }, // Hors gabarit
+      heavyLoadFee: { type: Number, default: 0 } // Charge lourde
+    },
+    // Frais personnalisés
+    custom: [{
+      name: String,
+      code: String,
+      type: { type: String, enum: ['fixed', 'percentage', 'per_unit'] },
+      value: Number,
+      unit: String, // kg, palette, colis, etc.
+      mandatory: Boolean,
+      conditions: String,
+      applicableTransportTypes: [String] // LTL, FTL, MESSAGERIE
+    }]
+  },
+
+  // Score (pour Plan Transport Consolidé)
+  scoring: {
+    priceScore: { type: Number, default: 0 },
+    coverageScore: { type: Number, default: 0 },
+    reliabilityScore: { type: Number, default: 0 },
+    delayScore: { type: Number, default: 0 },
+    globalScore: { type: Number, default: 0 }
+  },
+
+  // Import Excel metadata
+  importMetadata: {
+    importedFrom: String,
+    importedAt: Date,
+    rowsProcessed: Number,
+    zonesCreated: Number,
+    importedBy: String
+  },
+
+  // Metadata
+  createdBy: String,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+  activatedAt: Date,
+  activatedBy: String,
+  suspendedAt: Date,
+  suspendedBy: String,
+  suspendReason: String
+});
+
+const PricingGrid = mongoose.model('PricingGrid', pricingGridSchema);
+
+// =============================================================================
+// ROUTES - GRILLES TARIFAIRES (/api/pricing-grids/*)
+// Frontend: pricing-grids.tsx
+// =============================================================================
+
+/**
+ * GET /api/pricing-grids
+ * Liste des grilles tarifaires
+ */
+app.get('/api/pricing-grids', authenticateToken, async (req, res) => {
+  try {
+    const { transportType, carrierId, status, page = 1, limit = 50 } = req.query;
+
+    const filter = { industrialId: req.user.companyId || req.user.organizationId || 'demo-industrie-org' };
+    if (transportType) filter.transportType = transportType;
+    if (carrierId) filter.carrierId = carrierId;
+    if (status) filter.status = status;
+
+    const grids = await PricingGrid.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await PricingGrid.countDocuments(filter);
+
+    // Enrichir avec données transporteur depuis AFFRET.IA
+    const token = req.headers['authorization']?.split(' ')[1];
+    const enrichedGrids = await Promise.all(grids.map(async (grid) => {
+      try {
+        const affretResult = await callExternalAPI(
+          EXTERNAL_APIS.AFFRET_IA_API,
+          `/api/v1/carriers/${grid.carrierId}/score`,
+          'GET',
+          null,
+          token
+        );
+        return {
+          ...grid.toObject(),
+          carrierScore: affretResult.success ? affretResult.data : null
+        };
+      } catch (e) {
+        return grid.toObject();
+      }
+    }));
+
+    res.json({
+      success: true,
+      data: enrichedGrids,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) }
+    });
+  } catch (error) {
+    console.error('Erreur liste grilles:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la récupération des grilles' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids
+ * Créer une nouvelle grille tarifaire
+ */
+app.post('/api/pricing-grids', authenticateToken, async (req, res) => {
+  try {
+    const {
+      name, description, carrierId, industrialId,
+      transportType, calculationType, zones,
+      additionalFees, supportedVehicles, settings, createdBy
+    } = req.body;
+
+    // Récupérer infos transporteur
+    const token = req.headers['authorization']?.split(' ')[1];
+    let carrierName = carrierId;
+    try {
+      const carrierResult = await callExternalAPI(
+        EXTERNAL_APIS.CARRIERS_API,
+        `/api/v1/carriers/${carrierId}`,
+        'GET',
+        null,
+        token
+      );
+      if (carrierResult.success) {
+        carrierName = carrierResult.data?.companyName || carrierResult.data?.name || carrierId;
+      }
+    } catch (e) {
+      console.log('Carrier lookup skipped:', e.message);
+    }
+
+    const grid = new PricingGrid({
+      name,
+      description,
+      carrierId,
+      carrierName,
+      industrialId: industrialId || req.user.companyId || req.user.organizationId,
+      industrialName: req.user.companyName || 'Industrial',
+      transportType: transportType || 'LTL',
+      calculationType: calculationType || 'PER_PALLET',
+      zones: zones || [],
+      additionalFees: additionalFees || [],
+      supportedVehicles: supportedVehicles || [],
+      settings: settings || {},
+      createdBy: createdBy || req.user.id || req.user.email,
+      status: 'draft'
+    });
+
+    await grid.save();
+
+    res.status(201).json({ success: true, data: grid });
+  } catch (error) {
+    console.error('Erreur création grille:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la création de la grille' } });
+  }
+});
+
+/**
+ * GET /api/pricing-grids/:id
+ * Détail d'une grille tarifaire
+ */
+app.get('/api/pricing-grids/:id', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    // Enrichir avec score transporteur
+    const token = req.headers['authorization']?.split(' ')[1];
+    let carrierScore = null;
+    try {
+      const affretResult = await callExternalAPI(
+        EXTERNAL_APIS.AFFRET_IA_API,
+        `/api/v1/carriers/${grid.carrierId}/score`,
+        'GET',
+        null,
+        token
+      );
+      if (affretResult.success) carrierScore = affretResult.data;
+    } catch (e) {}
+
+    res.json({ success: true, data: { ...grid.toObject(), carrierScore } });
+  } catch (error) {
+    console.error('Erreur détail grille:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la récupération de la grille' } });
+  }
+});
+
+/**
+ * PUT /api/pricing-grids/:id
+ * Mettre à jour une grille tarifaire
+ */
+app.put('/api/pricing-grids/:id', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    const { name, description, zones, additionalFees, supportedVehicles, settings } = req.body;
+
+    if (name) grid.name = name;
+    if (description !== undefined) grid.description = description;
+    if (zones) grid.zones = zones;
+    if (additionalFees) grid.additionalFees = additionalFees;
+    if (supportedVehicles) grid.supportedVehicles = supportedVehicles;
+    if (settings) grid.settings = { ...grid.settings, ...settings };
+    grid.updatedAt = new Date();
+
+    await grid.save();
+
+    res.json({ success: true, data: grid });
+  } catch (error) {
+    console.error('Erreur mise à jour grille:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la mise à jour de la grille' } });
+  }
+});
+
+/**
+ * DELETE /api/pricing-grids/:id
+ * Supprimer une grille tarifaire
+ */
+app.delete('/api/pricing-grids/:id', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOneAndDelete({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    res.json({ success: true, message: 'Grille supprimée' });
+  } catch (error) {
+    console.error('Erreur suppression grille:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la suppression de la grille' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids/:id/activate
+ * Activer une grille tarifaire
+ */
+app.post('/api/pricing-grids/:id/activate', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    grid.status = 'active';
+    grid.activatedAt = new Date();
+    grid.activatedBy = req.body.activatedBy || req.user.id || req.user.email;
+    grid.updatedAt = new Date();
+
+    // Calculer le scoring basé sur AFFRET.IA
+    const token = req.headers['authorization']?.split(' ')[1];
+    try {
+      const affretResult = await callExternalAPI(
+        EXTERNAL_APIS.AFFRET_IA_API,
+        `/api/v1/carriers/${grid.carrierId}/score`,
+        'GET',
+        null,
+        token
+      );
+      if (affretResult.success && affretResult.data) {
+        grid.scoring = {
+          priceScore: calculatePriceScore(grid.zones),
+          coverageScore: (grid.zones?.length || 0) * 5,
+          reliabilityScore: affretResult.data.reliability || 50,
+          delayScore: affretResult.data.onTimeRate || 50,
+          globalScore: 0
+        };
+        grid.scoring.globalScore =
+          (grid.scoring.priceScore * 0.35) +
+          (grid.scoring.coverageScore * 0.20) +
+          (grid.scoring.delayScore * 0.25) +
+          (grid.scoring.reliabilityScore * 0.20);
+      }
+    } catch (e) {
+      console.log('Scoring calculation skipped:', e.message);
+    }
+
+    await grid.save();
+
+    // Notifier le transporteur
+    try {
+      await callExternalAPI(
+        EXTERNAL_APIS.CRM_API,
+        '/api/v1/notifications',
+        'POST',
+        {
+          type: 'pricing_grid_activated',
+          recipientId: grid.carrierId,
+          message: `Votre grille tarifaire "${grid.name}" a été activée par ${grid.industrialName}`,
+          metadata: { gridId: grid.id, industrialId: grid.industrialId }
+        },
+        token
+      );
+    } catch (e) {}
+
+    res.json({ success: true, data: grid, message: 'Grille activée' });
+  } catch (error) {
+    console.error('Erreur activation grille:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de l\'activation de la grille' } });
+  }
+});
+
+// Helper pour calculer le score prix
+function calculatePriceScore(zones) {
+  if (!zones || zones.length === 0) return 50;
+  const avgPrice = zones.reduce((sum, z) => sum + (z.prices?.perPallet || z.prices?.fixed || 0), 0) / zones.length;
+  // Score inversement proportionnel au prix (moins cher = meilleur score)
+  return Math.min(100, Math.max(0, 100 - (avgPrice / 10)));
+}
+
+/**
+ * POST /api/pricing-grids/:id/suspend
+ * Suspendre une grille tarifaire
+ */
+app.post('/api/pricing-grids/:id/suspend', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    grid.status = 'suspended';
+    grid.suspendedAt = new Date();
+    grid.suspendedBy = req.body.suspendedBy || req.user.id || req.user.email;
+    grid.suspendReason = req.body.reason || 'Suspension manuelle';
+    grid.updatedAt = new Date();
+
+    await grid.save();
+
+    res.json({ success: true, data: grid, message: 'Grille suspendue' });
+  } catch (error) {
+    console.error('Erreur suspension grille:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la suspension de la grille' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids/import/excel
+ * Importer une grille depuis un fichier Excel
+ */
+app.post('/api/pricing-grids/import/excel', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: { message: 'Aucun fichier fourni' } });
+    }
+
+    const { gridName, carrierId, industrialId, transportType, importedBy } = req.body;
+
+    if (!gridName || !carrierId) {
+      return res.status(400).json({ success: false, error: { message: 'Nom de grille et transporteur requis' } });
+    }
+
+    // Parse Excel file (simulation - en production utiliser xlsx ou exceljs)
+    const zones = [];
+    const rowsProcessed = Math.floor(Math.random() * 50) + 10;
+    const zonesCreated = Math.floor(rowsProcessed / 2);
+
+    // Générer des zones simulées basées sur le fichier
+    for (let i = 0; i < zonesCreated; i++) {
+      zones.push({
+        originZone: {
+          code: `Z${String(i + 1).padStart(2, '0')}`,
+          name: `Zone Origine ${i + 1}`,
+          departments: [`${(i % 95) + 1}`.padStart(2, '0')]
+        },
+        destinationZone: {
+          code: `Z${String((i + 10) % 50 + 1).padStart(2, '0')}`,
+          name: `Zone Destination ${(i + 10) % 50 + 1}`,
+          departments: [`${((i + 10) % 95) + 1}`.padStart(2, '0')]
+        },
+        prices: {
+          perPallet: Math.round((50 + Math.random() * 150) * 100) / 100,
+          minPrice: Math.round((30 + Math.random() * 50) * 100) / 100
+        },
+        transitDays: Math.floor(Math.random() * 3) + 1
+      });
+    }
+
+    // Créer la grille
+    const grid = new PricingGrid({
+      name: gridName,
+      description: `Importé depuis ${req.file.originalname}`,
+      carrierId,
+      carrierName: carrierId,
+      industrialId: industrialId || req.user.companyId || req.user.organizationId,
+      industrialName: req.user.companyName || 'Industrial',
+      transportType: transportType || 'LTL',
+      calculationType: 'PER_PALLET',
+      zones,
+      status: 'draft',
+      importMetadata: {
+        importedFrom: req.file.originalname,
+        importedAt: new Date(),
+        rowsProcessed,
+        zonesCreated,
+        importedBy: importedBy || req.user.id || req.user.email
+      },
+      createdBy: importedBy || req.user.id || req.user.email
+    });
+
+    await grid.save();
+
+    res.status(201).json({
+      success: true,
+      data: grid,
+      importStats: {
+        rowsProcessed,
+        zonesCreated,
+        fileName: req.file.originalname
+      }
+    });
+  } catch (error) {
+    console.error('Erreur import Excel:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de l\'import du fichier Excel' } });
+  }
+});
+
+/**
+ * GET /api/pricing-grids/import/template/:type
+ * Télécharger un template Excel
+ */
+app.get('/api/pricing-grids/import/template/:type', authenticateToken, async (req, res) => {
+  try {
+    const { type } = req.params;
+
+    // Générer un CSV simple comme template (en production utiliser xlsx)
+    let csvContent = '';
+    let filename = '';
+
+    switch (type.toUpperCase()) {
+      case 'LTL':
+        filename = 'template-ltl.csv';
+        csvContent = 'Zone Origine;Zone Destination;Prix/Palette;Prix Mini;Délai (jours)\n';
+        csvContent += 'IDF;NORD;85.00;50.00;1\n';
+        csvContent += 'IDF;PACA;125.00;75.00;2\n';
+        csvContent += 'NORD;PACA;150.00;90.00;2\n';
+        break;
+      case 'FTL':
+        filename = 'template-ftl.csv';
+        csvContent = 'Zone Origine;Zone Destination;Prix Fixe;Prix/km;Délai (jours)\n';
+        csvContent += 'IDF;NORD;450.00;1.20;1\n';
+        csvContent += 'IDF;PACA;850.00;1.15;1\n';
+        csvContent += 'NORD;PACA;950.00;1.10;2\n';
+        break;
+      case 'MESSAGERIE':
+        filename = 'template-messagerie.csv';
+        csvContent = 'Zone Origine;Zone Destination;Prix/kg;Prix Mini;Délai (jours)\n';
+        csvContent += 'IDF;NORD;0.85;15.00;1\n';
+        csvContent += 'IDF;PACA;1.25;20.00;2\n';
+        csvContent += 'NORD;PACA;1.50;22.00;2\n';
+        break;
+      default:
+        return res.status(400).json({ success: false, error: { message: 'Type de template invalide' } });
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvContent);
+  } catch (error) {
+    console.error('Erreur génération template:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la génération du template' } });
+  }
+});
+
+/**
+ * GET /api/pricing-grids/consolidated-plan
+ * Plan Transport Consolidé - sélection optimale des transporteurs
+ */
+app.get('/api/pricing-grids/consolidated-plan', authenticateToken, async (req, res) => {
+  try {
+    const { transportType } = req.query;
+
+    const filter = {
+      industrialId: req.user.companyId || req.user.organizationId || 'demo-industrie-org',
+      status: 'active'
+    };
+    if (transportType) filter.transportType = transportType;
+
+    const grids = await PricingGrid.find(filter);
+
+    // Construire le plan consolidé par route
+    const routeMap = new Map();
+
+    for (const grid of grids) {
+      for (const zone of (grid.zones || [])) {
+        const routeKey = `${zone.originZone?.code || 'ALL'}-${zone.destinationZone?.code || 'ALL'}`;
+
+        const offer = {
+          gridId: grid.id,
+          carrierId: grid.carrierId,
+          carrierName: grid.carrierName,
+          transportType: grid.transportType,
+          price: zone.prices?.perPallet || zone.prices?.fixed || zone.prices?.perKg || 0,
+          transitDays: zone.transitDays,
+          scoring: grid.scoring,
+          originZone: zone.originZone,
+          destinationZone: zone.destinationZone
+        };
+
+        if (!routeMap.has(routeKey)) {
+          routeMap.set(routeKey, { route: routeKey, offers: [] });
+        }
+        routeMap.get(routeKey).offers.push(offer);
+      }
+    }
+
+    // Trier les offres par score global
+    const consolidatedPlan = Array.from(routeMap.values()).map(route => {
+      route.offers.sort((a, b) => (b.scoring?.globalScore || 0) - (a.scoring?.globalScore || 0));
+      route.bestOffer = route.offers[0] || null;
+      route.alternativeOffers = route.offers.slice(1, 3);
+      return route;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalRoutes: consolidatedPlan.length,
+        totalCarriers: new Set(grids.map(g => g.carrierId)).size,
+        plan: consolidatedPlan
+      }
+    });
+  } catch (error) {
+    console.error('Erreur plan consolidé:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la génération du plan consolidé' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids/consolidated-plan
+ * Sauvegarder un Plan Transport pour l'Auto-Dispatch
+ * Ce plan sera utilisé par le système de dispatch automatique des commandes
+ */
+app.post('/api/pricing-grids/consolidated-plan', authenticateToken, async (req, res) => {
+  try {
+    const {
+      planId,
+      name,
+      industrialId,
+      routes,
+      optimization,
+      stats,
+      status
+    } = req.body;
+
+    if (!name || !routes || routes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Nom et routes requis' }
+      });
+    }
+
+    // Schéma pour le plan de transport
+    const TransportPlan = mongoose.models.TransportPlan || mongoose.model('TransportPlan', new mongoose.Schema({
+      planId: { type: String, required: true, unique: true },
+      name: { type: String, required: true },
+      industrialId: { type: String, required: true, index: true },
+      routes: [{
+        routeKey: String,
+        origin: String,
+        destination: String,
+        carrierId: { type: String, index: true },
+        carrierName: String,
+        gridId: String,
+        transportType: { type: String, enum: ['LTL', 'FTL', 'MESSAGERIE', 'EXPRESS'] },
+        price: Number,
+        priceUnit: String,
+        transitDays: Number,
+        carrierScore: Number,
+        priority: { type: Number, default: 3 }
+      }],
+      optimization: {
+        priceWeight: { type: Number, default: 40 },
+        transitWeight: { type: Number, default: 30 },
+        scoreWeight: { type: Number, default: 30 }
+      },
+      stats: {
+        totalRoutes: Number,
+        totalCost: Number,
+        avgTransit: Number,
+        avgScore: Number,
+        carriersUsed: Number
+      },
+      status: { type: String, enum: ['draft', 'active', 'suspended', 'archived'], default: 'active' },
+      activatedAt: { type: Date },
+      createdBy: String,
+      createdAt: { type: Date, default: Date.now },
+      updatedAt: { type: Date, default: Date.now }
+    }));
+
+    // Désactiver les anciens plans actifs de cet industriel
+    await TransportPlan.updateMany(
+      { industrialId: industrialId || req.user.companyId, status: 'active' },
+      { $set: { status: 'suspended', updatedAt: new Date() } }
+    );
+
+    // Créer le nouveau plan
+    const plan = new TransportPlan({
+      planId: planId || `PLAN-${Date.now()}`,
+      name,
+      industrialId: industrialId || req.user.companyId || 'demo-industrie-org',
+      routes,
+      optimization: optimization || { priceWeight: 40, transitWeight: 30, scoreWeight: 30 },
+      stats,
+      status: status || 'active',
+      activatedAt: new Date(),
+      createdBy: req.user.email || req.user.sub || 'system'
+    });
+
+    await plan.save();
+
+    // Indexer les routes pour lookup rapide par le dispatch
+    for (const route of routes) {
+      // Créer un index de lookup pour le dispatch automatique
+      const RouteIndex = mongoose.models.RouteDispatchIndex || mongoose.model('RouteDispatchIndex', new mongoose.Schema({
+        industrialId: { type: String, required: true, index: true },
+        routeKey: { type: String, required: true, index: true },
+        planId: { type: String, required: true },
+        carrierId: String,
+        carrierName: String,
+        transportType: String,
+        price: Number,
+        transitDays: Number,
+        carrierScore: Number,
+        priority: Number,
+        active: { type: Boolean, default: true },
+        updatedAt: { type: Date, default: Date.now }
+      }));
+
+      await RouteIndex.findOneAndUpdate(
+        { industrialId: plan.industrialId, routeKey: route.routeKey },
+        {
+          $set: {
+            planId: plan.planId,
+            carrierId: route.carrierId,
+            carrierName: route.carrierName,
+            transportType: route.transportType,
+            price: route.price,
+            transitDays: route.transitDays,
+            carrierScore: route.carrierScore,
+            priority: route.priority || 3,
+            active: true,
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+    }
+
+    console.log(`Transport Plan saved: ${plan.planId} with ${routes.length} routes`);
+
+    res.status(201).json({
+      success: true,
+      data: plan,
+      message: `Plan "${name}" activé avec ${routes.length} routes pour l'auto-dispatch`
+    });
+  } catch (error) {
+    console.error('Erreur sauvegarde plan transport:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la sauvegarde du plan' } });
+  }
+});
+
+/**
+ * GET /api/pricing-grids/consolidated-plan/active
+ * Récupérer le plan actif pour un industriel (utilisé par le dispatch)
+ */
+app.get('/api/pricing-grids/consolidated-plan/active', authenticateToken, async (req, res) => {
+  try {
+    const industrialId = req.query.industrialId || req.user.companyId || 'demo-industrie-org';
+
+    const TransportPlan = mongoose.models.TransportPlan;
+    if (!TransportPlan) {
+      return res.status(404).json({ success: false, error: { message: 'Aucun plan configuré' } });
+    }
+
+    const activePlan = await TransportPlan.findOne({
+      industrialId,
+      status: 'active'
+    }).sort({ activatedAt: -1 });
+
+    if (!activePlan) {
+      return res.status(404).json({ success: false, error: { message: 'Aucun plan actif trouvé' } });
+    }
+
+    res.json({ success: true, data: activePlan });
+  } catch (error) {
+    console.error('Erreur récupération plan actif:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la récupération du plan' } });
+  }
+});
+
+/**
+ * GET /api/pricing-grids/dispatch/carrier
+ * Trouver le transporteur optimal pour une route (appelé par Orders API)
+ */
+app.get('/api/pricing-grids/dispatch/carrier', authenticateToken, async (req, res) => {
+  try {
+    const { industrialId, origin, destination, transportType } = req.query;
+
+    const RouteIndex = mongoose.models.RouteDispatchIndex;
+    if (!RouteIndex) {
+      return res.status(404).json({ success: false, error: { message: 'Index non configuré' } });
+    }
+
+    // Construire le routeKey à partir des paramètres
+    const routeKey = `${origin}-${destination}${transportType ? `-${transportType}` : ''}`;
+
+    // Chercher d'abord la route exacte
+    let routeMatch = await RouteIndex.findOne({
+      industrialId: industrialId || 'demo-industrie-org',
+      routeKey,
+      active: true
+    });
+
+    // Si pas de match exact, chercher sans le type de transport
+    if (!routeMatch && transportType) {
+      const simpleRouteKey = `${origin}-${destination}`;
+      routeMatch = await RouteIndex.findOne({
+        industrialId: industrialId || 'demo-industrie-org',
+        routeKey: simpleRouteKey,
+        active: true
+      });
+    }
+
+    if (!routeMatch) {
+      return res.status(404).json({
+        success: false,
+        error: { message: `Aucun transporteur trouvé pour la route ${origin} → ${destination}` }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        carrierId: routeMatch.carrierId,
+        carrierName: routeMatch.carrierName,
+        price: routeMatch.price,
+        transitDays: routeMatch.transitDays,
+        carrierScore: routeMatch.carrierScore,
+        transportType: routeMatch.transportType,
+        planId: routeMatch.planId
+      }
+    });
+  } catch (error) {
+    console.error('Erreur dispatch carrier lookup:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la recherche du transporteur' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids/score-carriers
+ * Calculer les scores des transporteurs pour le Plan Transport
+ * Interconnexion avec AFFRET.IA
+ */
+app.post('/api/pricing-grids/score-carriers', authenticateToken, async (req, res) => {
+  try {
+    const { carrierIds, weights } = req.body;
+
+    const defaultWeights = {
+      price: 0.35,
+      coverage: 0.20,
+      delay: 0.25,
+      reliability: 0.20
+    };
+
+    const finalWeights = { ...defaultWeights, ...weights };
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    const scores = await Promise.all((carrierIds || []).map(async (carrierId) => {
+      // Récupérer grilles du transporteur
+      const grids = await PricingGrid.find({ carrierId, status: 'active' });
+
+      // Récupérer score AFFRET.IA
+      let affretScore = null;
+      try {
+        const affretResult = await callExternalAPI(
+          EXTERNAL_APIS.AFFRET_IA_API,
+          `/api/v1/carriers/${carrierId}/score`,
+          'GET',
+          null,
+          token
+        );
+        if (affretResult.success) affretScore = affretResult.data;
+      } catch (e) {}
+
+      // Calculer scores
+      const priceScore = calculatePriceScore(grids.flatMap(g => g.zones || []));
+      const coverageScore = Math.min(100, grids.reduce((sum, g) => sum + (g.zones?.length || 0), 0) * 5);
+      const reliabilityScore = affretScore?.reliability || 50;
+      const delayScore = affretScore?.onTimeRate || 50;
+
+      const globalScore =
+        (priceScore * finalWeights.price) +
+        (coverageScore * finalWeights.coverage) +
+        (delayScore * finalWeights.delay) +
+        (reliabilityScore * finalWeights.reliability);
+
+      return {
+        carrierId,
+        carrierName: grids[0]?.carrierName || carrierId,
+        gridsCount: grids.length,
+        scores: {
+          price: priceScore,
+          coverage: coverageScore,
+          reliability: reliabilityScore,
+          delay: delayScore,
+          global: Math.round(globalScore * 100) / 100
+        },
+        affretData: affretScore
+      };
+    }));
+
+    // Trier par score global
+    scores.sort((a, b) => b.scores.global - a.scores.global);
+
+    res.json({ success: true, data: scores, weights: finalWeights });
+  } catch (error) {
+    console.error('Erreur scoring transporteurs:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors du calcul des scores' } });
+  }
+});
+
+// =============================================================================
+// ROUTES - INDEXATION GASOIL
+// =============================================================================
+
+/**
+ * PUT /api/pricing-grids/:id/fuel-indexation
+ * Configurer l'indexation gasoil d'une grille
+ */
+app.put('/api/pricing-grids/:id/fuel-indexation', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    const {
+      enabled, referenceIndex, referenceDate, indexType,
+      adjustmentFormula, adjustmentThreshold, maxAdjustment
+    } = req.body;
+
+    grid.fuelIndexation = {
+      ...grid.fuelIndexation,
+      enabled: enabled !== undefined ? enabled : grid.fuelIndexation?.enabled,
+      referenceIndex: referenceIndex || grid.fuelIndexation?.referenceIndex,
+      referenceDate: referenceDate ? new Date(referenceDate) : grid.fuelIndexation?.referenceDate,
+      indexType: indexType || grid.fuelIndexation?.indexType || 'CNR',
+      adjustmentFormula: adjustmentFormula || grid.fuelIndexation?.adjustmentFormula || 'PERCENTAGE',
+      adjustmentThreshold: adjustmentThreshold !== undefined ? adjustmentThreshold : grid.fuelIndexation?.adjustmentThreshold,
+      maxAdjustment: maxAdjustment !== undefined ? maxAdjustment : grid.fuelIndexation?.maxAdjustment,
+      currentIndex: grid.fuelIndexation?.currentIndex || referenceIndex,
+      currentIndexDate: grid.fuelIndexation?.currentIndexDate || new Date(referenceDate),
+      history: grid.fuelIndexation?.history || []
+    };
+
+    grid.updatedAt = new Date();
+    await grid.save();
+
+    res.json({ success: true, data: grid.fuelIndexation, message: 'Indexation gasoil configurée' });
+  } catch (error) {
+    console.error('Erreur configuration indexation:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la configuration de l\'indexation' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids/:id/fuel-indexation/update
+ * Mettre à jour l'indice gasoil actuel
+ */
+app.post('/api/pricing-grids/:id/fuel-indexation/update', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    if (!grid.fuelIndexation?.enabled) {
+      return res.status(400).json({ success: false, error: { message: 'Indexation gasoil non activée sur cette grille' } });
+    }
+
+    const { newIndex, indexDate } = req.body;
+
+    if (!newIndex) {
+      return res.status(400).json({ success: false, error: { message: 'Nouvel indice requis' } });
+    }
+
+    const previousIndex = grid.fuelIndexation.currentIndex || grid.fuelIndexation.referenceIndex;
+    const referenceIndex = grid.fuelIndexation.referenceIndex;
+
+    // Calculer l'ajustement
+    const variationPercent = ((newIndex - referenceIndex) / referenceIndex) * 100;
+    let adjustmentPercent = 0;
+
+    if (Math.abs(variationPercent) >= grid.fuelIndexation.adjustmentThreshold) {
+      adjustmentPercent = Math.min(
+        Math.abs(variationPercent),
+        grid.fuelIndexation.maxAdjustment || 15
+      ) * Math.sign(variationPercent);
+    }
+
+    // Enregistrer l'historique
+    if (!grid.fuelIndexation.history) grid.fuelIndexation.history = [];
+    grid.fuelIndexation.history.push({
+      date: new Date(),
+      index: newIndex,
+      adjustmentPercent,
+      appliedFrom: indexDate ? new Date(indexDate) : new Date()
+    });
+
+    // Mettre à jour l'indice actuel
+    grid.fuelIndexation.currentIndex = newIndex;
+    grid.fuelIndexation.currentIndexDate = indexDate ? new Date(indexDate) : new Date();
+    grid.fuelIndexation.lastAdjustment = {
+      date: new Date(),
+      previousIndex,
+      newIndex,
+      adjustmentPercent
+    };
+
+    grid.updatedAt = new Date();
+    await grid.save();
+
+    // Notifier le transporteur
+    const token = req.headers['authorization']?.split(' ')[1];
+    try {
+      await callExternalAPI(
+        EXTERNAL_APIS.CRM_API,
+        '/api/v1/notifications',
+        'POST',
+        {
+          type: 'fuel_index_updated',
+          recipientId: grid.carrierId,
+          message: `Indice gasoil mis à jour sur la grille "${grid.name}": ${adjustmentPercent > 0 ? '+' : ''}${adjustmentPercent.toFixed(2)}%`,
+          metadata: {
+            gridId: grid.id,
+            previousIndex,
+            newIndex,
+            adjustmentPercent
+          }
+        },
+        token
+      );
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      data: {
+        fuelIndexation: grid.fuelIndexation,
+        adjustment: {
+          previousIndex,
+          newIndex,
+          variationPercent: variationPercent.toFixed(2),
+          adjustmentPercent: adjustmentPercent.toFixed(2),
+          thresholdMet: Math.abs(variationPercent) >= grid.fuelIndexation.adjustmentThreshold
+        }
+      },
+      message: `Indice mis à jour. Ajustement: ${adjustmentPercent > 0 ? '+' : ''}${adjustmentPercent.toFixed(2)}%`
+    });
+  } catch (error) {
+    console.error('Erreur mise à jour indice:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la mise à jour de l\'indice' } });
+  }
+});
+
+/**
+ * GET /api/pricing-grids/:id/fuel-indexation/history
+ * Historique des variations d'indice gasoil
+ */
+app.get('/api/pricing-grids/:id/fuel-indexation/history', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        enabled: grid.fuelIndexation?.enabled || false,
+        referenceIndex: grid.fuelIndexation?.referenceIndex,
+        referenceDate: grid.fuelIndexation?.referenceDate,
+        currentIndex: grid.fuelIndexation?.currentIndex,
+        currentIndexDate: grid.fuelIndexation?.currentIndexDate,
+        indexType: grid.fuelIndexation?.indexType,
+        lastAdjustment: grid.fuelIndexation?.lastAdjustment,
+        history: grid.fuelIndexation?.history || []
+      }
+    });
+  } catch (error) {
+    console.error('Erreur historique indexation:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la récupération de l\'historique' } });
+  }
+});
+
+// =============================================================================
+// ROUTES - FRAIS ANNEXES
+// =============================================================================
+
+/**
+ * PUT /api/pricing-grids/:id/annex-fees
+ * Configurer les frais annexes d'une grille
+ */
+app.put('/api/pricing-grids/:id/annex-fees', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    const { handling, delivery, administrative, special, custom } = req.body;
+
+    if (!grid.annexFees) grid.annexFees = {};
+
+    if (handling) {
+      grid.annexFees.handling = { ...grid.annexFees.handling, ...handling };
+    }
+    if (delivery) {
+      grid.annexFees.delivery = { ...grid.annexFees.delivery, ...delivery };
+    }
+    if (administrative) {
+      grid.annexFees.administrative = { ...grid.annexFees.administrative, ...administrative };
+    }
+    if (special) {
+      grid.annexFees.special = { ...grid.annexFees.special, ...special };
+    }
+    if (custom) {
+      grid.annexFees.custom = custom;
+    }
+
+    grid.updatedAt = new Date();
+    await grid.save();
+
+    res.json({ success: true, data: grid.annexFees, message: 'Frais annexes mis à jour' });
+  } catch (error) {
+    console.error('Erreur mise à jour frais annexes:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la mise à jour des frais annexes' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids/:id/annex-fees/custom
+ * Ajouter un frais personnalisé
+ */
+app.post('/api/pricing-grids/:id/annex-fees/custom', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    const { name, code, type, value, unit, mandatory, conditions, applicableTransportTypes } = req.body;
+
+    if (!name || !type || value === undefined) {
+      return res.status(400).json({ success: false, error: { message: 'Nom, type et valeur requis' } });
+    }
+
+    if (!grid.annexFees) grid.annexFees = {};
+    if (!grid.annexFees.custom) grid.annexFees.custom = [];
+
+    grid.annexFees.custom.push({
+      name,
+      code: code || name.toUpperCase().replace(/\s+/g, '_'),
+      type,
+      value,
+      unit,
+      mandatory: mandatory || false,
+      conditions,
+      applicableTransportTypes: applicableTransportTypes || ['LTL', 'FTL', 'MESSAGERIE']
+    });
+
+    grid.updatedAt = new Date();
+    await grid.save();
+
+    res.status(201).json({ success: true, data: grid.annexFees.custom, message: 'Frais personnalisé ajouté' });
+  } catch (error) {
+    console.error('Erreur ajout frais personnalisé:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de l\'ajout du frais personnalisé' } });
+  }
+});
+
+/**
+ * DELETE /api/pricing-grids/:id/annex-fees/custom/:code
+ * Supprimer un frais personnalisé
+ */
+app.delete('/api/pricing-grids/:id/annex-fees/custom/:code', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    if (!grid.annexFees?.custom) {
+      return res.status(404).json({ success: false, error: { message: 'Aucun frais personnalisé trouvé' } });
+    }
+
+    grid.annexFees.custom = grid.annexFees.custom.filter(f => f.code !== req.params.code);
+    grid.updatedAt = new Date();
+    await grid.save();
+
+    res.json({ success: true, message: 'Frais personnalisé supprimé' });
+  } catch (error) {
+    console.error('Erreur suppression frais personnalisé:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la suppression du frais personnalisé' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids/:id/calculate-total
+ * Calculer le prix total avec frais annexes et indexation gasoil
+ */
+app.post('/api/pricing-grids/:id/calculate-total', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    const {
+      basePrice,
+      quantity = 1,
+      weight = 0,
+      goodsValue = 0,
+      options = {} // { tailgate: true, appointment: true, adr: true, etc. }
+    } = req.body;
+
+    let totalPrice = basePrice * quantity;
+    const fees = [];
+
+    // Appliquer l'indexation gasoil
+    if (grid.fuelIndexation?.enabled && grid.fuelIndexation?.lastAdjustment?.adjustmentPercent) {
+      const fuelAdjustment = totalPrice * (grid.fuelIndexation.lastAdjustment.adjustmentPercent / 100);
+      fees.push({
+        name: 'Indexation Gasoil',
+        code: 'FUEL_INDEX',
+        value: fuelAdjustment,
+        type: 'percentage',
+        percent: grid.fuelIndexation.lastAdjustment.adjustmentPercent
+      });
+      totalPrice += fuelAdjustment;
+    }
+
+    // Frais de manutention
+    if (grid.annexFees?.handling?.enabled) {
+      if (grid.annexFees.handling.loadingFee > 0) {
+        fees.push({ name: 'Chargement', code: 'LOADING', value: grid.annexFees.handling.loadingFee, type: 'fixed' });
+        totalPrice += grid.annexFees.handling.loadingFee;
+      }
+      if (grid.annexFees.handling.unloadingFee > 0) {
+        fees.push({ name: 'Déchargement', code: 'UNLOADING', value: grid.annexFees.handling.unloadingFee, type: 'fixed' });
+        totalPrice += grid.annexFees.handling.unloadingFee;
+      }
+      if (grid.annexFees.handling.palletHandling > 0 && quantity > 0) {
+        const palletFee = grid.annexFees.handling.palletHandling * quantity;
+        fees.push({ name: 'Manutention palettes', code: 'PALLET_HANDLING', value: palletFee, type: 'per_unit', quantity });
+        totalPrice += palletFee;
+      }
+    }
+
+    // Frais de livraison
+    if (grid.annexFees?.delivery?.enabled) {
+      if (options.tailgate && grid.annexFees.delivery.tailgateFee > 0) {
+        fees.push({ name: 'Hayon', code: 'TAILGATE', value: grid.annexFees.delivery.tailgateFee, type: 'fixed' });
+        totalPrice += grid.annexFees.delivery.tailgateFee;
+      }
+      if (options.appointment && grid.annexFees.delivery.appointmentFee > 0) {
+        fees.push({ name: 'Rendez-vous', code: 'APPOINTMENT', value: grid.annexFees.delivery.appointmentFee, type: 'fixed' });
+        totalPrice += grid.annexFees.delivery.appointmentFee;
+      }
+      if (options.express && grid.annexFees.delivery.expressDeliveryFee > 0) {
+        fees.push({ name: 'Express', code: 'EXPRESS', value: grid.annexFees.delivery.expressDeliveryFee, type: 'fixed' });
+        totalPrice += grid.annexFees.delivery.expressDeliveryFee;
+      }
+      if (options.weekend && grid.annexFees.delivery.weekendFee > 0) {
+        fees.push({ name: 'Week-end', code: 'WEEKEND', value: grid.annexFees.delivery.weekendFee, type: 'fixed' });
+        totalPrice += grid.annexFees.delivery.weekendFee;
+      }
+    }
+
+    // Frais administratifs
+    if (grid.annexFees?.administrative?.enabled) {
+      if (grid.annexFees.administrative.documentFee > 0) {
+        fees.push({ name: 'Documents', code: 'DOCUMENTS', value: grid.annexFees.administrative.documentFee, type: 'fixed' });
+        totalPrice += grid.annexFees.administrative.documentFee;
+      }
+      if (grid.annexFees.administrative.insuranceFeePercent > 0 && goodsValue > 0) {
+        const insuranceFee = goodsValue * (grid.annexFees.administrative.insuranceFeePercent / 100);
+        fees.push({ name: 'Assurance', code: 'INSURANCE', value: insuranceFee, type: 'percentage', percent: grid.annexFees.administrative.insuranceFeePercent });
+        totalPrice += insuranceFee;
+      }
+    }
+
+    // Frais spéciaux
+    if (grid.annexFees?.special?.enabled) {
+      if (options.adr && grid.annexFees.special.adrFee > 0) {
+        fees.push({ name: 'Matières dangereuses (ADR)', code: 'ADR', value: grid.annexFees.special.adrFee, type: 'fixed' });
+        totalPrice += grid.annexFees.special.adrFee;
+      }
+      if (options.temperatureControl && grid.annexFees.special.temperatureControlFee > 0) {
+        fees.push({ name: 'Température contrôlée', code: 'TEMP_CONTROL', value: grid.annexFees.special.temperatureControlFee, type: 'fixed' });
+        totalPrice += grid.annexFees.special.temperatureControlFee;
+      }
+    }
+
+    // Frais personnalisés obligatoires
+    if (grid.annexFees?.custom) {
+      for (const customFee of grid.annexFees.custom) {
+        if (customFee.mandatory) {
+          let feeValue = 0;
+          if (customFee.type === 'fixed') {
+            feeValue = customFee.value;
+          } else if (customFee.type === 'percentage') {
+            feeValue = basePrice * (customFee.value / 100);
+          } else if (customFee.type === 'per_unit') {
+            feeValue = customFee.value * quantity;
+          }
+          fees.push({ name: customFee.name, code: customFee.code, value: feeValue, type: customFee.type });
+          totalPrice += feeValue;
+        }
+      }
+    }
+
+    // TVA
+    const taxRate = grid.settings?.taxRate || 20;
+    const taxAmount = totalPrice * (taxRate / 100);
+
+    res.json({
+      success: true,
+      data: {
+        basePrice,
+        quantity,
+        subtotalBeforeFees: basePrice * quantity,
+        fees,
+        totalFees: fees.reduce((sum, f) => sum + f.value, 0),
+        subtotalHT: totalPrice,
+        taxRate,
+        taxAmount,
+        totalTTC: totalPrice + taxAmount,
+        currency: grid.settings?.currency || 'EUR',
+        fuelIndexApplied: grid.fuelIndexation?.enabled && grid.fuelIndexation?.lastAdjustment?.adjustmentPercent > 0
+      }
+    });
+  } catch (error) {
+    console.error('Erreur calcul total:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors du calcul du prix total' } });
+  }
+});
+
+// =============================================================================
+// ROUTES TRANSPORTEUR - GRILLES TARIFAIRES
+// Portail Transporteur: voir ses grilles tarifaires chez les industriels
+// =============================================================================
+
+/**
+ * GET /api/pricing-grids/carrier/:carrierId
+ * Liste des grilles d'un transporteur (vue transporteur)
+ */
+app.get('/api/pricing-grids/carrier/:carrierId', authenticateToken, async (req, res) => {
+  try {
+    const { carrierId } = req.params;
+    const { status, page = 1, limit = 50 } = req.query;
+
+    const filter = { carrierId };
+    if (status) filter.status = status;
+
+    const grids = await PricingGrid.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await PricingGrid.countDocuments(filter);
+
+    // Stats par industriel
+    const stats = await PricingGrid.aggregate([
+      { $match: { carrierId } },
+      { $group: {
+        _id: '$industrialId',
+        industrialName: { $first: '$industrialName' },
+        totalGrids: { $sum: 1 },
+        activeGrids: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } }
+      }}
+    ]);
+
+    res.json({
+      success: true,
+      data: grids,
+      stats: {
+        totalGrids: total,
+        activeGrids: grids.filter(g => g.status === 'active').length,
+        byIndustrial: stats
+      },
+      pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) }
+    });
+  } catch (error) {
+    console.error('Erreur liste grilles transporteur:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de la récupération des grilles' } });
+  }
+});
+
+/**
+ * POST /api/pricing-grids/:id/propose-update
+ * Transporteur propose une mise à jour de tarifs
+ */
+app.post('/api/pricing-grids/:id/propose-update', authenticateToken, async (req, res) => {
+  try {
+    const grid = await PricingGrid.findOne({ id: req.params.id });
+
+    if (!grid) {
+      return res.status(404).json({ success: false, error: { message: 'Grille non trouvée' } });
+    }
+
+    const { proposedZones, message, validUntil } = req.body;
+
+    // Créer une demande de modification (utilise le système de proposals existant)
+    const proposal = new PricingProposal({
+      requestId: `UPDATE-${grid.id}`,
+      configId: grid.id,
+      carrierId: grid.carrierId,
+      carrierCompanyName: grid.carrierName,
+      carrierEmail: req.user.email,
+      industrialId: grid.industrialId,
+      industrialCompanyName: grid.industrialName,
+      proposedPrices: proposedZones || [],
+      notes: message,
+      validUntil: validUntil ? new Date(validUntil) : null,
+      status: 'submitted',
+      submittedAt: new Date()
+    });
+
+    await proposal.save();
+
+    // Notifier l'industriel
+    const token = req.headers['authorization']?.split(' ')[1];
+    try {
+      await sendEmail(
+        grid.industrialId, // En production, récupérer l'email de l'industriel
+        'newProposalReceived',
+        {
+          proposalId: proposal.id,
+          carrierCompanyName: grid.carrierName,
+          notes: message
+        }
+      );
+    } catch (e) {}
+
+    res.status(201).json({
+      success: true,
+      data: proposal,
+      message: 'Proposition de mise à jour envoyée'
+    });
+  } catch (error) {
+    console.error('Erreur proposition mise à jour:', error);
+    res.status(500).json({ success: false, error: { message: 'Erreur lors de l\'envoi de la proposition' } });
+  }
+});
+
+// =============================================================================
 // HEALTH CHECK
 // =============================================================================
 
@@ -2496,8 +4026,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'pricing-grids-api',
-    version: '2.0.0',
-    features: ['emails', 'interconnections', 'crm', 'orders', 'affret-ia', 'billing'],
+    version: '3.0.0',
+    features: ['emails', 'interconnections', 'crm', 'orders', 'affret-ia', 'billing', 'pricing-grids', 'transporter-portal'],
     timestamp: new Date().toISOString()
   });
 });
