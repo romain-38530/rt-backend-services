@@ -20,6 +20,22 @@ const {
   DefaultConfig
 } = require('./affretia-models');
 
+// Import du modèle ProspectCarrier pour les transporteurs B2P scrapés
+let ProspectCarrier = null;
+try {
+  ProspectCarrier = require('./prospect-carrier-model');
+} catch (err) {
+  console.warn('[AFFRET.IA] ProspectCarrier model not available - B2P prospects disabled');
+}
+
+// Import du service de prospection pour les emails automatiques
+let ProspectionService = null;
+try {
+  ProspectionService = require('./prospection-service');
+} catch (err) {
+  console.warn('[AFFRET.IA] ProspectionService not available - Auto-prospection disabled');
+}
+
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
@@ -204,22 +220,114 @@ async function analyzeAndGenerateShortlist(db, sessionId) {
       ]
     }).toArray();
 
-    console.log(`[AFFRET.IA] ${carriers.length} transporteurs trouvés pour analyse`);
+    console.log(`[AFFRET.IA] ${carriers.length} transporteurs standards trouvés pour analyse`);
 
-    // Scorer chaque transporteur
+    // =========================================================================
+    // INTÉGRATION B2P : Récupérer les transporteurs prospects scrapés
+    // =========================================================================
+    let b2pProspects = [];
+    if (ProspectCarrier) {
+      try {
+        const pickupCity = session.mission.origin?.city || '';
+        const deliveryCity = session.mission.destination?.city || '';
+        const pickupPostalCode = session.mission.origin?.postalCode || '';
+
+        // Rechercher les prospects B2P matching la route
+        b2pProspects = await ProspectCarrier.find({
+          prospectionStatus: { $in: ['new', 'contacted', 'interested', 'trial_active'] },
+          blocked: { $ne: true },
+          $or: [
+            { 'activityZones.fromCity': { $regex: new RegExp(pickupCity, 'i') } },
+            { 'activityZones.toCity': { $regex: new RegExp(deliveryCity, 'i') } },
+            { 'activityZones.fromPostalCode': { $regex: `^${pickupPostalCode?.substring(0, 2)}` } }
+          ]
+        })
+        .sort({ 'engagementScore.value': -1, 'source.interactionCount': -1 })
+        .limit(50)
+        .lean();
+
+        console.log(`[AFFRET.IA] ${b2pProspects.length} transporteurs B2P prospects trouvés`);
+      } catch (b2pErr) {
+        console.warn('[AFFRET.IA] Erreur récupération prospects B2P:', b2pErr.message);
+      }
+    }
+
+    // Combiner les transporteurs standards et B2P
+    const allCarriers = [...carriers];
+
+    // Convertir les prospects B2P en format transporteur pour le scoring
+    for (const prospect of b2pProspects) {
+      // Vérifier qu'on n'a pas déjà ce transporteur (par email)
+      const existsInCarriers = carriers.some(c =>
+        c.email?.toLowerCase() === prospect.carrierEmail?.toLowerCase()
+      );
+
+      if (!existsInCarriers) {
+        allCarriers.push({
+          _id: prospect._id,
+          name: prospect.carrierName,
+          companyName: prospect.carrierName,
+          email: prospect.carrierEmail,
+          phone: prospect.carrierPhone,
+          type: 'b2p_prospect', // Marqueur spécial pour les prospects B2P
+          status: 'active',
+          source: 'b2p_scraping',
+          prospectionStatus: prospect.prospectionStatus,
+          engagementScore: prospect.engagementScore?.value || 0,
+          activityZones: prospect.activityZones,
+          trialOffer: prospect.trialOffer,
+          // Score par défaut pour les prospects (pas d'historique)
+          averageRate: null,
+          fleetSize: 3, // Estimation par défaut
+          documents: {}, // Pas de documents vérifiés
+          vigilanceStatus: 'unknown'
+        });
+      }
+    }
+
+    console.log(`[AFFRET.IA] Total: ${allCarriers.length} transporteurs pour analyse (${carriers.length} standards + ${b2pProspects.length} B2P)`);
+
+    // Scorer chaque transporteur (standards + B2P)
     const scoredCarriers = await Promise.all(
-      carriers.map(async (carrier) => {
+      allCarriers.map(async (carrier) => {
         const score = await calculateCarrierScore(db, carrier, session);
+
+        // Bonus/malus spécifiques pour les prospects B2P
+        let adjustedScore = score.total;
+        const adjustedReasons = [...score.reasons];
+
+        if (carrier.type === 'b2p_prospect') {
+          // Bonus pour engagement élevé sur B2P
+          if (carrier.engagementScore >= 50) {
+            adjustedScore += 5;
+            adjustedReasons.push('Prospect B2P engagé');
+          }
+
+          // Bonus si en période d'essai actif
+          if (carrier.prospectionStatus === 'trial_active') {
+            adjustedScore += 10;
+            adjustedReasons.push('Essai gratuit actif');
+          }
+
+          // Malus léger car pas d'historique vérifié
+          adjustedScore -= 5;
+          adjustedReasons.push('Nouveau prospect B2P');
+        }
+
         return {
           carrierId: carrier._id,
           carrierName: carrier.name || carrier.companyName,
-          score: score.total,
+          carrierEmail: carrier.email,
+          carrierPhone: carrier.phone,
+          score: Math.max(0, Math.min(100, adjustedScore)),
           scoreBreakdown: score.breakdown,
           ranking: 0,
-          reasons: score.reasons,
+          reasons: adjustedReasons,
           contacted: false,
           contactedAt: null,
-          channels: determineChannels(carrier)
+          channels: determineChannels(carrier),
+          source: carrier.source || 'internal', // Marquer la source
+          isB2PProspect: carrier.type === 'b2p_prospect'
         };
       })
     );
@@ -467,6 +575,16 @@ async function calculateComplianceScore(db, carrier) {
 function determineChannels(carrier) {
   const channels = [];
 
+  // Pour les prospects B2P, on utilise principalement l'email
+  if (carrier.type === 'b2p_prospect') {
+    if (carrier.email) {
+      channels.push(BroadcastChannels.EMAIL);
+    }
+    // Les prospects B2P n'ont pas accès à la marketplace interne
+    return channels.length > 0 ? channels : [BroadcastChannels.EMAIL];
+  }
+
+  // Transporteurs standards
   if (carrier.email) channels.push(BroadcastChannels.EMAIL);
   if (carrier.marketplaceEnabled) channels.push(BroadcastChannels.MARKETPLACE);
   if (carrier.pushEnabled) channels.push(BroadcastChannels.PUSH_NOTIFICATION);
@@ -491,6 +609,17 @@ function generateRecommendations(shortlist, session) {
   const topScore = shortlist[0]?.score || 0;
   if (topScore > 90) {
     recommendations.push('Excellent candidat identifié - Attribution rapide recommandée');
+  }
+
+  // Stats B2P prospects
+  const b2pCount = shortlist.filter(c => c.isB2PProspect).length;
+  if (b2pCount > 0) {
+    recommendations.push(`${b2pCount} transporteur(s) B2P prospect(s) inclus dans la shortlist`);
+
+    const b2pInTop5 = shortlist.slice(0, 5).filter(c => c.isB2PProspect).length;
+    if (b2pInTop5 > 0) {
+      recommendations.push(`${b2pInTop5} prospect(s) B2P dans le top 5 - Opportunité de conversion`);
+    }
   }
 
   return recommendations;
@@ -1732,6 +1861,146 @@ async function getActiveSessions(db, organizationId) {
 }
 
 // ============================================================================
+// PROSPECTION B2P - Sollicitation automatique des transporteurs scrapés
+// ============================================================================
+
+/**
+ * Synchronise les transporteurs B2P depuis la base de scraping
+ */
+async function syncB2PCarriers() {
+  if (!ProspectionService) {
+    console.warn('[AFFRET.IA] ProspectionService not available');
+    return { synced: 0, error: 'Service not available' };
+  }
+
+  try {
+    const result = await ProspectionService.syncCarriersFromB2PWeb();
+    console.log(`[AFFRET.IA] B2P sync complete: ${result.created} created, ${result.updated} updated`);
+    return result;
+  } catch (error) {
+    console.error('[AFFRET.IA] B2P sync error:', error.message);
+    return { synced: 0, error: error.message };
+  }
+}
+
+/**
+ * Lance une campagne de prospection B2P pour un transport sans réponses
+ * Envoie des emails aux transporteurs B2P qui matchent la route
+ */
+async function launchB2PProspection(db, sessionId, options = {}) {
+  const session = await db.collection('affretia_sessions').findOne({ sessionId });
+
+  if (!session) {
+    throw new Error('Session AFFRET.IA non trouvée');
+  }
+
+  if (!ProspectionService) {
+    console.warn('[AFFRET.IA] ProspectionService not available for B2P prospection');
+    return { sent: 0, error: 'Service not available' };
+  }
+
+  const {
+    maxProspects = 15,
+    includeTrialOffer = true
+  } = options;
+
+  try {
+    // Préparer les données du transport pour le matching
+    const transport = {
+      pickupCity: session.mission.origin?.city || '',
+      pickupPostalCode: session.mission.origin?.postalCode || '',
+      deliveryCity: session.mission.destination?.city || '',
+      deliveryPostalCode: session.mission.destination?.postalCode || '',
+      pickupDate: session.mission.pickupDate,
+      weight: session.mission.goods?.weight,
+      vehicleType: session.mission.requirements?.vehicleType
+    };
+
+    // Synchroniser d'abord les transporteurs B2P
+    await syncB2PCarriers();
+
+    // Lancer la campagne de prospection
+    const result = await ProspectionService.launchProspectionCampaign(transport, maxProspects);
+
+    // Enregistrer dans la session
+    await db.collection('affretia_sessions').updateOne(
+      { sessionId },
+      {
+        $set: {
+          'b2pProspection': {
+            launchedAt: new Date(),
+            prospectsContacted: result.contacted,
+            prospectsFailed: result.failed,
+            totalProspects: result.total,
+            details: result.details
+          },
+          updatedAt: new Date()
+        },
+        $push: {
+          statusHistory: {
+            status: session.status,
+            changedAt: new Date(),
+            reason: `Prospection B2P lancée: ${result.contacted} transporteurs contactés`
+          }
+        }
+      }
+    );
+
+    console.log(`[AFFRET.IA] B2P prospection for session ${sessionId}: ${result.contacted} contacted`);
+
+    return {
+      sessionId,
+      contacted: result.contacted,
+      failed: result.failed,
+      total: result.total,
+      details: result.details
+    };
+
+  } catch (error) {
+    console.error('[AFFRET.IA] B2P prospection error:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Vérifie les sessions sans réponses et lance la prospection B2P automatiquement
+ */
+async function autoProspectNoResponseSessions(db) {
+  try {
+    // Trouver les sessions en attente de réponses depuis plus de 2h sans réponses
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+
+    const sessionsWithoutResponses = await db.collection('affretia_sessions').find({
+      status: AffretiaStatus.AWAITING_RESPONSES,
+      'broadcast.startedAt': { $lte: twoHoursAgo },
+      'responses.0': { $exists: false }, // Pas de réponses
+      'b2pProspection': { $exists: false } // Pas encore de prospection B2P
+    }).toArray();
+
+    console.log(`[AFFRET.IA] Found ${sessionsWithoutResponses.length} sessions without responses for B2P prospection`);
+
+    const results = [];
+    for (const session of sessionsWithoutResponses) {
+      try {
+        const result = await launchB2PProspection(db, session.sessionId);
+        results.push({ sessionId: session.sessionId, success: true, ...result });
+      } catch (err) {
+        results.push({ sessionId: session.sessionId, success: false, error: err.message });
+      }
+    }
+
+    return {
+      processed: sessionsWithoutResponses.length,
+      results
+    };
+
+  } catch (error) {
+    console.error('[AFFRET.IA] Auto-prospect error:', error.message);
+    throw error;
+  }
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -1781,5 +2050,10 @@ module.exports = {
   getActiveSessions,
   updateSessionStatus,
   generateSessionId,
-  generateTrackingToken
+  generateTrackingToken,
+
+  // Prospection B2P
+  launchB2PProspection,
+  syncB2PCarriers,
+  autoProspectNoResponseSessions
 };

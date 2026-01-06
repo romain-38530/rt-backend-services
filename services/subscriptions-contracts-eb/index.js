@@ -1329,6 +1329,24 @@ async function startServer() {
     app.use('/api/icpe', icpeRoutes);
     console.log('✅ ICPE routes mounted (Installations Classees)');
 
+    // v4.2.3 - B2P Dashboard Routes
+    try {
+      const b2pDashboardRoutes = require('./b2p-dashboard-routes');
+      app.use('/api/b2p/dashboard', b2pDashboardRoutes);
+      console.log('✅ B2P Dashboard routes mounted (Prospect conversion tracking)');
+    } catch (err) {
+      console.warn('⚠️  B2P Dashboard routes not loaded:', err.message);
+    }
+
+    // v4.2.3 - Email A/B Testing Routes
+    try {
+      const emailABTestingRoutes = require('./email-ab-testing-routes');
+      app.use('/api/b2p/ab-testing', emailABTestingRoutes);
+      console.log('✅ Email A/B Testing routes mounted (Prospection email optimization)');
+    } catch (err) {
+      console.warn('⚠️  Email A/B Testing routes not loaded:', err.message);
+    }
+
   } else {
     console.warn('⚠️  v4.0.0 services not initialized - MongoDB not connected');
   }

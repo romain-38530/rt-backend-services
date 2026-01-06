@@ -5,7 +5,7 @@ const path = require('path');
 // Utiliser le chemin absolu pour pnpm
 const archiver = require('c:/Users/rtard/rt-backend-services/node_modules/.pnpm/archiver@7.0.1/node_modules/archiver');
 
-const VERSION = 'v4.0.0-compliance';
+const VERSION = 'v4.2.4-carrier-routes-fix';
 const outputPath = path.join(__dirname, 'bundle', `deploy-${VERSION}.zip`);
 
 // Créer le dossier bundle s'il n'existe pas
@@ -132,6 +132,17 @@ const files = [
   'driving-time-service.js',
   'carbon-footprint-service.js',
   'error-handler.js',
+  // v4.2.1 - ICPE & Logistics Delegation
+  'icpe-routes.js',
+  'logistics-delegation-routes.js',
+  // v4.2.2 - B2P Prospects Integration
+  'prospect-carrier-model.js',
+  'prospection-service.js',
+  // v4.2.3 - B2P Dashboard & A/B Testing
+  'b2p-dashboard-service.js',
+  'b2p-dashboard-routes.js',
+  'email-ab-testing-service.js',
+  'email-ab-testing-routes.js',
 ];
 
 console.log('');
