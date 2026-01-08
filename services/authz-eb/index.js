@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { setupCarrierRoutes, checkAndSendVigilanceAlerts } = require('./carriers');
 const { sendClientOnboardingConfirmationEmail } = require('./email');
+const { setupSubUsersRoutes } = require('./subusers');
 const cron = require('node-cron');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-secret-key-2024-change-in-production';
@@ -1185,6 +1186,7 @@ async function startServer() {
   // Setup carrier management routes after MongoDB connection
   if (mongoConnected && db) {
     setupCarrierRoutes(app, db);
+    setupSubUsersRoutes(app, db, jwt, JWT_SECRET);
     console.log('✓ Carrier management routes configured');
 
     // Cron job: Alertes de vigilance quotidiennes a 8h00 (heure Paris)
