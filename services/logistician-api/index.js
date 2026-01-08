@@ -29,6 +29,7 @@ import stripeRoutes from './routes/stripe.routes.js';
 import teamRoutes from './routes/team.routes.js';
 import capacityRoutes from './routes/capacity.routes.js';
 import trackingRoutes from './routes/tracking.routes.js';
+import etaRequestRoutes from './routes/eta-request.routes.js';
 import billingRoutes from './routes/billing.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 
@@ -172,6 +173,8 @@ app.use('/api/logisticians', stripeRoutes);
 app.use('/api/logisticians', teamRoutes);
 app.use('/api/logisticians', capacityRoutes);
 app.use('/api/logisticians', trackingRoutes);
+app.use('/api/logisticians', etaRequestRoutes);
+app.use('/api', etaRequestRoutes);
 app.use('/api/logisticians', billingRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
