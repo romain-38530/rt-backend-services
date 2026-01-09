@@ -32,6 +32,7 @@ import trackingRoutes from './routes/tracking.routes.js';
 import etaRequestRoutes from './routes/eta-request.routes.js';
 import billingRoutes from './routes/billing.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
+import ecmrRoutes from './routes/ecmr.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -177,6 +178,7 @@ app.use('/api/logisticians', etaRequestRoutes);
 app.use('/api', etaRequestRoutes);
 app.use('/api/logisticians', billingRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api', ecmrRoutes);
 
 // Stripe webhook (special route)
 app.use('/api/stripe', stripeRoutes);

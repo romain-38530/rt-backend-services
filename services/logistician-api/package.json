@@ -22,6 +22,7 @@
     "@aws-sdk/client-sns": "^3.490.0",
     "ws": "^8.16.0",
     "pdfkit": "^0.14.0",
+    "qrcode": "^1.5.3",
     "node-cron": "^3.0.3"
   },
   "engines": {
