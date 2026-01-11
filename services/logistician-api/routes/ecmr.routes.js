@@ -271,6 +271,33 @@ router.get('/ecmr/:id/pdf', async (req, res) => {
   }
 });
 
+// POST /api/ecmr/generate-pdf - Générer un PDF à partir des données envoyées (pour données locales/mock)
+router.post('/ecmr/generate-pdf', async (req, res) => {
+  try {
+    const document = req.body;
+
+    if (!document || !document.cmrNumber) {
+      return res.status(400).json({ error: 'Données e-CMR manquantes' });
+    }
+
+    // Générer le PDF
+    const pdfBuffer = await generateECMRPdf(document, {
+      baseUrl: process.env.LOGISTICIAN_PORTAL_URL || 'https://logisticien.symphonia-controltower.com',
+      includeQRCode: true
+    });
+
+    // Envoyer le PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${document.cmrNumber}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    res.status(500).json({ error: 'Erreur lors de la génération du PDF', details: error.message });
+  }
+});
+
 // GET /api/ecmr/:cmrNumber/verify - Vérifier l'authenticité d'un e-CMR
 router.get('/ecmr/:cmrNumber/verify', async (req, res) => {
   try {

@@ -75,6 +75,10 @@ async function connectDB() {
     db = mongoClient.db('rt-technologie');
     console.log('[LOGISTICIAN-API] MongoDB connected');
 
+    // Make db available via app.locals for routes
+    app.locals.db = db;
+    app.locals.mongoClient = mongoClient;
+
     // Create indexes
     await createIndexes();
 
