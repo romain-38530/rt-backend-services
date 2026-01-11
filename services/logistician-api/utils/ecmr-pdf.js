@@ -20,37 +20,6 @@ function generateECMRHash(ecmrData) {
   return createHash('sha256').update(dataString).digest('hex');
 }
 
-// Générer un QR Code pour vérification
-async function generateQRCode(ecmrData, baseUrl) {
-  const verificationUrl = `${baseUrl}/api/ecmr/${ecmrData.cmrNumber}/verify`;
-  const hash = generateECMRHash(ecmrData);
-
-  const qrData = JSON.stringify({
-    cmrNumber: ecmrData.cmrNumber,
-    verifyUrl: verificationUrl,
-    hash: hash.substring(0, 16)
-  });
-
-  try {
-    const qrCodeDataUrl = await QRCode.toDataURL(qrData, {
-      errorCorrectionLevel: 'H',
-      type: 'image/png',
-      quality: 1,
-      margin: 1,
-      width: 200
-    });
-
-    return {
-      dataUrl: qrCodeDataUrl,
-      verificationUrl,
-      hash
-    };
-  } catch (error) {
-    console.error('Error generating QR code:', error);
-    return null;
-  }
-}
-
 // Formater une date en français
 function formatDate(date) {
   if (!date) return 'N/A';
@@ -64,14 +33,43 @@ function formatDate(date) {
   });
 }
 
-// Générer le PDF e-CMR
+// Générer le PDF e-CMR (version simplifiée sans QR code async)
 export async function generateECMRPdf(ecmrData, options = {}) {
   const {
     baseUrl = 'https://logisticien.symphonia-controltower.com',
     includeQRCode = true
   } = options;
 
-  return new Promise(async (resolve, reject) => {
+  // Générer le QR code en avance si nécessaire
+  let qrCodeBuffer = null;
+  let qrVerificationUrl = '';
+  let qrHash = '';
+  if (includeQRCode) {
+    try {
+      qrVerificationUrl = `${baseUrl}/api/ecmr/${ecmrData.cmrNumber}/verify`;
+      qrHash = generateECMRHash(ecmrData);
+      const qrData = JSON.stringify({
+        cmrNumber: ecmrData.cmrNumber,
+        verifyUrl: qrVerificationUrl,
+        hash: qrHash.substring(0, 16)
+      });
+
+      // Générer en Data URL puis convertir en Buffer (pas besoin de canvas)
+      const qrDataUrl = await QRCode.toDataURL(qrData, {
+        errorCorrectionLevel: 'H',
+        type: 'image/png',
+        margin: 1,
+        width: 200
+      });
+      // Extraire la partie base64 et convertir en buffer
+      const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+      qrCodeBuffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+    }
+  }
+
+  return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: 'A4',
@@ -94,17 +92,17 @@ export async function generateECMRPdf(ecmrData, options = {}) {
       // ========== EN-TÊTE ==========
       doc.rect(0, 0, 612, 80).fill('#1e293b');
       doc.fontSize(28).font('Helvetica-Bold').fillColor('#ffffff').text('e-CMR', 50, 25);
-      doc.fontSize(12).font('Helvetica').text('Lettre de Voiture Électronique', 50, 55);
+      doc.fontSize(12).font('Helvetica').text('Lettre de Voiture Electronique', 50, 55);
       doc.fillColor('#000000');
       doc.moveDown(3);
 
       // Numéro e-CMR et statut
       const statusColors = {
         draft: { bg: '#9ca3af', text: 'Brouillon' },
-        pending_sender: { bg: '#fbbf24', text: 'Attente expéditeur' },
+        pending_sender: { bg: '#fbbf24', text: 'Attente expediteur' },
         pending_carrier: { bg: '#3b82f6', text: 'Attente transporteur' },
         pending_recipient: { bg: '#a855f7', text: 'Attente destinataire' },
-        completed: { bg: '#10b981', text: 'Complété' },
+        completed: { bg: '#10b981', text: 'Complete' },
         disputed: { bg: '#ef4444', text: 'Litige' }
       };
 
@@ -119,7 +117,7 @@ export async function generateECMRPdf(ecmrData, options = {}) {
       doc.fillColor('#000000');
 
       doc.fontSize(10).font('Helvetica');
-      doc.text(`Créé le: ${formatDate(ecmrData.createdAt)}`, 50, 125);
+      doc.text(`Cree le: ${formatDate(ecmrData.createdAt)}`, 50, 125);
       if (ecmrData.orderRef) {
         doc.text(`Commande: ${ecmrData.orderRef}`, 250, 125);
       }
@@ -133,7 +131,7 @@ export async function generateECMRPdf(ecmrData, options = {}) {
       // Expéditeur
       doc.rect(50, boxY, boxWidth, boxHeight).stroke('#3b82f6');
       doc.rect(50, boxY, boxWidth, 20).fill('#3b82f6');
-      doc.fontSize(10).fillColor('#ffffff').font('Helvetica-Bold').text('EXPÉDITEUR', 55, boxY + 5);
+      doc.fontSize(10).fillColor('#ffffff').font('Helvetica-Bold').text('EXPEDITEUR', 55, boxY + 5);
       doc.fillColor('#000000').font('Helvetica').fontSize(9);
       doc.text(ecmrData.sender?.name || 'N/A', 55, boxY + 28, { width: boxWidth - 10 });
       doc.text(ecmrData.sender?.address || '', 55, boxY + 42, { width: boxWidth - 10 });
@@ -178,20 +176,20 @@ export async function generateECMRPdf(ecmrData, options = {}) {
       // Colonnes marchandises
       const cols = [
         { label: 'Description', value: ecmrData.goods?.description || 'N/A', x: 55, width: 180 },
-        { label: 'Quantité', value: `${ecmrData.goods?.quantity || 0} ${ecmrData.goods?.packaging || ''}`, x: 245, width: 80 },
+        { label: 'Quantite', value: `${ecmrData.goods?.quantity || 0} ${ecmrData.goods?.packaging || ''}`, x: 245, width: 80 },
         { label: 'Poids', value: `${((ecmrData.goods?.weight || 0) / 1000).toFixed(2)} T`, x: 335, width: 80 },
         { label: 'Palettes', value: `${ecmrData.goods?.pallets || 0}`, x: 425, width: 60 }
       ];
 
       cols.forEach(col => {
         doc.fontSize(8).fillColor('#666666').text(col.label, col.x, goodsY + 28);
-        doc.fontSize(10).fillColor('#000000').text(col.value, col.x, goodsY + 42, { width: col.width });
+        doc.fontSize(10).fillColor('#000000').text(String(col.value), col.x, goodsY + 42, { width: col.width });
       });
 
       // ========== DATES ==========
       const datesY = goodsY + 100;
       doc.rect(50, datesY, 250, 50).stroke('#0ea5e9');
-      doc.fontSize(9).font('Helvetica-Bold').text('Date d\'enlèvement:', 55, datesY + 10);
+      doc.fontSize(9).font('Helvetica-Bold').text('Date enlevement:', 55, datesY + 10);
       doc.font('Helvetica').text(formatDate(ecmrData.pickupDate), 55, datesY + 25);
 
       doc.rect(315, datesY, 250, 50).stroke('#0ea5e9');
@@ -200,17 +198,17 @@ export async function generateECMRPdf(ecmrData, options = {}) {
 
       // ========== SIGNATURES ==========
       const sigY = datesY + 70;
-      doc.fontSize(12).font('Helvetica-Bold').text('SIGNATURES ÉLECTRONIQUES', 50, sigY);
+      doc.fontSize(12).font('Helvetica-Bold').text('SIGNATURES ELECTRONIQUES', 50, sigY);
       doc.moveTo(50, sigY + 15).lineTo(565, sigY + 15).stroke();
 
       const signatures = [
-        { label: 'Expéditeur', data: ecmrData.signatures?.sender, color: '#3b82f6' },
+        { label: 'Expediteur', data: ecmrData.signatures?.sender, color: '#3b82f6' },
         { label: 'Transporteur', data: ecmrData.signatures?.carrier, color: '#fbbf24' },
         { label: 'Destinataire', data: ecmrData.signatures?.recipient, color: '#10b981' }
       ];
 
       let sigX = 50;
-      signatures.forEach((sig, i) => {
+      signatures.forEach((sig) => {
         const boxW = 170;
         const sigBoxY = sigY + 25;
 
@@ -218,13 +216,13 @@ export async function generateECMRPdf(ecmrData, options = {}) {
 
         if (sig.data) {
           doc.rect(sigX, sigBoxY, boxW, 20).fill(sig.color);
-          doc.fontSize(9).fillColor('#ffffff').font('Helvetica-Bold').text(`✓ ${sig.label}`, sigX + 5, sigBoxY + 5);
+          doc.fontSize(9).fillColor('#ffffff').font('Helvetica-Bold').text(`[OK] ${sig.label}`, sigX + 5, sigBoxY + 5);
           doc.fillColor('#000000').font('Helvetica').fontSize(8);
-          doc.text(`Signé par: ${sig.data.name}`, sigX + 5, sigBoxY + 30, { width: boxW - 10 });
+          doc.text(`Signe par: ${sig.data.name}`, sigX + 5, sigBoxY + 30, { width: boxW - 10 });
           doc.text(`Le: ${formatDate(sig.data.date)}`, sigX + 5, sigBoxY + 45, { width: boxW - 10 });
         } else {
           doc.rect(sigX, sigBoxY, boxW, 20).fill('#e5e7eb');
-          doc.fontSize(9).fillColor('#6b7280').font('Helvetica-Bold').text(`○ ${sig.label}`, sigX + 5, sigBoxY + 5);
+          doc.fontSize(9).fillColor('#6b7280').font('Helvetica-Bold').text(`[ ] ${sig.label}`, sigX + 5, sigBoxY + 5);
           doc.fillColor('#9ca3af').font('Helvetica').fontSize(8);
           doc.text('En attente de signature', sigX + 5, sigBoxY + 40, { width: boxW - 10 });
         }
@@ -237,12 +235,12 @@ export async function generateECMRPdf(ecmrData, options = {}) {
         const resY = sigY + 115;
         doc.rect(50, resY, 515, 20 + ecmrData.reservations.length * 35).stroke('#ef4444');
         doc.rect(50, resY, 515, 20).fill('#ef4444');
-        doc.fontSize(10).fillColor('#ffffff').font('Helvetica-Bold').text(`⚠️ RÉSERVES (${ecmrData.reservations.length})`, 55, resY + 5);
+        doc.fontSize(10).fillColor('#ffffff').font('Helvetica-Bold').text(`RESERVES (${ecmrData.reservations.length})`, 55, resY + 5);
         doc.fillColor('#000000').font('Helvetica').fontSize(9);
 
         ecmrData.reservations.forEach((res, i) => {
           const resItemY = resY + 25 + i * 35;
-          const typeLabels = { damage: '💥 Dommage', missing: '❓ Manquant', delay: '⏰ Retard', other: '📝 Autre' };
+          const typeLabels = { damage: 'Dommage', missing: 'Manquant', delay: 'Retard', other: 'Autre' };
           doc.font('Helvetica-Bold').text(typeLabels[res.type] || res.type, 55, resItemY);
           doc.font('Helvetica').text(res.description, 55, resItemY + 12, { width: 500 });
           doc.fontSize(8).fillColor('#6b7280').text(`Par ${res.createdBy} le ${formatDate(res.createdAt)}`, 55, resItemY + 24);
@@ -251,49 +249,46 @@ export async function generateECMRPdf(ecmrData, options = {}) {
       }
 
       // ========== QR CODE PAGE ==========
-      if (includeQRCode) {
+      if (qrCodeBuffer) {
         doc.addPage();
 
         doc.rect(0, 0, 612, 80).fill('#1e293b');
-        doc.fontSize(20).font('Helvetica-Bold').fillColor('#ffffff').text('Vérification e-CMR', 50, 30);
+        doc.fontSize(20).font('Helvetica-Bold').fillColor('#ffffff').text('Verification e-CMR', 50, 30);
         doc.fillColor('#000000');
 
-        const qrCode = await generateQRCode(ecmrData, baseUrl);
+        // Utiliser le buffer PNG directement
+        doc.image(qrCodeBuffer, 206, 120, { width: 200, height: 200 });
 
-        if (qrCode) {
-          doc.image(qrCode.dataUrl, 206, 120, { width: 200, height: 200 });
-
-          doc.fontSize(12).font('Helvetica').text('Scannez ce QR code pour vérifier l\'authenticité', 50, 340, { align: 'center', width: 515 });
-          doc.fontSize(10).fillColor('#6b7280');
-          doc.text(`URL: ${qrCode.verificationUrl}`, 50, 370, { align: 'center', width: 515 });
-          doc.text(`Hash: ${qrCode.hash.substring(0, 32)}...`, 50, 390, { align: 'center', width: 515 });
-        }
+        doc.fontSize(12).font('Helvetica').text('Scannez ce QR code pour verifier l\'authenticite', 50, 340, { align: 'center', width: 515 });
+        doc.fontSize(10).fillColor('#6b7280');
+        doc.text(`URL: ${qrVerificationUrl}`, 50, 370, { align: 'center', width: 515 });
+        doc.text(`Hash: ${qrHash.substring(0, 32)}...`, 50, 390, { align: 'center', width: 515 });
       }
 
       // ========== PIED DE PAGE ==========
       doc.addPage();
       doc.rect(0, 0, 612, 792).fill('#f8fafc');
 
-      doc.fontSize(14).font('Helvetica-Bold').fillColor('#1e293b').text('Mentions légales', 50, 50);
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#1e293b').text('Mentions legales', 50, 50);
       doc.moveDown();
 
       doc.fontSize(9).font('Helvetica').fillColor('#4b5563');
-      doc.text('Ce document électronique est conforme à:', 50, 80);
-      doc.text('• Convention relative au contrat de transport international de marchandises par route (CMR, 1956)', 60, 100, { width: 500 });
-      doc.text('• Protocole additionnel à la Convention CMR relatif à la lettre de voiture électronique (e-CMR, 2008)', 60, 120, { width: 500 });
-      doc.text('• Règlement (UE) N° 910/2014 sur l\'identification électronique (eIDAS)', 60, 140, { width: 500 });
+      doc.text('Ce document electronique est conforme a:', 50, 80);
+      doc.text('- Convention relative au contrat de transport international de marchandises par route (CMR, 1956)', 60, 100, { width: 500 });
+      doc.text('- Protocole additionnel a la Convention CMR relatif a la lettre de voiture electronique (e-CMR, 2008)', 60, 120, { width: 500 });
+      doc.text('- Reglement (UE) N 910/2014 sur l\'identification electronique (eIDAS)', 60, 140, { width: 500 });
 
       doc.moveDown(2);
-      doc.fontSize(10).font('Helvetica-Bold').text('Informations de traçabilité', 50, 180);
+      doc.fontSize(10).font('Helvetica-Bold').text('Informations de tracabilite', 50, 180);
       doc.fontSize(9).font('Helvetica');
-      doc.text(`Document généré le: ${formatDate(new Date())}`, 50, 200);
+      doc.text(`Document genere le: ${formatDate(new Date())}`, 50, 200);
       doc.text(`Hash SHA-256: ${generateECMRHash(ecmrData)}`, 50, 215);
-      doc.text(`Numéro CMR: ${ecmrData.cmrNumber}`, 50, 230);
+      doc.text(`Numero CMR: ${ecmrData.cmrNumber}`, 50, 230);
 
       doc.moveDown(3);
       doc.fontSize(8).fillColor('#9ca3af');
       doc.text('SYMPHONI.A Control Tower - RT Technologies', 50, 280);
-      doc.text('Les signatures électroniques apposées sur ce document ont valeur légale.', 50, 295);
+      doc.text('Les signatures electroniques apposees sur ce document ont valeur legale.', 50, 295);
 
       doc.end();
 
@@ -304,4 +299,4 @@ export async function generateECMRPdf(ecmrData, options = {}) {
   });
 }
 
-export { generateECMRHash, generateQRCode };
+export { generateECMRHash };
