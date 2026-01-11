@@ -53,7 +53,8 @@ app.use(cors({
     'http://localhost:5173',
     'https://logistician.symphonia-controltower.com',
     'https://industry.symphonia-controltower.com',
-    'https://transporter.symphonia-controltower.com'
+    'https://transporter.symphonia-controltower.com',
+    'https://d196iyjkj263he.cloudfront.net'
   ],
   credentials: true
 }));
