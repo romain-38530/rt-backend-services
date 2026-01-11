@@ -5,7 +5,8 @@
       "Bash(do echo \"=== Check $i/8 ===\")",
       "Bash(aws elasticbeanstalk describe-environment-health:*)",
       "Bash(done)",
-      "Bash(aws elasticbeanstalk update-environment:*)"
+      "Bash(aws elasticbeanstalk update-environment:*)",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": []

@@ -37,24 +37,43 @@ const COMPANY_INFO = {
 
 // Pricing plans with Stripe price IDs (create these in Stripe Dashboard)
 const PRICING_PLANS = {
+  // Plans Industriel
   industriel: {
     name: 'Espace Industriel',
     monthlyPrice: 499,
     annualPrice: 5988,
     stripePriceId: process.env.STRIPE_PRICE_INDUSTRIEL || 'price_industriel_monthly'
   },
-  transporteur_premium: {
-    name: 'Transporteur Premium',
-    monthlyPrice: 299,
-    annualPrice: 3588,
-    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_PREMIUM || 'price_transporteur_premium_monthly'
+  // Plans Transporteur - Nouvelle structure tarifaire
+  transporteur_free: {
+    name: 'Transporteur Gratuit',
+    monthlyPrice: 0,
+    annualPrice: 0,
+    stripePriceId: null, // Plan gratuit, pas de priceId
+    activatedFeatures: ['base_access']
   },
-  transporteur_pro: {
-    name: 'Transporteur Pro',
+  transporteur_affretia: {
+    name: 'AFFRET.IA',
+    monthlyPrice: 200,
+    annualPrice: 2400,
+    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_AFFRETIA || 'price_transporteur_affretia_200',
+    activatedFeatures: ['bourse_fret', 'matching_ia', 'vigilance', 'alertes_temps_reel']
+  },
+  transporteur_industrie: {
+    name: 'Pack Industrie Complet',
     monthlyPrice: 499,
     annualPrice: 5988,
-    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_PRO || 'price_transporteur_pro_monthly'
+    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_INDUSTRIE || 'price_transporteur_industrie_499',
+    activatedFeatures: ['bourse_fret', 'matching_ia', 'vigilance', 'alertes_temps_reel', 'referentiel_transporteurs', 'planning', 'kpi', 'scoring', 'appels_offres', 'utilisateurs_illimites']
   },
+  transporteur_tms: {
+    name: 'Connexion TMS',
+    monthlyPrice: 149,
+    annualPrice: 1788,
+    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_TMS || 'price_transporteur_tms_149',
+    activatedFeatures: ['tms_sync', 'api_rest', 'webhooks']
+  },
+  // Plans Logisticien
   logisticien_premium: {
     name: 'Logisticien Premium',
     monthlyPrice: 499,
@@ -917,6 +936,86 @@ function createStripeRoutes(mongoClient, mongoConnected) {
   });
 
   /**
+   * GET /api/stripe/features
+   * Récupérer les features activées de l'utilisateur connecté
+   */
+  router.get('/features', authenticateToken, checkMongoDB, async (req, res) => {
+    try {
+      const db = mongoClient.db();
+      const user = await db.collection('users').findOne({ _id: new ObjectId(req.user.userId) });
+
+      if (!user) {
+        return res.json({
+          success: true,
+          data: {
+            currentPlan: 'transporteur_free',
+            activatedFeatures: ['base_access'],
+            subscriptionStatus: null
+          }
+        });
+      }
+
+      // Récupérer le plan et les features
+      const currentPlan = user.currentPlan || 'transporteur_free';
+      const plan = PRICING_PLANS[currentPlan];
+      const activatedFeatures = user.activatedFeatures || plan?.activatedFeatures || ['base_access'];
+
+      res.json({
+        success: true,
+        data: {
+          currentPlan,
+          planName: plan?.name || 'Transporteur Gratuit',
+          activatedFeatures,
+          subscriptionStatus: user.subscriptionStatus || null,
+          planActivatedAt: user.planActivatedAt || null
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching features:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: error.message
+        }
+      });
+    }
+  });
+
+  /**
+   * GET /api/stripe/check-feature/:featureId
+   * Vérifier si une feature spécifique est activée pour l'utilisateur
+   */
+  router.get('/check-feature/:featureId', authenticateToken, checkMongoDB, async (req, res) => {
+    try {
+      const { featureId } = req.params;
+      const db = mongoClient.db();
+      const user = await db.collection('users').findOne({ _id: new ObjectId(req.user.userId) });
+
+      const activatedFeatures = user?.activatedFeatures || ['base_access'];
+      const hasFeature = activatedFeatures.includes(featureId);
+
+      res.json({
+        success: true,
+        data: {
+          featureId,
+          hasAccess: hasFeature,
+          currentPlan: user?.currentPlan || 'transporteur_free'
+        }
+      });
+    } catch (error) {
+      console.error('Error checking feature:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: error.message
+        }
+      });
+    }
+  });
+
+  /**
    * POST /api/stripe/cancel-subscription
    * Annuler un abonnement
    *
@@ -1097,18 +1196,27 @@ function createStripeRoutes(mongoClient, mongoConnected) {
               }
             );
 
-            // Mettre à jour l'utilisateur avec l'abonnement
+            // Mettre à jour l'utilisateur avec l'abonnement et activer les features
             if (session.subscription && session.metadata?.userId) {
+              const planId = session.metadata?.planId;
+              const plan = PRICING_PLANS[planId];
+              const activatedFeatures = plan?.activatedFeatures || [];
+
               await db.collection('users').updateOne(
                 { _id: new ObjectId(session.metadata.userId) },
                 {
                   $set: {
                     subscriptionId: session.subscription,
                     subscriptionStatus: 'active',
+                    currentPlan: planId || 'unknown',
+                    activatedFeatures: activatedFeatures,
+                    planActivatedAt: new Date(),
                     updatedAt: new Date()
                   }
                 }
               );
+
+              console.log(`[Webhook] Features activated for user ${session.metadata.userId}:`, activatedFeatures);
             }
           }
 
