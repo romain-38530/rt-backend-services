@@ -8,11 +8,11 @@ const crypto = require('crypto');
 
 // Subscription limits for sub-users
 const SUBSCRIPTION_LIMITS = {
-  free: 0,
+  free: 1,        // 1 membre pour le plan gratuit
   starter: 2,
   pro: 5,
   business: 15,
-  enterprise: -1 // -1 = unlimited
+  enterprise: -1  // -1 = unlimited
 };
 
 // Get sub-users limit based on subscription
