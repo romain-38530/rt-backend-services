@@ -1794,6 +1794,205 @@ function createStripeRoutes(mongoClient, mongoConnected) {
     }
   });
 
+  // ==================== ADMIN: CREATE STRIPE PRODUCTS ====================
+
+  /**
+   * POST /api/stripe/admin/setup-products
+   * Create Stripe products and prices for transporter plans
+   * Requires admin authorization (check via API key or admin role)
+   */
+  router.post('/admin/setup-products', async (req, res) => {
+    try {
+      // Check admin authorization via header
+      const adminKey = req.headers['x-admin-key'];
+      const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
+
+      if (adminKey !== expectedKey) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Invalid admin key' }
+        });
+      }
+
+      const TRANSPORTER_PLANS = [
+        {
+          planId: 'transporteur_affretia',
+          productName: 'AFFRET.IA - Bourse de Fret',
+          productDescription: 'Accès à la bourse de fret, matching IA intelligent, vigilance et notation, alertes temps réel',
+          priceAmount: 20000, // 200€ in cents
+          currency: 'eur',
+          interval: 'month',
+          features: ['bourse_fret', 'matching_ia', 'vigilance', 'alertes_temps_reel']
+        },
+        {
+          planId: 'transporteur_industrie',
+          productName: 'Pack Industrie Complet',
+          productDescription: 'Pack complet incluant AFFRET.IA + référentiel transporteurs, planning, KPI, scoring, appels d\'offres, utilisateurs illimités',
+          priceAmount: 49900, // 499€ in cents
+          currency: 'eur',
+          interval: 'month',
+          features: ['bourse_fret', 'matching_ia', 'vigilance', 'alertes_temps_reel', 'referentiel_transporteurs', 'planning', 'kpi', 'scoring', 'appels_offres', 'utilisateurs_illimites']
+        },
+        {
+          planId: 'transporteur_tms',
+          productName: 'Connexion TMS',
+          productDescription: 'Synchronisation TMS, API REST complète, Webhooks temps réel',
+          priceAmount: 14900, // 149€ in cents
+          currency: 'eur',
+          interval: 'month',
+          features: ['tms_sync', 'api_rest', 'webhooks']
+        }
+      ];
+
+      const results = {
+        products: [],
+        prices: [],
+        envVars: {}
+      };
+
+      for (const plan of TRANSPORTER_PLANS) {
+        try {
+          // Check if product already exists
+          const existingProducts = await stripe.products.list({ limit: 100 });
+          let product = existingProducts.data.find(p => p.metadata?.planId === plan.planId);
+
+          if (!product) {
+            // Create product
+            console.log(`[Stripe Admin] Creating product: ${plan.productName}`);
+            product = await stripe.products.create({
+              name: plan.productName,
+              description: plan.productDescription,
+              metadata: {
+                planId: plan.planId,
+                features: plan.features.join(',')
+              }
+            });
+            results.products.push({ name: plan.productName, id: product.id, created: true });
+          } else {
+            results.products.push({ name: plan.productName, id: product.id, created: false });
+          }
+
+          // Check if price already exists
+          const existingPrices = await stripe.prices.list({
+            product: product.id,
+            active: true
+          });
+          let price = existingPrices.data.find(p =>
+            p.unit_amount === plan.priceAmount &&
+            p.recurring?.interval === plan.interval
+          );
+
+          if (!price) {
+            // Create price
+            console.log(`[Stripe Admin] Creating price: ${plan.priceAmount / 100}€/${plan.interval}`);
+            price = await stripe.prices.create({
+              product: product.id,
+              unit_amount: plan.priceAmount,
+              currency: plan.currency,
+              recurring: {
+                interval: plan.interval
+              },
+              metadata: {
+                planId: plan.planId,
+                features: plan.features.join(',')
+              }
+            });
+            results.prices.push({
+              name: plan.productName,
+              id: price.id,
+              amount: plan.priceAmount / 100,
+              created: true
+            });
+          } else {
+            results.prices.push({
+              name: plan.productName,
+              id: price.id,
+              amount: plan.priceAmount / 100,
+              created: false
+            });
+          }
+
+          // Add to env vars
+          const envName = `STRIPE_PRICE_TRANSPORTEUR_${plan.planId.replace('transporteur_', '').toUpperCase()}`;
+          results.envVars[envName] = price.id;
+
+        } catch (planError) {
+          console.error(`[Stripe Admin] Error creating ${plan.productName}:`, planError.message);
+          results.products.push({ name: plan.productName, error: planError.message });
+        }
+      }
+
+      console.log('[Stripe Admin] Setup complete:', JSON.stringify(results.envVars));
+
+      res.json({
+        success: true,
+        data: results,
+        message: 'Stripe products and prices created/verified successfully',
+        instructions: 'Update your environment variables with the envVars values'
+      });
+
+    } catch (error) {
+      console.error('[Stripe Admin] Setup error:', error.message);
+      res.status(500).json({
+        success: false,
+        error: { code: 'SERVER_ERROR', message: error.message }
+      });
+    }
+  });
+
+  /**
+   * GET /api/stripe/admin/list-products
+   * List all Stripe products and prices
+   */
+  router.get('/admin/list-products', async (req, res) => {
+    try {
+      const adminKey = req.headers['x-admin-key'];
+      const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
+
+      if (adminKey !== expectedKey) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Invalid admin key' }
+        });
+      }
+
+      const products = await stripe.products.list({ limit: 100, active: true });
+      const prices = await stripe.prices.list({ limit: 100, active: true });
+
+      const productDetails = products.data.map(product => {
+        const productPrices = prices.data.filter(p => p.product === product.id);
+        return {
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          metadata: product.metadata,
+          prices: productPrices.map(p => ({
+            id: p.id,
+            amount: p.unit_amount / 100,
+            currency: p.currency,
+            interval: p.recurring?.interval,
+            metadata: p.metadata
+          }))
+        };
+      });
+
+      res.json({
+        success: true,
+        data: {
+          products: productDetails,
+          count: products.data.length
+        }
+      });
+
+    } catch (error) {
+      console.error('[Stripe Admin] List products error:', error.message);
+      res.status(500).json({
+        success: false,
+        error: { code: 'SERVER_ERROR', message: error.message }
+      });
+    }
+  });
+
   return router;
 }
 
