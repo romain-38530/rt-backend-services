@@ -56,21 +56,21 @@ const PRICING_PLANS = {
     name: 'AFFRET.IA',
     monthlyPrice: 200,
     annualPrice: 2400,
-    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_AFFRETIA || 'price_transporteur_affretia_200',
+    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_AFFRETIA || 'price_1SoX3KRzJcFnHbQGYOYq21al',
     activatedFeatures: ['bourse_fret', 'matching_ia', 'vigilance', 'alertes_temps_reel']
   },
   transporteur_industrie: {
     name: 'Pack Industrie Complet',
     monthlyPrice: 499,
     annualPrice: 5988,
-    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_INDUSTRIE || 'price_transporteur_industrie_499',
+    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_INDUSTRIE || 'price_1SoX3KRzJcFnHbQGuBkHkP0r',
     activatedFeatures: ['bourse_fret', 'matching_ia', 'vigilance', 'alertes_temps_reel', 'referentiel_transporteurs', 'planning', 'kpi', 'scoring', 'appels_offres', 'utilisateurs_illimites']
   },
   transporteur_tms: {
     name: 'Connexion TMS',
     monthlyPrice: 149,
     annualPrice: 1788,
-    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_TMS || 'price_transporteur_tms_149',
+    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_TMS || 'price_1SoX3LRzJcFnHbQG8x6z12Ni',
     activatedFeatures: ['tms_sync', 'api_rest', 'webhooks']
   },
   // Plans Logisticien
