@@ -101,8 +101,54 @@ function createSubscriptionManagementRoutes(mongoClient, mongoConnected) {
   /**
    * GET /api/subscriptions/features
    * Liste toutes les features avec descriptions
+   * Si email query param est fourni, retourne les features activees de l'utilisateur
    */
-  router.get('/features', (req, res) => {
+  router.get('/features', checkMongoDB, async (req, res) => {
+    const { email } = req.query;
+
+    // Si email fourni, retourner les features de l'utilisateur
+    if (email) {
+      try {
+        const db = mongoClient.db();
+        const user = await db.collection('users').findOne({ email: email });
+
+        if (user) {
+          return res.json({
+            success: true,
+            data: {
+              email: user.email,
+              currentPlan: user.currentPlan,
+              planName: user.planName,
+              subscriptionStatus: user.subscriptionStatus || 'active',
+              activatedFeatures: user.activatedFeatures || [],
+              activatedOptions: user.activatedOptions || [],
+              planActivatedAt: user.planActivatedAt
+            }
+          });
+        } else {
+          // Utilisateur non trouve - retourner plan gratuit
+          return res.json({
+            success: true,
+            data: {
+              email: email,
+              currentPlan: 'free',
+              planName: 'Gratuit',
+              subscriptionStatus: 'active',
+              activatedFeatures: ['base_access'],
+              activatedOptions: []
+            }
+          });
+        }
+      } catch (error) {
+        console.error('[Subscriptions] Error fetching user features:', error);
+        return res.status(500).json({
+          success: false,
+          error: { code: 'DB_ERROR', message: error.message }
+        });
+      }
+    }
+
+    // Sans email, retourner la liste des features disponibles
     res.json({
       success: true,
       data: FEATURE_DESCRIPTIONS
