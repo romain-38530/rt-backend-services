@@ -1180,6 +1180,307 @@ app.get('/api/stripe/admin/list-products', async (req, res) => {
   }
 });
 
+// POST /api/stripe/admin/setup-logisticien-options - Create Logisticien options
+app.post('/api/stripe/admin/setup-logisticien-options', async (req, res) => {
+  try {
+    const adminKey = req.headers['x-admin-key'];
+    const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
+
+    if (adminKey !== expectedKey) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid admin key' } });
+    }
+
+    const LOGISTICIEN_OPTIONS = [
+      {
+        planId: 'logisticien_bourse_stockage',
+        productName: 'Bourse de Stockage',
+        productDescription: 'Acces a la bourse de stockage pour proposer et trouver des espaces de stockage',
+        priceAmount: 15000, // 150 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['bourse_stockage', 'matching_stockage', 'alertes_stockage']
+      },
+      {
+        planId: 'logisticien_borne_accueil',
+        productName: 'Borne Accueil Chauffeur',
+        productDescription: 'Borne digitale pour accueil des chauffeurs, check-in automatique, gestion des files attente',
+        priceAmount: 10000, // 100 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['borne_accueil', 'checkin_chauffeur', 'file_attente', 'notifications_sms']
+      }
+    ];
+
+    const results = { products: [], prices: [], envVars: {} };
+
+    for (const option of LOGISTICIEN_OPTIONS) {
+      try {
+        const existingProducts = await stripe.products.list({ limit: 100 });
+        let product = existingProducts.data.find(p => p.metadata?.planId === option.planId);
+
+        if (!product) {
+          product = await stripe.products.create({
+            name: option.productName,
+            description: option.productDescription,
+            metadata: { planId: option.planId, features: option.features.join(',') }
+          });
+          results.products.push({ name: option.productName, id: product.id, created: true });
+        } else {
+          results.products.push({ name: option.productName, id: product.id, created: false });
+        }
+
+        const existingPrices = await stripe.prices.list({ product: product.id, active: true });
+        let price = existingPrices.data.find(p => p.unit_amount === option.priceAmount && p.recurring?.interval === option.interval);
+
+        if (!price) {
+          price = await stripe.prices.create({
+            product: product.id,
+            unit_amount: option.priceAmount,
+            currency: option.currency,
+            recurring: { interval: option.interval },
+            metadata: { planId: option.planId, features: option.features.join(',') }
+          });
+          results.prices.push({ name: option.productName, id: price.id, amount: option.priceAmount / 100, created: true });
+        } else {
+          results.prices.push({ name: option.productName, id: price.id, amount: option.priceAmount / 100, created: false });
+        }
+
+        const envName = 'STRIPE_PRICE_' + option.planId.replace('logisticien_', '').toUpperCase();
+        results.envVars[envName] = price.id;
+      } catch (optionError) {
+        results.products.push({ name: option.productName, error: optionError.message });
+      }
+    }
+
+    console.log('[Stripe Admin] Logisticien options setup complete:', JSON.stringify(results.envVars));
+    res.json({ success: true, data: results, message: 'Logisticien options created/verified successfully' });
+  } catch (error) {
+    console.error('[Stripe Admin] Logisticien setup error:', error.message);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+  }
+});
+
+// POST /api/stripe/admin/setup-industrie-products - Create Industrie products
+app.post('/api/stripe/admin/setup-industrie-products', async (req, res) => {
+  try {
+    const adminKey = req.headers['x-admin-key'];
+    const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
+
+    if (adminKey !== expectedKey) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid admin key' } });
+    }
+
+    const INDUSTRIE_PRODUCTS = [
+      {
+        planId: 'industriel_base',
+        productName: 'Espace Industriel',
+        productDescription: 'Acces complet a l\'espace industriel SYMPHONI.A - Gestion donneurs d\'ordres, flux transport, tracking',
+        priceAmount: 49900, // 499 EUR/mois (prix lancement)
+        currency: 'eur',
+        interval: 'month',
+        features: ['espace_industriel', 'gestion_do', 'flux_transport', 'tracking_basic', 'notifications', 'reporting']
+      },
+      {
+        planId: 'industriel_affretia',
+        productName: 'AFFRET.IA Industrie',
+        productDescription: 'Module AFFRET.IA pour industriels - Bourse de fret intelligente avec matching IA',
+        priceAmount: 20000, // 200 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['affretia', 'bourse_fret', 'matching_ia', 'negociation_auto', 'scoring_transporteurs']
+      },
+      {
+        planId: 'industriel_tracking_basic',
+        productName: 'Tracking IA Basic',
+        productDescription: 'Module Tracking IA niveau basique - Suivi automatise des transports',
+        priceAmount: 9900, // 99 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['tracking_ia_basic', 'alertes_retard', 'eta_prediction']
+      },
+      {
+        planId: 'industriel_tracking_autonome',
+        productName: 'Tracking IA Autonome',
+        productDescription: 'Module Tracking IA autonome - Version complete en autonomie',
+        priceAmount: 15000, // 150 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['tracking_ia_autonome', 'geofencing', 'alertes_avancees', 'reporting_detaille', 'api']
+      },
+      {
+        planId: 'industriel_tracking_app',
+        productName: 'Tracking IA via Application',
+        productDescription: 'Module Tracking IA Premium via application mobile SYMPHONI.A',
+        priceAmount: 35000, // 350 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['tracking_ia_app', 'application_mobile', 'full_visibility', 'temps_reel', 'integration_complete']
+      },
+      {
+        planId: 'industriel_prefacturation',
+        productName: 'Module Pre-facturation',
+        productDescription: 'Automatisation de la pre-facturation transport avec rapprochement',
+        priceAmount: 19900, // 199 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['prefacturation', 'rapprochement_auto', 'ecarts_detection', 'export_comptable']
+      },
+      {
+        planId: 'industriel_palettes',
+        productName: 'Module Palettes Europe',
+        productDescription: 'Gestion du parc palettes Europe - Suivi, facturation, contentieux',
+        priceAmount: 19900, // 199 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['palettes_europe', 'suivi_parc', 'facturation_palettes', 'contentieux']
+      },
+      {
+        planId: 'industriel_signature',
+        productName: 'Signature Electronique',
+        productDescription: 'Signature electronique qualifiee pour documents transport',
+        priceAmount: 9900, // 99 EUR/mois
+        currency: 'eur',
+        interval: 'month',
+        features: ['signature_electronique', 'archivage_legal', 'conformite_eidas']
+      }
+    ];
+
+    const results = { products: [], prices: [], envVars: {} };
+
+    for (const option of INDUSTRIE_PRODUCTS) {
+      try {
+        const existingProducts = await stripe.products.list({ limit: 100 });
+        let product = existingProducts.data.find(p => p.metadata?.planId === option.planId);
+
+        if (!product) {
+          product = await stripe.products.create({
+            name: option.productName,
+            description: option.productDescription,
+            metadata: { planId: option.planId, features: option.features.join(',') }
+          });
+          results.products.push({ name: option.productName, id: product.id, created: true });
+        } else {
+          results.products.push({ name: option.productName, id: product.id, created: false });
+        }
+
+        const existingPrices = await stripe.prices.list({ product: product.id, active: true });
+        let price = existingPrices.data.find(p => p.unit_amount === option.priceAmount && p.recurring?.interval === option.interval);
+
+        if (!price) {
+          const priceData = {
+            product: product.id,
+            unit_amount: option.priceAmount,
+            currency: option.currency,
+            metadata: { planId: option.planId, features: option.features.join(',') }
+          };
+
+          if (option.usageType === 'metered') {
+            priceData.recurring = { interval: option.interval, usage_type: 'metered' };
+          } else {
+            priceData.recurring = { interval: option.interval };
+          }
+
+          price = await stripe.prices.create(priceData);
+          results.prices.push({ name: option.productName, id: price.id, amount: option.priceAmount / 100, created: true });
+        } else {
+          results.prices.push({ name: option.productName, id: price.id, amount: option.priceAmount / 100, created: false });
+        }
+
+        const envName = 'STRIPE_PRICE_' + option.planId.toUpperCase();
+        results.envVars[envName] = price.id;
+      } catch (optionError) {
+        results.products.push({ name: option.productName, error: optionError.message });
+      }
+    }
+
+    console.log('[Stripe Admin] Industrie products setup complete:', JSON.stringify(results.envVars));
+    res.json({ success: true, data: results, message: 'Industrie products created/verified successfully' });
+  } catch (error) {
+    console.error('[Stripe Admin] Industrie setup error:', error.message);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+  }
+});
+
+// POST /api/stripe/admin/setup-all-options - Create all optional add-ons
+app.post('/api/stripe/admin/setup-all-options', async (req, res) => {
+  try {
+    const adminKey = req.headers['x-admin-key'];
+    const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
+
+    if (adminKey !== expectedKey) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid admin key' } });
+    }
+
+    const ALL_OPTIONS = [
+      { planId: 'option_ecmr', productName: 'e-CMR', productDescription: 'Lettre de voiture electronique avec signature', priceAmount: 4900, currency: 'eur', interval: 'month', features: ['ecmr', 'signature_electronique', 'archivage'] },
+      { planId: 'option_geofencing', productName: 'Geofencing Alertes', productDescription: 'Alertes de zones geographiques et detection arrivee/depart', priceAmount: 2900, currency: 'eur', interval: 'month', features: ['geofencing', 'alertes_zones', 'detection_auto'] },
+      { planId: 'option_ocr', productName: 'OCR Documents', productDescription: 'Reconnaissance automatique des documents transport', priceAmount: 3900, currency: 'eur', interval: 'month', features: ['ocr', 'extraction_auto', 'validation'] },
+      { planId: 'option_bourse_privee', productName: 'Bourse Privee Transporteurs', productDescription: 'Bourse de fret privee avec vos transporteurs references', priceAmount: 14900, currency: 'eur', interval: 'month', features: ['bourse_privee', 'matching', 'negociation'] },
+      { planId: 'option_webhooks', productName: 'Webhooks Temps Reel', productDescription: 'Integration temps reel via webhooks pour votre SI', priceAmount: 5900, currency: 'eur', interval: 'month', features: ['webhooks', 'temps_reel', 'api'] },
+      { planId: 'option_archivage', productName: 'Archivage Legal 10 ans', productDescription: 'Archivage legal des documents transport pendant 10 ans', priceAmount: 1900, currency: 'eur', interval: 'month', features: ['archivage_legal', 'conformite', 'audit'] },
+      { planId: 'option_tms_connexion', productName: 'Connexion TMS/Outil Tiers', productDescription: 'Integration avec votre TMS ou outil existant', priceAmount: 8900, currency: 'eur', interval: 'month', features: ['tms_connexion', 'api_bidirectionnelle', 'mapping'] },
+      { planId: 'option_chatbot_ia', productName: 'Chatbot IA', productDescription: 'Assistant IA pour support et automatisation', priceAmount: 4900, currency: 'eur', interval: 'month', features: ['chatbot_ia', 'support_auto', 'faq'] },
+      { planId: 'option_sms', productName: 'Pack SMS', productDescription: 'Notifications SMS pour chauffeurs et alertes', priceAmount: 7, currency: 'eur', interval: 'month', usageType: 'metered', unitLabel: 'SMS', features: ['sms', 'notifications'] },
+      { planId: 'option_signature_qualifiee', productName: 'Signature Qualifiee', productDescription: 'Signature electronique qualifiee eIDAS', priceAmount: 200, currency: 'eur', interval: 'month', usageType: 'metered', unitLabel: 'signature', features: ['signature_qualifiee', 'eidas', 'legal'] }
+    ];
+
+    const results = { products: [], prices: [], envVars: {} };
+
+    for (const option of ALL_OPTIONS) {
+      try {
+        const existingProducts = await stripe.products.list({ limit: 100 });
+        let product = existingProducts.data.find(p => p.metadata?.planId === option.planId);
+
+        if (!product) {
+          product = await stripe.products.create({
+            name: option.productName,
+            description: option.productDescription,
+            metadata: { planId: option.planId, features: option.features.join(',') }
+          });
+          results.products.push({ name: option.productName, id: product.id, created: true });
+        } else {
+          results.products.push({ name: option.productName, id: product.id, created: false });
+        }
+
+        const existingPrices = await stripe.prices.list({ product: product.id, active: true });
+        let price = existingPrices.data.find(p => p.unit_amount === option.priceAmount);
+
+        if (!price) {
+          const priceData = {
+            product: product.id,
+            unit_amount: option.priceAmount,
+            currency: option.currency,
+            metadata: { planId: option.planId }
+          };
+
+          if (option.usageType === 'metered') {
+            priceData.recurring = { interval: option.interval, usage_type: 'metered' };
+            if (option.unitLabel) priceData.transform_quantity = { divide_by: 1, round: 'up' };
+          } else {
+            priceData.recurring = { interval: option.interval };
+          }
+
+          price = await stripe.prices.create(priceData);
+          results.prices.push({ name: option.productName, id: price.id, amount: option.priceAmount / 100, created: true });
+        } else {
+          results.prices.push({ name: option.productName, id: price.id, amount: option.priceAmount / 100, created: false });
+        }
+
+        const envName = 'STRIPE_PRICE_' + option.planId.toUpperCase();
+        results.envVars[envName] = price.id;
+      } catch (optionError) {
+        results.products.push({ name: option.productName, error: optionError.message });
+      }
+    }
+
+    console.log('[Stripe Admin] All options setup complete:', JSON.stringify(results.envVars));
+    res.json({ success: true, data: results, message: 'All options created/verified successfully' });
+  } catch (error) {
+    console.error('[Stripe Admin] Options setup error:', error.message);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+  }
+});
+
 console.log('✅ Stripe Admin routes mounted (no MongoDB dependency)');
 
 // Start server

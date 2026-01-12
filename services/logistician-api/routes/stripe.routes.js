@@ -12,10 +12,10 @@ const router = Router();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_xxx');
 
-// Price IDs (à configurer dans Stripe Dashboard)
+// Price IDs (Production Stripe)
 const STRIPE_PRICES = {
-  bourse_stockage: process.env.STRIPE_PRICE_BOURSE_STOCKAGE || 'price_bourse_stockage',
-  borne_accueil: process.env.STRIPE_PRICE_BORNE_ACCUEIL || 'price_borne_accueil'
+  bourse_stockage: process.env.STRIPE_PRICE_BOURSE_STOCKAGE || 'price_1SokbbRzJcFnHbQGT7tUcYt5',
+  borne_accueil: process.env.STRIPE_PRICE_BORNE_ACCUEIL || 'price_1SokbcRzJcFnHbQGui5iqhCJ'
 };
 
 // ===========================================

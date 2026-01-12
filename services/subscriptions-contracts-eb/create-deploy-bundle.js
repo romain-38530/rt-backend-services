@@ -5,7 +5,7 @@ const path = require('path');
 // Utiliser le chemin absolu pour pnpm
 const archiver = require('c:/Users/rtard/rt-backend-services/node_modules/.pnpm/archiver@7.0.1/node_modules/archiver');
 
-const VERSION = 'v4.2.4-carrier-routes-fix';
+const VERSION = 'v4.2.5-stripe-admin-setup';
 const outputPath = path.join(__dirname, 'bundle', `deploy-${VERSION}.zip`);
 
 // Créer le dossier bundle s'il n'existe pas
