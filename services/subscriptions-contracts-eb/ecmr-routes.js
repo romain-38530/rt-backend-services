@@ -70,6 +70,46 @@ function createECMRRoutes(mongoClient, mongoConnected) {
     }
   });
 
+  // POST /api/ecmr/generate-pdf - Générer un PDF à partir des données envoyées (pour données mock/locales)
+  router.post('/generate-pdf', async (req, res) => {
+    try {
+      const ecmrData = req.body;
+
+      if (!ecmrData || !ecmrData.cmrNumber) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'Missing e-CMR data or cmrNumber'
+          }
+        });
+      }
+
+      // Générer le PDF avec les données fournies
+      const pdfBuffer = await generateECMRPdf(ecmrData, {
+        baseUrl: process.env.API_BASE_URL || 'https://dgze8l03lwl5h.cloudfront.net',
+        includeQRCode: true
+      });
+
+      // Envoyer le PDF
+      const filename = `eCMR-${ecmrData.cmrNumber}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.send(pdfBuffer);
+
+    } catch (error) {
+      console.error('Error generating e-CMR PDF from data:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error.message
+        }
+      });
+    }
+  });
+
   // GET /api/ecmr/:id/pdf - Télécharger le PDF de l'e-CMR
   router.get('/:id/pdf', checkMongoDB, async (req, res) => {
     try {

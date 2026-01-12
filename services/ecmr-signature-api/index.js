@@ -1031,14 +1031,67 @@ app.post('/api/v1/ecmr/generate-pdf', async (req, res) => {
   try {
     const ecmr = req.body;
 
-    if (!ecmr || !ecmr.id) {
-      return res.status(400).json({ success: false, error: 'Données eCMR requises' });
+    // Accept id, cmrNumber, or ecmrId as identifier
+    const identifier = ecmr.id || ecmr.cmrNumber || ecmr.ecmrId || ecmr._id;
+    if (!ecmr || !identifier) {
+      return res.status(400).json({ success: false, error: 'Données eCMR requises (id, cmrNumber ou ecmrId)' });
     }
 
-    // Normalize ecmr data to ensure ecmrId is set
+    // Normalize ecmr data - map different field naming conventions
+    // Frontend logistician uses: sender, recipient, carrier, goods
+    // API expects: shipper, consignee, carrier, goods
+    // Frontend signatures format: signatures.sender.signature, signatures.carrier.signature, signatures.recipient.signature
+    // API expects: shipper.signatureImage, carrier.signatureImage, consignee.signatureImage
+
+    // Extract signature data from frontend format
+    const senderSig = ecmr.signatures?.sender || {};
+    const carrierSig = ecmr.signatures?.carrier || {};
+    const recipientSig = ecmr.signatures?.recipient || {};
+
     const normalizedEcmr = {
       ...ecmr,
-      ecmrId: ecmr.ecmrId || ecmr.id
+      ecmrId: identifier,
+      id: identifier,
+      // Map sender -> shipper with signature data
+      shipper: {
+        ...(ecmr.shipper || ecmr.sender || {}),
+        // Map signature from signatures.sender to shipper.signatureImage
+        signedAt: senderSig.date || ecmr.shipper?.signedAt || ecmr.sender?.signedAt,
+        signedBy: senderSig.name || ecmr.shipper?.signedBy || ecmr.sender?.signedBy,
+        signatureImage: senderSig.signature || ecmr.shipper?.signatureImage || ecmr.sender?.signatureImage
+      },
+      // Map recipient -> consignee with signature data
+      consignee: {
+        ...(ecmr.consignee || ecmr.recipient || {}),
+        // Map signature from signatures.recipient to consignee.signatureImage
+        signedAt: recipientSig.date || ecmr.consignee?.signedAt || ecmr.recipient?.signedAt,
+        signedBy: recipientSig.name || ecmr.consignee?.signedBy || ecmr.recipient?.signedBy,
+        signatureImage: recipientSig.signature || ecmr.consignee?.signatureImage || ecmr.recipient?.signatureImage
+      },
+      // Carrier with signature data
+      carrier: {
+        ...(ecmr.carrier || {}),
+        // Map signature from signatures.carrier to carrier.signatureImage
+        signedAt: carrierSig.date || ecmr.carrier?.signedAt,
+        signedBy: carrierSig.name || ecmr.carrier?.signedBy,
+        signatureImage: carrierSig.signature || ecmr.carrier?.signatureImage
+      },
+      // Map goods data
+      goods: ecmr.goods || {},
+      // Map pickup/delivery from sender/recipient addresses if not set
+      pickup: ecmr.pickup || {
+        address: ecmr.sender?.address || ecmr.shipper?.address,
+        city: ecmr.sender?.city || ecmr.shipper?.city,
+        postalCode: ecmr.sender?.postalCode || ecmr.shipper?.postalCode,
+        country: ecmr.sender?.country || ecmr.shipper?.country,
+        scheduledDate: ecmr.createdAt || ecmr.date
+      },
+      delivery: ecmr.delivery || {
+        address: ecmr.recipient?.address || ecmr.consignee?.address,
+        city: ecmr.recipient?.city || ecmr.consignee?.city,
+        postalCode: ecmr.recipient?.postalCode || ecmr.consignee?.postalCode,
+        country: ecmr.recipient?.country || ecmr.consignee?.country
+      }
     };
 
     // Generate QR code for verification

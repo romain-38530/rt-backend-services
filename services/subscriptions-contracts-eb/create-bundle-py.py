@@ -4,7 +4,7 @@ import os
 import zipfile
 from pathlib import Path
 
-VERSION = "v4.2.8-stripe-admin-no-mongo"
+VERSION = "v4.2.9-logisticien-options"
 SOURCE_DIR = Path(__file__).parent
 BUNDLE_DIR = SOURCE_DIR / "bundle"
 OUTPUT_FILE = BUNDLE_DIR / f"deploy-{VERSION}.zip"
