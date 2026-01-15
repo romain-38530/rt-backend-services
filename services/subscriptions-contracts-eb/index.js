@@ -9,15 +9,19 @@ const express = require('express');
 const http = require('http');
 const { EventEmitter } = require('events');
 const { MongoClient } = require('mongodb');
+const { SESClient } = require('@aws-sdk/client-ses');
 const security = require('./security-middleware');
 const createECMRRoutes = require('./ecmr-routes');
 const createAccountTypesRoutes = require('./account-types-routes');
 const createCarrierReferencingRoutes = require('./carrier-referencing-routes');
 const createPricingGridsRoutes = require('./pricing-grids-routes');
+const createPricingGridsExtendedRoutes = require('./pricing-grids-extended-routes');
 const createIndustrialTransportConfigRoutes = require('./industrial-transport-config-routes');
 const createAuthRoutes = require('./auth-routes');
 const createStripeRoutes = require('./stripe-routes');
 const createSubscriptionManagementRoutes = require('./subscription-management-routes');
+const createContractRoutes = require('./contract-routes');
+const createSignatureRoutes = require('./signature-routes');
 const createTransportOrdersRoutes = require('./transport-orders-routes');
 const scheduledJobs = require('./scheduled-jobs');
 const notificationService = require('./notification-service');
@@ -32,7 +36,7 @@ const logisticsDelegationRoutes = require('./logistics-delegation-routes');
 const icpeRoutes = require('./icpe-routes');
 
 // v4.0.0 - Compliance & Security Enhancements
-const { createGdprService, GDPR_CONFIG } = require('./gdpr-service');
+const { createGDPRService, GDPR_CONFIG } = require('./gdpr-service');
 const { createConsentService } = require('./consent-service');
 const { initializeGdprRoutes } = require('./gdpr-routes');
 const { SecureLogger, requestLoggerMiddleware, errorLoggerMiddleware } = require('./secure-logger');
@@ -42,6 +46,9 @@ const { createRedisCacheService, getRedisCacheService } = require('./redis-cache
 const { createDrivingTimeService } = require('./driving-time-service');
 const { createCarbonFootprintService } = require('./carbon-footprint-service');
 const { createErrorHandler, notFoundHandler, setupGlobalErrorHandlers, asyncHandler } = require('./error-handler');
+
+// Setup global error handlers IMMEDIATELY to catch all unhandled errors
+setupGlobalErrorHandlers(console);
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -78,6 +85,17 @@ setupGlobalErrorHandlers(secureLogger);
 // MongoDB connection
 let mongoClient;
 let mongoConnected = false;
+
+// AWS SES Client for contract emails
+let sesClient = null;
+try {
+  sesClient = new SESClient({
+    region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-central-1'
+  });
+  console.log('[SES] AWS SES client initialized for contracts');
+} catch (error) {
+  console.warn('[SES] AWS SES initialization failed:', error.message);
+}
 
 async function connectMongoDB() {
   try {
@@ -1058,14 +1076,33 @@ app.post('/api/signatures/:id/sign', async (req, res) => {
 
 // ==================== STRIPE ADMIN ROUTES (NO MongoDB dependency) ====================
 // These routes are mounted directly without MongoDB for initial Stripe setup
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_your_stripe_key');
+
+// SECURITY: Stripe and Admin key validation
+const STRIPE_SECRET_KEY_MAIN = process.env.STRIPE_SECRET_KEY;
+if (process.env.NODE_ENV === 'production' && !STRIPE_SECRET_KEY_MAIN) {
+  console.error('[SECURITY] STRIPE_SECRET_KEY is required in production');
+}
+const stripe = require('stripe')(STRIPE_SECRET_KEY_MAIN || 'sk_test_dev_placeholder');
+
+// SECURITY: Admin key validation helper
+function validateAdminKey(providedKey) {
+  const expectedKey = process.env.ADMIN_SETUP_KEY;
+  if (process.env.NODE_ENV === 'production' && !expectedKey) {
+    console.error('[SECURITY] ADMIN_SETUP_KEY not configured in production');
+    return false;
+  }
+  // En dev, permettre une clé de fallback mais logger un warning
+  const keyToCheck = expectedKey || 'dev-admin-key-not-for-production';
+  if (!expectedKey && process.env.NODE_ENV !== 'production') {
+    console.warn('[SECURITY WARNING] Using default admin key - set ADMIN_SETUP_KEY in production');
+  }
+  return providedKey === keyToCheck;
+}
 
 app.post('/api/stripe/admin/setup-products', async (req, res) => {
   try {
     const adminKey = req.headers['x-admin-key'];
-    const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
-
-    if (adminKey !== expectedKey) {
+    if (!validateAdminKey(adminKey)) {
       return res.status(403).json({
         success: false,
         error: { code: 'FORBIDDEN', message: 'Invalid admin key' }
@@ -1154,9 +1191,7 @@ app.post('/api/stripe/admin/setup-products', async (req, res) => {
 app.get('/api/stripe/admin/list-products', async (req, res) => {
   try {
     const adminKey = req.headers['x-admin-key'];
-    const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
-
-    if (adminKey !== expectedKey) {
+    if (!validateAdminKey(adminKey)) {
       return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid admin key' } });
     }
 
@@ -1184,9 +1219,7 @@ app.get('/api/stripe/admin/list-products', async (req, res) => {
 app.post('/api/stripe/admin/setup-logisticien-options', async (req, res) => {
   try {
     const adminKey = req.headers['x-admin-key'];
-    const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
-
-    if (adminKey !== expectedKey) {
+    if (!validateAdminKey(adminKey)) {
       return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid admin key' } });
     }
 
@@ -1264,9 +1297,7 @@ app.post('/api/stripe/admin/setup-logisticien-options', async (req, res) => {
 app.post('/api/stripe/admin/setup-industrie-products', async (req, res) => {
   try {
     const adminKey = req.headers['x-admin-key'];
-    const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
-
-    if (adminKey !== expectedKey) {
+    if (!validateAdminKey(adminKey)) {
       return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid admin key' } });
     }
 
@@ -1405,9 +1436,7 @@ app.post('/api/stripe/admin/setup-industrie-products', async (req, res) => {
 app.post('/api/stripe/admin/setup-all-options', async (req, res) => {
   try {
     const adminKey = req.headers['x-admin-key'];
-    const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
-
-    if (adminKey !== expectedKey) {
+    if (!validateAdminKey(adminKey)) {
       return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid admin key' } });
     }
 
@@ -1519,6 +1548,11 @@ async function startServer() {
     const pricingGridsRouter = createPricingGridsRoutes(mongoClient, mongoConnected);
     app.use('/api/pricing-grids', pricingGridsRouter);
     console.log('✅ Pricing Grids routes mounted successfully');
+
+    // Mount Pricing Grids Extended routes (configs, requests, proposals, files, interconnect, stats)
+    const pricingGridsExtendedRouter = createPricingGridsExtendedRoutes(mongoClient, mongoConnected);
+    app.use('/api/pricing-grids', pricingGridsExtendedRouter);
+    console.log('✅ Pricing Grids Extended routes mounted (configs, requests, proposals, files, interconnect, stats)');
   } else {
     console.warn('⚠️  Pricing Grids routes not mounted - MongoDB not connected');
   }
@@ -1560,6 +1594,24 @@ async function startServer() {
     console.log('✅ Subscription management routes mounted successfully');
   } else {
     console.warn('⚠️  Subscription management routes not mounted - MongoDB not connected');
+  }
+
+  // Mount Contract routes (generation, signature, management)
+  if (mongoConnected) {
+    const contractRouter = createContractRoutes(mongoClient, mongoConnected, sesClient);
+    app.use('/api/contracts', contractRouter);
+    console.log('✅ Contract routes mounted successfully');
+  } else {
+    console.warn('⚠️  Contract routes not mounted - MongoDB not connected');
+  }
+
+  // Mount Electronic Signature routes (internal signature system)
+  if (mongoConnected) {
+    const signatureRouter = createSignatureRoutes(mongoClient, mongoConnected, sesClient);
+    app.use('/api/signature', signatureRouter);
+    console.log('✅ Electronic Signature routes mounted successfully');
+  } else {
+    console.warn('⚠️  Electronic Signature routes not mounted - MongoDB not connected');
   }
 
   // Mount Flux Commande routes after MongoDB connection is established
@@ -1651,19 +1703,24 @@ async function startServer() {
 
   // ==================== v4.0.0 - COMPLIANCE & SECURITY SERVICES ====================
 
-  // Initialize Redis Cache (optional - gracefully degrades if not available)
-  try {
-    redisCache = getRedisCacheService();
-    await redisCache.connect();
-    console.log('✅ Redis cache service initialized');
-  } catch (redisError) {
-    console.warn('⚠️  Redis cache not available (optional):', redisError.message);
+  // Initialize Redis Cache (optional - only if REDIS_URL is configured)
+  if (process.env.REDIS_URL) {
+    try {
+      redisCache = getRedisCacheService();
+      await redisCache.connect();
+      console.log('✅ Redis cache service initialized');
+    } catch (redisError) {
+      console.warn('⚠️  Redis cache not available (optional):', redisError.message);
+      redisCache = null;
+    }
+  } else {
+    console.log('ℹ️  Redis cache not configured (optional) - skipping');
   }
 
   // Initialize v4.0.0 services
   if (mongoConnected) {
     // GDPR Services
-    gdprService = createGdprService(mongoClient);
+    gdprService = createGDPRService(mongoClient);
     consentService = createConsentService(mongoClient);
     console.log('✅ GDPR & Consent services initialized');
 

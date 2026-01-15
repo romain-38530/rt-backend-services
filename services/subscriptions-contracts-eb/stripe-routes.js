@@ -3,18 +3,37 @@
 
 const express = require('express');
 const { ObjectId } = require('mongodb');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_your_stripe_key');
+// SECURITY: Stripe secret key validation
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+if (process.env.NODE_ENV === 'production' && !STRIPE_SECRET_KEY) {
+  throw new Error('[SECURITY] STRIPE_SECRET_KEY is required in production');
+}
+const stripe = require('stripe')(STRIPE_SECRET_KEY || 'sk_test_dev_placeholder');
 const { SESClient, SendRawEmailCommand } = require('@aws-sdk/client-ses');
 const PDFDocument = require('pdfkit');
 const { authenticateToken } = require('./auth-middleware');
 
-// Configuration Stripe
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_your_webhook_secret';
+// Configuration Stripe - SECURITY: Webhook secret validation
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+if (process.env.NODE_ENV === 'production' && !STRIPE_WEBHOOK_SECRET) {
+  console.warn('[SECURITY WARNING] STRIPE_WEBHOOK_SECRET not set - webhook validation will fail');
+}
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+// SECURITY: Admin key validation helper
+function validateAdminKey(providedKey) {
+  const expectedKey = process.env.ADMIN_SETUP_KEY;
+  if (process.env.NODE_ENV === 'production' && !expectedKey) {
+    console.error('[SECURITY] ADMIN_SETUP_KEY not configured in production');
+    return false;
+  }
+  const keyToCheck = expectedKey || 'dev-admin-key-not-for-production';
+  return providedKey === keyToCheck;
+}
 
 // Configuration AWS SES
 const SES_CONFIG = {
-  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-west-1'
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-central-1'
 };
 
 const SES_BILLING_FROM = process.env.SES_BILLING_EMAIL || 'facturation@symphonia-controltower.com';
@@ -1178,6 +1197,52 @@ function createStripeRoutes(mongoClient, mongoConnected) {
                     authDb
                   );
                   console.log(`✅ Subscription ${subscription.id} created for onboarding ${onboardingRequestId}`);
+
+                  // NOUVEAU: Générer et envoyer le contrat pour signature
+                  try {
+                    const { ContractService } = require('./contract-service');
+                    const contractService = new ContractService(mongoClient, sesClient);
+
+                    // Mettre à jour onboarding avec stripeCustomerId
+                    const updatedOnboarding = {
+                      ...onboardingRequest,
+                      stripeCustomerId: session.customer,
+                      stripeSubscriptionId: subscription.id
+                    };
+
+                    // Générer le contrat
+                    const contractResult = await contractService.createContract(
+                      updatedOnboarding,
+                      session.customer
+                    );
+
+                    console.log(`✅ Contract ${contractResult.contractNumber} generated for ${onboardingRequest.email}`);
+
+                    // Envoyer pour signature électronique
+                    const signatureResult = await contractService.sendForSignature(contractResult.contractNumber);
+
+                    if (signatureResult.success) {
+                      console.log(`✅ Contract ${contractResult.contractNumber} sent for signature`);
+
+                      // Mettre à jour onboarding request
+                      await authDb.collection('onboarding_requests').updateOne(
+                        { _id: onboardingRequest._id },
+                        {
+                          $set: {
+                            contractNumber: contractResult.contractNumber,
+                            contractStatus: 'pending_signature',
+                            signatureUrl: signatureResult.signatureUrl,
+                            updatedAt: new Date()
+                          }
+                        }
+                      );
+                    } else {
+                      console.log(`[Webhook] Contract generated but signature service not configured - manual signature required`);
+                    }
+                  } catch (contractError) {
+                    console.error('[Webhook] Error generating contract:', contractError.message);
+                    // Ne pas bloquer le flux - le contrat peut être généré manuellement
+                  }
                 } catch (subError) {
                   console.error('[Webhook] Error creating subscription:', subError.message);
                 }
@@ -1805,9 +1870,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
     try {
       // Check admin authorization via header
       const adminKey = req.headers['x-admin-key'];
-      const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
-
-      if (adminKey !== expectedKey) {
+      if (!validateAdminKey(adminKey)) {
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Invalid admin key' }
@@ -1947,9 +2010,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
   router.get('/admin/list-products', async (req, res) => {
     try {
       const adminKey = req.headers['x-admin-key'];
-      const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
-
-      if (adminKey !== expectedKey) {
+      if (!validateAdminKey(adminKey)) {
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Invalid admin key' }
