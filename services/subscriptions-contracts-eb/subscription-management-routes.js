@@ -6,7 +6,12 @@
 
 const express = require('express');
 const { ObjectId } = require('mongodb');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_your_stripe_key');
+// SECURITY: Stripe secret key validation
+const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
+if (process.env.NODE_ENV === 'production' && !STRIPE_KEY) {
+  console.error('[SECURITY] STRIPE_SECRET_KEY is required in production');
+}
+const stripe = require('stripe')(STRIPE_KEY || 'sk_test_dev_placeholder');
 
 const {
   TRANSPORTEUR_PLANS,
@@ -100,59 +105,69 @@ function createSubscriptionManagementRoutes(mongoClient, mongoConnected) {
 
   /**
    * GET /api/subscriptions/features
-   * Liste toutes les features avec descriptions
-   * Si email query param est fourni, retourne les features activees de l'utilisateur
+   * Liste toutes les features avec descriptions (public)
    */
-  router.get('/features', checkMongoDB, async (req, res) => {
-    const { email } = req.query;
-
-    // Si email fourni, retourner les features de l'utilisateur
-    if (email) {
-      try {
-        const db = mongoClient.db();
-        const user = await db.collection('users').findOne({ email: email });
-
-        if (user) {
-          return res.json({
-            success: true,
-            data: {
-              email: user.email,
-              currentPlan: user.currentPlan,
-              planName: user.planName,
-              subscriptionStatus: user.subscriptionStatus || 'active',
-              activatedFeatures: user.activatedFeatures || [],
-              activatedOptions: user.activatedOptions || [],
-              planActivatedAt: user.planActivatedAt
-            }
-          });
-        } else {
-          // Utilisateur non trouve - retourner plan gratuit
-          return res.json({
-            success: true,
-            data: {
-              email: email,
-              currentPlan: 'free',
-              planName: 'Gratuit',
-              subscriptionStatus: 'active',
-              activatedFeatures: ['base_access'],
-              activatedOptions: []
-            }
-          });
-        }
-      } catch (error) {
-        console.error('[Subscriptions] Error fetching user features:', error);
-        return res.status(500).json({
-          success: false,
-          error: { code: 'DB_ERROR', message: error.message }
-        });
-      }
-    }
-
-    // Sans email, retourner la liste des features disponibles
+  router.get('/features', (req, res) => {
+    // Retourner uniquement la liste des features disponibles (données publiques)
     res.json({
       success: true,
       data: FEATURE_DESCRIPTIONS
     });
+  });
+
+  /**
+   * GET /api/subscriptions/my-features
+   * Retourne les features activées de l'utilisateur connecté
+   * SECURITY: Requiert authentification - pas d'accès par email arbitraire
+   */
+  router.get('/my-features', authenticateToken, checkMongoDB, async (req, res) => {
+    try {
+      const db = mongoClient.db();
+      const userId = req.user.userId || req.user.id || req.user.sub;
+      const userEmail = req.user.email;
+
+      // Chercher par ID ou email de l'utilisateur authentifié
+      const user = await db.collection('users').findOne({
+        $or: [
+          { _id: new ObjectId(userId) },
+          { email: userEmail }
+        ]
+      });
+
+      if (user) {
+        return res.json({
+          success: true,
+          data: {
+            email: user.email,
+            currentPlan: user.currentPlan,
+            planName: user.planName,
+            subscriptionStatus: user.subscriptionStatus || 'active',
+            activatedFeatures: user.activatedFeatures || [],
+            activatedOptions: user.activatedOptions || [],
+            planActivatedAt: user.planActivatedAt
+          }
+        });
+      } else {
+        // Utilisateur authentifié mais pas en DB - retourner plan gratuit
+        return res.json({
+          success: true,
+          data: {
+            email: userEmail,
+            currentPlan: 'free',
+            planName: 'Gratuit',
+            subscriptionStatus: 'active',
+            activatedFeatures: ['base_access'],
+            activatedOptions: []
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[Subscriptions] Error fetching user features:', error);
+      return res.status(500).json({
+        success: false,
+        error: { code: 'DB_ERROR', message: error.message }
+      });
+    }
   });
 
   // ==================== ENDPOINTS AUTHENTIFIES ====================

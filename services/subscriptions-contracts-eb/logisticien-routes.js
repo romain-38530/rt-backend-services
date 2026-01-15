@@ -1,5 +1,5 @@
 // Logisticien Routes - API de gestion des logisticiens SYMPHONI.A
-// RT Backend Services - Version 2.5.2 - Security Enhancements
+// RT Backend Services - Version 2.6.0 - Stripe Integration for Paid Options
 
 const { ObjectId } = require('mongodb');
 const bcrypt = require('bcryptjs');
@@ -8,10 +8,31 @@ const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/clien
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { TextractClient, DetectDocumentTextCommand } = require('@aws-sdk/client-textract');
 
+// Stripe Configuration for Paid Options
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+
+// Prix officiels Logisticien (en centimes EUR)
+const LOGISTICIEN_STRIPE_PRICES = {
+  bourseDeStockage: {
+    priceId: process.env.STRIPE_PRICE_LOGISTICIEN_BOURSE || null,
+    productId: process.env.STRIPE_PRODUCT_LOGISTICIEN_BOURSE || null,
+    amount: 20000, // 200 EUR
+    name: 'Bourse de Stockage',
+    description: 'Acces marketplace de stockage SYMPHONI.A'
+  },
+  borneAccueilChauffeur: {
+    priceId: process.env.STRIPE_PRICE_LOGISTICIEN_BORNE || null,
+    productId: process.env.STRIPE_PRODUCT_LOGISTICIEN_BORNE || null,
+    amount: 15000, // 150 EUR
+    name: 'Tablette Accueil Chauffeur',
+    description: 'Automatisation accueil chauffeur avec tablette/kiosque'
+  }
+};
+
 // Security Enhancements v2.5.0
 const { RateLimiterManager } = require('./rate-limiter-middleware');
-const { InvitationTokenService, TokenType } = require('./invitation-token-service');
-const { WebhookService, WebhookEvent } = require('./webhook-service');
+const { createInvitationTokenService, TokenType } = require('./invitation-token-service');
+const { createWebhookService, WebhookEvent } = require('./webhook-service');
 
 const {
   LogisticianStatus,
@@ -34,10 +55,47 @@ const {
   generateInvitationToken
 } = require('./logisticien-models');
 
-// Configuration
-const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-logisticien-secret-2024';
+// Import auth module for secure token generation
+const { generateAccessToken, verifyAccessToken, JWT_EXPIRES_IN: AUTH_JWT_EXPIRES_IN } = require('./auth-middleware');
+
+// Configuration sécurisée JWT
+// SECURITY: Ne jamais utiliser de fallback hardcodé en production
+const getSecureJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!secret || secret.length < 32) {
+      console.error('[SECURITY] FATAL: JWT_SECRET not set or too short in production');
+      throw new Error('JWT_SECRET must be at least 32 characters in production');
+    }
+    const weakSecrets = ['secret', 'password', 'changeme', 'symphonia-logisticien-secret-2024'];
+    if (weakSecrets.some(ws => secret.toLowerCase().includes(ws.toLowerCase()))) {
+      console.error('[SECURITY] FATAL: JWT_SECRET contains weak/default value');
+      throw new Error('JWT_SECRET contains a weak/default value');
+    }
+  }
+  // En développement, générer un secret temporaire avec avertissement
+  if (!secret) {
+    const crypto = require('crypto');
+    console.warn('[SECURITY] WARNING: JWT_SECRET not set - using temporary secret (DEV ONLY)');
+    return 'dev-temp-' + crypto.randomBytes(32).toString('hex');
+  }
+  return secret;
+};
+
+const JWT_SECRET = getSecureJwtSecret();
 const JWT_EXPIRES_IN = '24h';
 const INVITATION_EXPIRY_DAYS = 7;
+
+// SECURITY: Admin key validation helper
+function validateAdminKey(providedKey) {
+  const expectedKey = process.env.ADMIN_SETUP_KEY;
+  if (process.env.NODE_ENV === 'production' && !expectedKey) {
+    console.error('[SECURITY] ADMIN_SETUP_KEY not configured in production');
+    return false;
+  }
+  const keyToCheck = expectedKey || 'dev-admin-key-not-for-production';
+  return providedKey === keyToCheck;
+}
 
 // S3 Configuration
 const s3Client = new S3Client({
@@ -184,8 +242,8 @@ function createLogisticienRoutes(mongoClient, mongoConnected, sendLogisticianEma
       try {
         const db = mongoClient.db();
         rateLimiterManager = new RateLimiterManager(db);
-        invitationTokenService = new InvitationTokenService(db);
-        webhookService = new WebhookService(db);
+        invitationTokenService = createInvitationTokenService(db);
+        webhookService = createWebhookService(db);
         console.log('[LOGISTICIEN] Security services initialized');
       } catch (error) {
         console.error('[LOGISTICIEN] Failed to init security services:', error.message);
@@ -1806,218 +1864,212 @@ function createLogisticienRoutes(mongoClient, mongoConnected, sendLogisticianEma
     }
   });
 
+  // NOTE: Routes /stats/:industrielId, /icpe-dashboard/:industrielId et /icpe-rubriques
+  // sont définies plus haut (lignes 1258-1393) - pas de duplication nécessaire
+
   // ============================================
-  // STATISTIQUES (POUR INDUSTRIEL)
+  // OPTIONS PAYANTES LOGISTICIEN - STRIPE INTEGRATION
   // ============================================
+  // Tarification OFFICIELLE (Janvier 2026):
+  // - Bourse de Stockage: 200€/mois
+  // - Tablette Accueil Chauffeur: 150€/mois
+  // - Tout le reste: GRATUIT sur invitation industriel
 
   /**
-   * GET /api/logisticians/stats/:industrielId
-   * Statistiques des logisticiens pour un industriel
+   * Helper: Créer ou récupérer le Stripe Customer pour un logisticien
    */
-  router.get('/stats/:industrielId', checkMongoDB, async (req, res) => {
+  async function getOrCreateStripeCustomer(db, logistician) {
+    if (logistician.stripeCustomerId) {
+      return logistician.stripeCustomerId;
+    }
+
+    // Créer un nouveau customer Stripe
+    const customer = await stripe.customers.create({
+      email: logistician.email,
+      name: logistician.companyName || logistician.name,
+      metadata: {
+        logisticianId: logistician._id.toString(),
+        type: 'logisticien',
+        siret: logistician.siret || ''
+      }
+    });
+
+    // Sauvegarder le stripeCustomerId
+    await db.collection('logisticians').updateOne(
+      { _id: logistician._id },
+      { $set: { stripeCustomerId: customer.id, updatedAt: new Date() } }
+    );
+
+    return customer.id;
+  }
+
+  /**
+   * GET /api/logisticians/:id/subscription/options
+   * Obtenir les options d'abonnement disponibles et leur statut
+   */
+  router.get('/:id/subscription/options', checkMongoDB, async (req, res) => {
     const db = getDb();
     try {
-      const { industrielId } = req.params;
+      const { id } = req.params;
 
-      const logisticians = await db.collection('logisticians')
-        .find({ 'industrialClients.industrialId': new ObjectId(industrielId) })
-        .toArray();
-
-      const stats = {
-        total: logisticians.length,
-        byStatus: {},
-        byVigilance: {},
-        averageScore: 0,
-        alertsSummary: { critical: 0, warning: 0, info: 0 }
-      };
-
-      let totalScore = 0;
-      for (const log of logisticians) {
-        // Par statut
-        stats.byStatus[log.status] = (stats.byStatus[log.status] || 0) + 1;
-        // Par vigilance
-        stats.byVigilance[log.vigilanceStatus] = (stats.byVigilance[log.vigilanceStatus] || 0) + 1;
-        // Score
-        totalScore += log.score || 0;
-      }
-
-      stats.averageScore = logisticians.length > 0 ? Math.round(totalScore / logisticians.length) : 0;
-
-      // Alertes actives
-      const alerts = await db.collection('logistician_vigilance_alerts')
-        .find({
-          logisticianId: { $in: logisticians.map(l => l._id) },
-          isResolved: false
-        })
-        .toArray();
-
-      for (const alert of alerts) {
-        stats.alertsSummary[alert.severity] = (stats.alertsSummary[alert.severity] || 0) + 1;
-      }
-
-      res.json({
-        success: true,
-        stats
+      const logistician = await db.collection('logisticians').findOne({
+        _id: new ObjectId(id)
       });
 
-    } catch (error) {
-      console.error('[GET /api/logisticians/stats/:industrielId] Error:', error);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
-
-  // ============================================
-  // TABLEAU DE BORD ICPE TEMPS RÉEL (INDUSTRIEL)
-  // ============================================
-
-  /**
-   * GET /api/logisticians/icpe-dashboard/:industrielId
-   * Tableau de bord ICPE temps réel pour un industriel
-   * Voir tous les seuils ICPE de ses logisticiens
-   */
-  router.get('/icpe-dashboard/:industrielId', checkMongoDB, async (req, res) => {
-    const db = getDb();
-    try {
-      const { industrielId } = req.params;
-
-      // Récupérer tous les logisticiens de cet industriel
-      const logisticians = await db.collection('logisticians')
-        .find({
-          'industrialClients.industrialId': new ObjectId(industrielId),
-          status: LogisticianStatus.ACTIVE
-        })
-        .toArray();
-
-      if (logisticians.length === 0) {
-        return res.json({
-          success: true,
-          dashboard: {
-            logisticians: [],
-            summary: {
-              totalWarehouses: 0,
-              criticalAlerts: 0,
-              warningAlerts: 0,
-              compliantWarehouses: 0
-            }
-          }
+      if (!logistician) {
+        return res.status(404).json({
+          success: false,
+          error: 'Logisticien non trouvé'
         });
       }
 
-      // Récupérer les dernières déclarations pour chaque entrepôt
-      const now = new Date();
-      const currentWeek = getISOWeek(now);
-      const currentYear = now.getFullYear();
-
-      const dashboard = {
-        logisticians: [],
-        summary: {
-          totalWarehouses: 0,
-          criticalAlerts: 0,
-          warningAlerts: 0,
-          compliantWarehouses: 0
+      const options = [
+        {
+          id: 'bourseDeStockage',
+          name: 'Bourse de Stockage',
+          description: 'Accès marketplace de stockage SYMPHONI.A',
+          monthlyPrice: 200,
+          currency: 'EUR',
+          active: logistician.subscription?.paidOptions?.bourseDeStockage?.active || false,
+          activatedAt: logistician.subscription?.paidOptions?.bourseDeStockage?.activatedAt || null,
+          stripeSubscriptionId: logistician.subscription?.paidOptions?.bourseDeStockage?.stripeSubscriptionId || null
+        },
+        {
+          id: 'borneAccueilChauffeur',
+          name: 'Tablette Accueil Chauffeur',
+          description: 'Automatisation accueil chauffeur avec tablette/kiosque',
+          monthlyPrice: 150,
+          currency: 'EUR',
+          active: logistician.subscription?.paidOptions?.borneAccueilChauffeur?.active || false,
+          activatedAt: logistician.subscription?.paidOptions?.borneAccueilChauffeur?.activatedAt || null,
+          stripeSubscriptionId: logistician.subscription?.paidOptions?.borneAccueilChauffeur?.stripeSubscriptionId || null
         }
-      };
-
-      for (const logistician of logisticians) {
-        const logData = {
-          logisticianId: logistician._id,
-          companyName: logistician.companyName,
-          vigilanceStatus: logistician.vigilanceStatus,
-          score: logistician.score,
-          warehouses: []
-        };
-
-        for (const warehouse of (logistician.warehouses || []).filter(w => w.isActive)) {
-          dashboard.summary.totalWarehouses++;
-
-          // Récupérer la dernière déclaration
-          const lastDeclaration = await db.collection('icpe_volume_declarations')
-            .findOne(
-              {
-                logisticianId: logistician._id,
-                warehouseId: warehouse.warehouseId
-              },
-              { sort: { year: -1, weekNumber: -1 } }
-            );
-
-          // Calculer les alertes
-          const icpeAlerts = lastDeclaration
-            ? checkICPEThresholds(warehouse, lastDeclaration)
-            : [];
-
-          // Compter les alertes
-          const criticalCount = icpeAlerts.filter(a => a.severity === 'critical').length;
-          const warningCount = icpeAlerts.filter(a => a.severity === 'warning').length;
-
-          dashboard.summary.criticalAlerts += criticalCount;
-          dashboard.summary.warningAlerts += warningCount;
-          if (criticalCount === 0 && warningCount === 0) {
-            dashboard.summary.compliantWarehouses++;
-          }
-
-          logData.warehouses.push({
-            warehouseId: warehouse.warehouseId,
-            name: warehouse.name,
-            address: warehouse.address,
-            icpeStatus: warehouse.icpeStatus,
-            icpeRubriques: warehouse.icpeRubriques || [],
-            lastDeclaration: lastDeclaration ? {
-              weekNumber: lastDeclaration.weekNumber,
-              year: lastDeclaration.year,
-              declaredAt: lastDeclaration.declaredAt,
-              volumes: lastDeclaration.volumes
-            } : null,
-            declarationMissing: !lastDeclaration ||
-              lastDeclaration.year < currentYear ||
-              (lastDeclaration.year === currentYear && lastDeclaration.weekNumber < currentWeek - 1),
-            alerts: icpeAlerts,
-            alertsSummary: {
-              critical: criticalCount,
-              warning: warningCount
-            }
-          });
-        }
-
-        dashboard.logisticians.push(logData);
-      }
+      ];
 
       res.json({
         success: true,
-        dashboard,
-        currentWeek,
-        currentYear
+        options,
+        hasStripeCustomer: !!logistician.stripeCustomerId
       });
 
     } catch (error) {
-      console.error('[GET /api/logisticians/icpe-dashboard/:industrielId] Error:', error);
+      console.error('[GET /api/logisticians/:id/subscription/options] Error:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   });
 
   /**
-   * GET /api/logisticians/icpe-rubriques
-   * Liste des rubriques ICPE disponibles
+   * POST /api/logisticians/:id/subscribe/create-checkout
+   * Créer une session Stripe Checkout pour souscrire à une option
    */
-  router.get('/icpe-rubriques', checkMongoDB, async (req, res) => {
+  router.post('/:id/subscribe/create-checkout', checkMongoDB, async (req, res) => {
     const db = getDb();
-    res.json({
-      success: true,
-      rubriques: ICPE_RUBRIQUES
-    });
-  });
+    try {
+      const { id } = req.params;
+      const { optionId, successUrl, cancelUrl } = req.body;
 
-  // ============================================
-  // OPTIONS PAYANTES
-  // ============================================
+      if (!optionId || !['bourseDeStockage', 'borneAccueilChauffeur'].includes(optionId)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Option invalide. Options disponibles: bourseDeStockage, borneAccueilChauffeur'
+        });
+      }
+
+      const logistician = await db.collection('logisticians').findOne({
+        _id: new ObjectId(id),
+        status: LogisticianStatus.ACTIVE
+      });
+
+      if (!logistician) {
+        return res.status(404).json({
+          success: false,
+          error: 'Logisticien non trouvé ou non actif'
+        });
+      }
+
+      // Vérifier si l'option n'est pas déjà active
+      if (logistician.subscription?.paidOptions?.[optionId]?.active) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cette option est déjà active sur votre compte'
+        });
+      }
+
+      const optionConfig = LOGISTICIEN_STRIPE_PRICES[optionId];
+
+      // Vérifier que le Price ID Stripe est configuré
+      if (!optionConfig.priceId) {
+        return res.status(500).json({
+          success: false,
+          error: 'Configuration Stripe manquante. Contactez le support.'
+        });
+      }
+
+      // Obtenir ou créer le customer Stripe
+      const stripeCustomerId = await getOrCreateStripeCustomer(db, logistician);
+
+      const FRONTEND_URL = process.env.FRONTEND_URL || 'https://logisticien.symphonia-controltower.com';
+
+      // Créer la session Checkout
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        mode: 'subscription',
+        line_items: [{
+          price: optionConfig.priceId,
+          quantity: 1
+        }],
+        success_url: successUrl || `${FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&option=${optionId}`,
+        cancel_url: cancelUrl || `${FRONTEND_URL}/subscription?cancelled=true`,
+        metadata: {
+          logisticianId: id,
+          optionId: optionId,
+          optionName: optionConfig.name,
+          type: 'logisticien_paid_option'
+        },
+        subscription_data: {
+          metadata: {
+            logisticianId: id,
+            optionId: optionId,
+            type: 'logisticien_paid_option'
+          }
+        }
+      });
+
+      // Enregistrer la session en attente
+      await db.collection('logistician_checkout_sessions').insertOne({
+        sessionId: session.id,
+        logisticianId: new ObjectId(id),
+        optionId,
+        status: 'pending',
+        createdAt: new Date()
+      });
+
+      console.log(`[Stripe] Checkout session created for logisticien ${id}, option: ${optionId}`);
+
+      res.json({
+        success: true,
+        sessionId: session.id,
+        url: session.url,
+        optionId,
+        monthlyPrice: optionConfig.amount / 100
+      });
+
+    } catch (error) {
+      console.error('[POST /api/logisticians/:id/subscribe/create-checkout] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
 
   /**
    * POST /api/logisticians/:id/subscribe/bourse-stockage
-   * Activer l'option Bourse de Stockage (150€/mois)
+   * Activer l'option Bourse de Stockage (200€/mois) - route legacy, redirige vers checkout
    */
   router.post('/:id/subscribe/bourse-stockage', checkMongoDB, async (req, res) => {
     const db = getDb();
     try {
       const { id } = req.params;
+      const { successUrl, cancelUrl, skipPayment } = req.body;
 
       const logistician = await db.collection('logisticians').findOne({
         _id: new ObjectId(id),
@@ -2038,30 +2090,89 @@ function createLogisticienRoutes(mongoClient, mongoConnected, sendLogisticianEma
         });
       }
 
-      // TODO: Intégration Stripe pour le paiement
+      // Mode admin: activer sans paiement (pour tests ou migrations)
+      const adminKey = req.headers['x-admin-key'];
+      if (skipPayment && validateAdminKey(adminKey)) {
+        await db.collection('logisticians').updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              'subscription.paidOptions.bourseDeStockage': {
+                active: true,
+                activatedAt: new Date(),
+                activatedBy: 'admin_override'
+              },
+              updatedAt: new Date()
+            }
+          }
+        );
 
-      await db.collection('logisticians').updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $set: {
-            'subscription.paidOptions.bourseDeStockage': {
-              active: true,
-              activatedAt: new Date()
-            },
-            updatedAt: new Date()
+        await logLogisticianEvent(db, id, LogisticianEventTypes.OPTION_ACTIVATED, {
+          option: 'bourseDeStockage',
+          price: 200,
+          method: 'admin_override'
+        });
+
+        return res.json({
+          success: true,
+          message: 'Option Bourse de Stockage activée (mode admin)',
+          monthlyPrice: 200
+        });
+      }
+
+      // Vérifier que Stripe est configuré
+      const optionConfig = LOGISTICIEN_STRIPE_PRICES.bourseDeStockage;
+      if (!optionConfig.priceId) {
+        return res.status(500).json({
+          success: false,
+          error: 'Configuration Stripe manquante. Contactez le support.',
+          code: 'STRIPE_NOT_CONFIGURED'
+        });
+      }
+
+      // Créer une session Stripe Checkout
+      const stripeCustomerId = await getOrCreateStripeCustomer(db, logistician);
+      const FRONTEND_URL = process.env.FRONTEND_URL || 'https://logisticien.symphonia-controltower.com';
+
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        mode: 'subscription',
+        line_items: [{
+          price: optionConfig.priceId,
+          quantity: 1
+        }],
+        success_url: successUrl || `${FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&option=bourseDeStockage`,
+        cancel_url: cancelUrl || `${FRONTEND_URL}/subscription?cancelled=true`,
+        metadata: {
+          logisticianId: id,
+          optionId: 'bourseDeStockage',
+          type: 'logisticien_paid_option'
+        },
+        subscription_data: {
+          metadata: {
+            logisticianId: id,
+            optionId: 'bourseDeStockage',
+            type: 'logisticien_paid_option'
           }
         }
-      );
+      });
 
-      await logLogisticianEvent(db, id, LogisticianEventTypes.OPTION_ACTIVATED, {
-        option: 'bourseDeStockage',
-        price: 150
+      await db.collection('logistician_checkout_sessions').insertOne({
+        sessionId: session.id,
+        logisticianId: new ObjectId(id),
+        optionId: 'bourseDeStockage',
+        status: 'pending',
+        createdAt: new Date()
       });
 
       res.json({
         success: true,
-        message: 'Option Bourse de Stockage activée',
-        monthlyPrice: 150
+        requiresPayment: true,
+        checkoutUrl: session.url,
+        sessionId: session.id,
+        monthlyPrice: 200,
+        message: 'Redirection vers le paiement requise'
       });
 
     } catch (error) {
@@ -2072,12 +2183,13 @@ function createLogisticienRoutes(mongoClient, mongoConnected, sendLogisticianEma
 
   /**
    * POST /api/logisticians/:id/subscribe/borne-accueil
-   * Activer l'option Borne Accueil Chauffeur (100€/mois)
+   * Activer l'option Tablette Accueil Chauffeur (150€/mois) - route legacy, redirige vers checkout
    */
   router.post('/:id/subscribe/borne-accueil', checkMongoDB, async (req, res) => {
     const db = getDb();
     try {
       const { id } = req.params;
+      const { successUrl, cancelUrl, skipPayment } = req.body;
 
       const logistician = await db.collection('logisticians').findOne({
         _id: new ObjectId(id),
@@ -2098,34 +2210,294 @@ function createLogisticienRoutes(mongoClient, mongoConnected, sendLogisticianEma
         });
       }
 
-      // TODO: Intégration Stripe pour le paiement
+      // Mode admin: activer sans paiement (pour tests ou migrations)
+      const adminKey = req.headers['x-admin-key'];
+      if (skipPayment && validateAdminKey(adminKey)) {
+        await db.collection('logisticians').updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              'subscription.paidOptions.borneAccueilChauffeur': {
+                active: true,
+                activatedAt: new Date(),
+                activatedBy: 'admin_override'
+              },
+              updatedAt: new Date()
+            }
+          }
+        );
 
+        await logLogisticianEvent(db, id, LogisticianEventTypes.OPTION_ACTIVATED, {
+          option: 'borneAccueilChauffeur',
+          price: 150,
+          method: 'admin_override'
+        });
+
+        return res.json({
+          success: true,
+          message: 'Option Tablette Accueil Chauffeur activée (mode admin)',
+          monthlyPrice: 150
+        });
+      }
+
+      // Vérifier que Stripe est configuré
+      const optionConfig = LOGISTICIEN_STRIPE_PRICES.borneAccueilChauffeur;
+      if (!optionConfig.priceId) {
+        return res.status(500).json({
+          success: false,
+          error: 'Configuration Stripe manquante. Contactez le support.',
+          code: 'STRIPE_NOT_CONFIGURED'
+        });
+      }
+
+      // Créer une session Stripe Checkout
+      const stripeCustomerId = await getOrCreateStripeCustomer(db, logistician);
+      const FRONTEND_URL = process.env.FRONTEND_URL || 'https://logisticien.symphonia-controltower.com';
+
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        mode: 'subscription',
+        line_items: [{
+          price: optionConfig.priceId,
+          quantity: 1
+        }],
+        success_url: successUrl || `${FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&option=borneAccueilChauffeur`,
+        cancel_url: cancelUrl || `${FRONTEND_URL}/subscription?cancelled=true`,
+        metadata: {
+          logisticianId: id,
+          optionId: 'borneAccueilChauffeur',
+          type: 'logisticien_paid_option'
+        },
+        subscription_data: {
+          metadata: {
+            logisticianId: id,
+            optionId: 'borneAccueilChauffeur',
+            type: 'logisticien_paid_option'
+          }
+        }
+      });
+
+      await db.collection('logistician_checkout_sessions').insertOne({
+        sessionId: session.id,
+        logisticianId: new ObjectId(id),
+        optionId: 'borneAccueilChauffeur',
+        status: 'pending',
+        createdAt: new Date()
+      });
+
+      res.json({
+        success: true,
+        requiresPayment: true,
+        checkoutUrl: session.url,
+        sessionId: session.id,
+        monthlyPrice: 150,
+        message: 'Redirection vers le paiement requise'
+      });
+
+    } catch (error) {
+      console.error('[POST /api/logisticians/:id/subscribe/borne-accueil] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/logisticians/:id/subscribe/confirm
+   * Confirmer l'activation d'une option après paiement Stripe réussi
+   */
+  router.post('/:id/subscribe/confirm', checkMongoDB, async (req, res) => {
+    const db = getDb();
+    try {
+      const { id } = req.params;
+      const { sessionId } = req.body;
+
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          error: 'sessionId requis'
+        });
+      }
+
+      // Récupérer la session Stripe
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      if (session.payment_status !== 'paid') {
+        return res.status(400).json({
+          success: false,
+          error: 'Le paiement n\'a pas été complété',
+          paymentStatus: session.payment_status
+        });
+      }
+
+      // Vérifier que la session correspond au logisticien
+      if (session.metadata?.logisticianId !== id) {
+        return res.status(403).json({
+          success: false,
+          error: 'Session non autorisée pour ce logisticien'
+        });
+      }
+
+      const optionId = session.metadata?.optionId;
+      if (!optionId || !['bourseDeStockage', 'borneAccueilChauffeur'].includes(optionId)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Option invalide dans la session'
+        });
+      }
+
+      const logistician = await db.collection('logisticians').findOne({
+        _id: new ObjectId(id)
+      });
+
+      if (!logistician) {
+        return res.status(404).json({
+          success: false,
+          error: 'Logisticien non trouvé'
+        });
+      }
+
+      // Vérifier si déjà activé
+      if (logistician.subscription?.paidOptions?.[optionId]?.active) {
+        return res.json({
+          success: true,
+          message: 'Option déjà active',
+          alreadyActive: true
+        });
+      }
+
+      const price = optionId === 'bourseDeStockage' ? 200 : 150;
+
+      // Activer l'option
       await db.collection('logisticians').updateOne(
         { _id: new ObjectId(id) },
         {
           $set: {
-            'subscription.paidOptions.borneAccueilChauffeur': {
+            [`subscription.paidOptions.${optionId}`]: {
               active: true,
-              activatedAt: new Date()
+              activatedAt: new Date(),
+              stripeSubscriptionId: session.subscription,
+              stripeSessionId: sessionId
             },
             updatedAt: new Date()
           }
         }
       );
 
+      // Mettre à jour le statut de la session
+      await db.collection('logistician_checkout_sessions').updateOne(
+        { sessionId },
+        {
+          $set: {
+            status: 'completed',
+            completedAt: new Date(),
+            stripeSubscriptionId: session.subscription
+          }
+        }
+      );
+
       await logLogisticianEvent(db, id, LogisticianEventTypes.OPTION_ACTIVATED, {
-        option: 'borneAccueilChauffeur',
-        price: 100
+        option: optionId,
+        price,
+        stripeSubscriptionId: session.subscription,
+        method: 'stripe_checkout'
+      });
+
+      console.log(`[Stripe] Option ${optionId} activated for logisticien ${id}`);
+
+      res.json({
+        success: true,
+        message: `Option ${LOGISTICIEN_STRIPE_PRICES[optionId].name} activée avec succès`,
+        optionId,
+        monthlyPrice: price,
+        stripeSubscriptionId: session.subscription
+      });
+
+    } catch (error) {
+      console.error('[POST /api/logisticians/:id/subscribe/confirm] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/logisticians/:id/subscribe/cancel
+   * Annuler un abonnement à une option payante
+   */
+  router.post('/:id/subscribe/cancel', checkMongoDB, async (req, res) => {
+    const db = getDb();
+    try {
+      const { id } = req.params;
+      const { optionId } = req.body;
+
+      if (!optionId || !['bourseDeStockage', 'borneAccueilChauffeur'].includes(optionId)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Option invalide. Options disponibles: bourseDeStockage, borneAccueilChauffeur'
+        });
+      }
+
+      const logistician = await db.collection('logisticians').findOne({
+        _id: new ObjectId(id)
+      });
+
+      if (!logistician) {
+        return res.status(404).json({
+          success: false,
+          error: 'Logisticien non trouvé'
+        });
+      }
+
+      const optionData = logistician.subscription?.paidOptions?.[optionId];
+      if (!optionData?.active) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cette option n\'est pas active'
+        });
+      }
+
+      // Annuler l'abonnement Stripe si présent
+      if (optionData.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.update(optionData.stripeSubscriptionId, {
+            cancel_at_period_end: true
+          });
+          console.log(`[Stripe] Subscription ${optionData.stripeSubscriptionId} marked for cancellation`);
+        } catch (stripeError) {
+          console.error('[Stripe] Error canceling subscription:', stripeError.message);
+        }
+      }
+
+      const price = optionId === 'bourseDeStockage' ? 200 : 150;
+
+      // Désactiver l'option
+      await db.collection('logisticians').updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            [`subscription.paidOptions.${optionId}`]: {
+              active: false,
+              deactivatedAt: new Date(),
+              stripeSubscriptionId: optionData.stripeSubscriptionId,
+              cancelledAtPeriodEnd: true
+            },
+            updatedAt: new Date()
+          }
+        }
+      );
+
+      await logLogisticianEvent(db, id, LogisticianEventTypes.OPTION_DEACTIVATED, {
+        option: optionId,
+        price,
+        method: 'user_cancellation'
       });
 
       res.json({
         success: true,
-        message: 'Option Borne Accueil Chauffeur activée',
-        monthlyPrice: 100
+        message: `Option ${LOGISTICIEN_STRIPE_PRICES[optionId].name} sera désactivée à la fin de la période de facturation`,
+        optionId
       });
 
     } catch (error) {
-      console.error('[POST /api/logisticians/:id/subscribe/borne-accueil] Error:', error);
+      console.error('[POST /api/logisticians/:id/subscribe/cancel] Error:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   });
@@ -2366,7 +2738,439 @@ function createLogisticienRoutes(mongoClient, mongoConnected, sendLogisticianEma
     }
   });
 
-  console.log('[LogisticienRoutes] Routes configured successfully');
+  // ============================================
+  // AUTO-BLOCAGE ICPE & VIGILANCE (CRON JOBS)
+  // ============================================
+
+  /**
+   * POST /api/logisticians/cron/check-vigilance
+   * Cron job pour vérifier la vigilance de tous les logisticiens
+   * Bloque automatiquement ceux avec des documents expirés
+   * APPELER CE ENDPOINT TOUTES LES 24H
+   */
+  router.post('/cron/check-vigilance', checkMongoDB, async (req, res) => {
+    const db = getDb();
+    try {
+      // Vérifier l'authentification cron
+      const cronKey = req.headers['x-cron-key'];
+      const expectedKey = process.env.CRON_SECRET_KEY || 'symphonia-cron-secret-2024';
+
+      if (cronKey !== expectedKey) {
+        return res.status(403).json({
+          success: false,
+          error: 'Invalid cron key'
+        });
+      }
+
+      const results = {
+        checked: 0,
+        blocked: 0,
+        warned: 0,
+        alreadyBlocked: 0,
+        errors: []
+      };
+
+      // Récupérer tous les logisticiens actifs
+      const logisticians = await db.collection('logisticians').find({
+        status: { $in: [LogisticianStatus.ACTIVE, LogisticianStatus.ONBOARDING] }
+      }).toArray();
+
+      for (const logistician of logisticians) {
+        try {
+          results.checked++;
+
+          // Récupérer les documents du logisticien
+          const documents = await db.collection('logistician_documents').find({
+            logisticianId: logistician._id
+          }).toArray();
+
+          // Vérifier la vigilance
+          const vigilanceCheck = checkVigilanceStatus(logistician, documents);
+
+          // Mettre à jour le statut vigilance
+          const updateFields = {
+            vigilanceStatus: vigilanceCheck.status,
+            'vigilanceCheck.lastCheck': new Date(),
+            'vigilanceCheck.expiredDocuments': vigilanceCheck.expiredDocuments,
+            'vigilanceCheck.expiringDocuments': vigilanceCheck.expiringDocuments,
+            'vigilanceCheck.missingDocuments': vigilanceCheck.missingDocuments,
+            updatedAt: new Date()
+          };
+
+          // Si documents expirés ou manquants -> BLOQUER
+          if (vigilanceCheck.status === VigilanceStatus.BLOCKED &&
+              logistician.status !== LogisticianStatus.BLOCKED) {
+
+            const blockReason = [];
+            if (vigilanceCheck.expiredDocuments.length > 0) {
+              blockReason.push(`Documents expirés: ${vigilanceCheck.expiredDocuments.map(d => d.name).join(', ')}`);
+            }
+            if (vigilanceCheck.missingDocuments.length > 0) {
+              blockReason.push(`Documents manquants: ${vigilanceCheck.missingDocuments.map(d => d.name).join(', ')}`);
+            }
+
+            updateFields.status = LogisticianStatus.BLOCKED;
+            updateFields.blockedAt = new Date();
+            updateFields.blockedReason = `Auto-blocage vigilance: ${blockReason.join('; ')}`;
+
+            // Ajouter à l'historique de blocage
+            await db.collection('logisticians').updateOne(
+              { _id: logistician._id },
+              {
+                $push: {
+                  blockingHistory: {
+                    reason: 'vigilance_auto_block',
+                    description: updateFields.blockedReason,
+                    blockedAt: new Date(),
+                    blockedUntil: null,
+                    unblockedAt: null
+                  }
+                }
+              }
+            );
+
+            results.blocked++;
+
+            // Logger l'événement
+            await logLogisticianEvent(db, logistician._id, LogisticianEventTypes.BLOCKED, {
+              reason: 'vigilance_auto_block',
+              expiredDocuments: vigilanceCheck.expiredDocuments,
+              missingDocuments: vigilanceCheck.missingDocuments,
+              triggeredBy: 'cron'
+            });
+
+            // Créer une alerte
+            await createVigilanceAlert(db, {
+              logisticianId: logistician._id,
+              alertType: 'document_expired',
+              severity: 'critical',
+              title: 'Blocage automatique - Documents expirés',
+              message: updateFields.blockedReason,
+              actionRequired: true,
+              actionLabel: 'Mettre à jour les documents',
+              actionUrl: `/logisticien/${logistician._id}/documents`
+            });
+
+            console.log(`[CRON] Logisticien ${logistician._id} BLOQUÉ - Vigilance expirée`);
+          }
+          // Si documents expirent bientôt -> WARNING
+          else if (vigilanceCheck.status === VigilanceStatus.WARNING) {
+            results.warned++;
+
+            // Créer des alertes pour les documents expirant
+            for (const doc of vigilanceCheck.expiringDocuments) {
+              const alertType = doc.daysRemaining <= 7 ? 'document_expiring_7' :
+                               doc.daysRemaining <= 15 ? 'document_expiring_15' : 'document_expiring_30';
+
+              // Vérifier si alerte déjà créée récemment
+              const existingAlert = await db.collection('logistician_vigilance_alerts').findOne({
+                logisticianId: logistician._id,
+                alertType,
+                documentType: doc.type,
+                isResolved: false,
+                createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+              });
+
+              if (!existingAlert) {
+                await createVigilanceAlert(db, {
+                  logisticianId: logistician._id,
+                  warehouseId: doc.warehouseId || null,
+                  alertType,
+                  severity: doc.daysRemaining <= 7 ? 'critical' : 'warning',
+                  title: `Document ${doc.name} expire dans ${doc.daysRemaining} jours`,
+                  message: `Le document "${doc.name}" expire le ${new Date(Date.now() + doc.daysRemaining * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}`,
+                  documentType: doc.type,
+                  documentId: doc.documentId,
+                  actionRequired: true,
+                  actionLabel: 'Mettre à jour le document'
+                });
+              }
+            }
+          }
+          else if (logistician.status === LogisticianStatus.BLOCKED) {
+            results.alreadyBlocked++;
+          }
+
+          // Mettre à jour le logisticien
+          await db.collection('logisticians').updateOne(
+            { _id: logistician._id },
+            { $set: updateFields }
+          );
+
+        } catch (logError) {
+          results.errors.push({
+            logisticianId: logistician._id.toString(),
+            error: logError.message
+          });
+        }
+      }
+
+      console.log(`[CRON] Vigilance check completed: ${results.checked} checked, ${results.blocked} blocked, ${results.warned} warned`);
+
+      res.json({
+        success: true,
+        results
+      });
+
+    } catch (error) {
+      console.error('[POST /api/logisticians/cron/check-vigilance] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/logisticians/cron/check-icpe
+   * Cron job pour vérifier les seuils ICPE et alerter/bloquer
+   * APPELER CE ENDPOINT TOUTES LES 24H
+   */
+  router.post('/cron/check-icpe', checkMongoDB, async (req, res) => {
+    const db = getDb();
+    try {
+      // Vérifier l'authentification cron
+      const cronKey = req.headers['x-cron-key'];
+      const expectedKey = process.env.CRON_SECRET_KEY || 'symphonia-cron-secret-2024';
+
+      if (cronKey !== expectedKey) {
+        return res.status(403).json({
+          success: false,
+          error: 'Invalid cron key'
+        });
+      }
+
+      const results = {
+        warehousesChecked: 0,
+        criticalAlerts: 0,
+        warningAlerts: 0,
+        blocked: 0,
+        errors: []
+      };
+
+      // Récupérer les logisticiens actifs avec entrepôts
+      const logisticians = await db.collection('logisticians').find({
+        status: LogisticianStatus.ACTIVE,
+        'warehouses.0': { $exists: true }
+      }).toArray();
+
+      for (const logistician of logisticians) {
+        for (const warehouse of (logistician.warehouses || [])) {
+          if (!warehouse.isActive) continue;
+
+          try {
+            results.warehousesChecked++;
+
+            // Récupérer la dernière déclaration ICPE
+            const lastDeclaration = await db.collection('icpe_volume_declarations').findOne(
+              {
+                logisticianId: logistician._id,
+                warehouseId: warehouse.warehouseId
+              },
+              { sort: { year: -1, weekNumber: -1 } }
+            );
+
+            if (!lastDeclaration) continue;
+
+            // Vérifier les seuils
+            const alerts = checkICPEThresholds(warehouse, lastDeclaration);
+
+            for (const alert of alerts) {
+              // Vérifier si alerte déjà créée
+              const existingAlert = await db.collection('logistician_vigilance_alerts').findOne({
+                logisticianId: logistician._id,
+                warehouseId: warehouse.warehouseId,
+                alertType: alert.type,
+                rubrique: alert.rubrique,
+                isResolved: false
+              });
+
+              if (!existingAlert) {
+                await db.collection('logistician_vigilance_alerts').insertOne({
+                  logisticianId: logistician._id,
+                  warehouseId: warehouse.warehouseId,
+                  alertType: alert.type,
+                  severity: alert.severity,
+                  title: alert.message,
+                  message: `Rubrique ${alert.rubrique}: ${alert.volume} ${alert.unite} / ${alert.seuilMax} ${alert.unite} (${alert.percentage}%)`,
+                  rubrique: alert.rubrique,
+                  actionRequired: true,
+                  actionLabel: alert.severity === 'critical' ? 'Action urgente requise' : 'Vérifier les volumes',
+                  isResolved: false,
+                  createdAt: new Date(),
+                  // Auto-blocage si critique et non résolu après 7 jours
+                  autoBlockAt: alert.severity === 'critical' ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null
+                });
+
+                if (alert.severity === 'critical') {
+                  results.criticalAlerts++;
+                } else {
+                  results.warningAlerts++;
+                }
+
+                await logLogisticianEvent(db, logistician._id, LogisticianEventTypes.ICPE_ALERT_TRIGGERED, {
+                  warehouseId: warehouse.warehouseId,
+                  alert
+                });
+
+                console.log(`[CRON ICPE] Alert ${alert.severity} for ${logistician._id}/${warehouse.warehouseId}: ${alert.message}`);
+              }
+            }
+
+            // Vérifier les alertes critiques à auto-bloquer
+            const expiredCriticalAlerts = await db.collection('logistician_vigilance_alerts').find({
+              logisticianId: logistician._id,
+              alertType: 'icpe_seuil_critical',
+              isResolved: false,
+              autoBlockAt: { $lte: new Date() }
+            }).toArray();
+
+            if (expiredCriticalAlerts.length > 0 && logistician.status !== LogisticianStatus.BLOCKED) {
+              // Bloquer le logisticien
+              await db.collection('logisticians').updateOne(
+                { _id: logistician._id },
+                {
+                  $set: {
+                    status: LogisticianStatus.BLOCKED,
+                    blockedAt: new Date(),
+                    blockedReason: `Auto-blocage ICPE: ${expiredCriticalAlerts.length} alerte(s) critique(s) non résolue(s) après 7 jours`,
+                    updatedAt: new Date()
+                  },
+                  $push: {
+                    blockingHistory: {
+                      reason: 'icpe_auto_block',
+                      description: `Alertes ICPE critiques non résolues: ${expiredCriticalAlerts.map(a => a.rubrique).join(', ')}`,
+                      blockedAt: new Date()
+                    }
+                  }
+                }
+              );
+
+              results.blocked++;
+
+              await logLogisticianEvent(db, logistician._id, LogisticianEventTypes.BLOCKED, {
+                reason: 'icpe_auto_block',
+                alertIds: expiredCriticalAlerts.map(a => a._id),
+                triggeredBy: 'cron'
+              });
+
+              console.log(`[CRON ICPE] Logisticien ${logistician._id} BLOQUÉ - Alertes ICPE critiques non résolues`);
+            }
+
+          } catch (whError) {
+            results.errors.push({
+              logisticianId: logistician._id.toString(),
+              warehouseId: warehouse.warehouseId,
+              error: whError.message
+            });
+          }
+        }
+      }
+
+      console.log(`[CRON ICPE] Check completed: ${results.warehousesChecked} warehouses, ${results.criticalAlerts} critical, ${results.warningAlerts} warnings, ${results.blocked} blocked`);
+
+      res.json({
+        success: true,
+        results
+      });
+
+    } catch (error) {
+      console.error('[POST /api/logisticians/cron/check-icpe] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/logisticians/:id/unblock
+   * Débloquer manuellement un logisticien (admin only)
+   */
+  router.post('/:id/unblock', checkMongoDB, async (req, res) => {
+    const db = getDb();
+    try {
+      const { id } = req.params;
+      const { reason, adminId } = req.body;
+
+      // Vérifier l'authentification admin
+      const adminKey = req.headers['x-admin-key'];
+      const expectedKey = process.env.ADMIN_SETUP_KEY || 'symphonia-admin-setup-2024';
+
+      if (adminKey !== expectedKey) {
+        return res.status(403).json({
+          success: false,
+          error: 'Admin authorization required'
+        });
+      }
+
+      const logistician = await db.collection('logisticians').findOne({
+        _id: new ObjectId(id)
+      });
+
+      if (!logistician) {
+        return res.status(404).json({
+          success: false,
+          error: 'Logisticien non trouvé'
+        });
+      }
+
+      if (logistician.status !== LogisticianStatus.BLOCKED) {
+        return res.status(400).json({
+          success: false,
+          error: 'Logisticien non bloqué'
+        });
+      }
+
+      // Débloquer
+      await db.collection('logisticians').updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            status: LogisticianStatus.ACTIVE,
+            blockedReason: null,
+            blockedAt: null,
+            updatedAt: new Date()
+          },
+          $push: {
+            blockingHistory: {
+              $each: [{
+                unblockedAt: new Date(),
+                unblockedBy: adminId || 'admin',
+                notes: reason || 'Déblocage manuel admin'
+              }],
+              $position: 0,
+              $slice: 10
+            }
+          }
+        }
+      );
+
+      // Résoudre les alertes
+      await db.collection('logistician_vigilance_alerts').updateMany(
+        { logisticianId: new ObjectId(id), isResolved: false },
+        {
+          $set: {
+            isResolved: true,
+            resolvedAt: new Date(),
+            resolvedBy: adminId || 'admin'
+          }
+        }
+      );
+
+      await logLogisticianEvent(db, id, LogisticianEventTypes.UNBLOCKED, {
+        reason: reason || 'Déblocage manuel admin',
+        unblockedBy: adminId || 'admin'
+      });
+
+      console.log(`[ADMIN] Logisticien ${id} débloqué par ${adminId || 'admin'}`);
+
+      res.json({
+        success: true,
+        message: 'Logisticien débloqué avec succès'
+      });
+
+    } catch (error) {
+      console.error('[POST /api/logisticians/:id/unblock] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  console.log('[LogisticienRoutes] Routes configured successfully (v2.6.0 - Stripe + Auto-blocage)');
 
   return router;
 }

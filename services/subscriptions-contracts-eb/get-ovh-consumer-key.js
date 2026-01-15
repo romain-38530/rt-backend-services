@@ -6,11 +6,21 @@
  */
 
 const ovh = require('ovh');
+require('dotenv').config();
+
+// Credentials OVH - SECURISE via variables d'environnement
+if (!process.env.OVH_APP_KEY || !process.env.OVH_APP_SECRET) {
+  console.error('\x1b[31m[SECURITY ERROR]\x1b[0m Missing OVH credentials');
+  console.error('Set these environment variables:');
+  console.error('  OVH_APP_KEY=your_app_key');
+  console.error('  OVH_APP_SECRET=your_app_secret');
+  process.exit(1);
+}
 
 const api = ovh({
-  endpoint: 'ovh-eu',
-  appKey: '7467b1935c28b05e',
-  appSecret: '5dd42ebb267e3e2b97bbaa57fc8329e5'
+  endpoint: process.env.OVH_ENDPOINT || 'ovh-eu',
+  appKey: process.env.OVH_APP_KEY,
+  appSecret: process.env.OVH_APP_SECRET
 });
 
 console.log('');
@@ -56,7 +66,7 @@ api.request('POST', '/auth/credential', {
   console.log('2. Connectez-vous a votre compte OVH');
   console.log('3. Validez les permissions');
   console.log('');
-  console.log('4. Une fois valide, mettez a jour le script configure-dns-aws-ses.js');
-  console.log(`   avec le nouveau consumerKey: '${credential.consumerKey}'`);
+  console.log('4. Une fois valide, ajoutez le consumer key a vos variables d\'environnement:');
+  console.log(`   OVH_CONSUMER_KEY=${credential.consumerKey}`);
   console.log('');
 });

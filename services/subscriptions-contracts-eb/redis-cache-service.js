@@ -11,7 +11,15 @@
  * @version 1.0.0
  */
 
-const Redis = require('ioredis');
+// Only load ioredis if REDIS_URL is configured
+let Redis = null;
+try {
+  if (process.env.REDIS_URL) {
+    Redis = require('ioredis');
+  }
+} catch (e) {
+  console.log('[Redis] ioredis not available:', e.message);
+}
 
 // ============================================
 // CONFIGURATION
@@ -77,6 +85,12 @@ function createRedisCacheService() {
    * Se connecter à Redis
    */
   async function connect() {
+    // Skip if Redis is not configured or ioredis not available
+    if (!Redis || !process.env.REDIS_URL) {
+      console.log('[Redis] Redis not configured, skipping connection');
+      return false;
+    }
+
     if (isConnected && client) {
       return true;
     }
@@ -88,7 +102,7 @@ function createRedisCacheService() {
       // Client pour Pub/Sub (connexion dédiée)
       subscriber = new Redis(REDIS_CONFIG.url, REDIS_CONFIG.options);
 
-      // Event handlers
+      // Event handlers pour client principal
       client.on('connect', () => {
         console.log('[Redis] Connected to Redis server');
         isConnected = true;
@@ -108,6 +122,15 @@ function createRedisCacheService() {
         console.log('[Redis] Reconnecting...');
       });
 
+      // Event handlers pour subscriber (pour eviter unhandled rejections)
+      subscriber.on('error', (err) => {
+        console.error('[Redis Subscriber] Error:', err.message);
+      });
+
+      subscriber.on('close', () => {
+        console.log('[Redis Subscriber] Connection closed');
+      });
+
       // Connecter explicitement
       await client.connect();
       await subscriber.connect();
@@ -121,6 +144,17 @@ function createRedisCacheService() {
     } catch (error) {
       console.error('[Redis] Failed to connect:', error.message);
       isConnected = false;
+      // Cleanup on failure
+      if (client) {
+        client.removeAllListeners();
+        client.disconnect();
+        client = null;
+      }
+      if (subscriber) {
+        subscriber.removeAllListeners();
+        subscriber.disconnect();
+        subscriber = null;
+      }
       return false;
     }
   }

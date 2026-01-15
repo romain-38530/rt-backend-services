@@ -10,7 +10,7 @@ const { SESClient, SendEmailCommand, SendRawEmailCommand } = require('@aws-sdk/c
 
 // Configuration AWS SES
 const SES_CONFIG = {
-  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-west-1',
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-central-1',
   // Credentials auto via IAM role sur EB ou env vars
 };
 

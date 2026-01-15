@@ -294,6 +294,14 @@ function configureAffretiaRoutes(app, db, authenticateToken) {
       const { sessionId } = req.params;
       const { token, lat, lng, speed, heading, timestamp } = req.body;
 
+      // SECURITY: Vérifier que le token est fourni
+      if (!token || typeof token !== 'string' || token.length < 10) {
+        return res.status(401).json({
+          success: false,
+          error: 'Token de tracking requis'
+        });
+      }
+
       // Vérifier le token
       const session = await affretiaService.getSession(db, sessionId);
 
@@ -304,7 +312,9 @@ function configureAffretiaRoutes(app, db, authenticateToken) {
         });
       }
 
-      if (session.tracking?.token !== token) {
+      // SECURITY: Vérification stricte du token de tracking
+      if (!session.tracking?.token || session.tracking.token !== token) {
+        console.warn(`[AFFRET.IA] Invalid tracking token attempt for session ${sessionId}`);
         return res.status(401).json({
           success: false,
           error: 'Token de tracking invalide'
@@ -349,10 +359,27 @@ function configureAffretiaRoutes(app, db, authenticateToken) {
       const { sessionId } = req.params;
       const { token, type, location, coordinates } = req.body;
 
+      // SECURITY: Vérifier que le token est fourni
+      if (!token || typeof token !== 'string' || token.length < 10) {
+        return res.status(401).json({
+          success: false,
+          error: 'Token de tracking requis'
+        });
+      }
+
       // Vérifier le token
       const session = await affretiaService.getSession(db, sessionId);
 
-      if (session?.tracking?.token !== token) {
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          error: 'Session non trouvée'
+        });
+      }
+
+      // SECURITY: Vérification stricte du token de tracking
+      if (!session.tracking?.token || session.tracking.token !== token) {
+        console.warn(`[AFFRET.IA] Invalid geofence token attempt for session ${sessionId}`);
         return res.status(401).json({
           success: false,
           error: 'Token de tracking invalide'

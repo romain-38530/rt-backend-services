@@ -362,16 +362,16 @@ const LOGISTICIEN_PLANS = {
   }
 };
 
-// Options payantes Logisticien
+// Options payantes Logisticien - Tarifs OFFICIELS Janvier 2026
 const LOGISTICIEN_PAID_OPTIONS = {
   bourseDeStockage: {
     id: 'bourseDeStockage',
     name: 'Bourse de Stockage',
     description: 'Acces a la marketplace de stockage pour proposer vos capacites',
-    monthlyPrice: 150,
+    monthlyPrice: 200, // PRIX OFFICIEL: 200 EUR/mois
     pricingType: 'fixed_monthly',
-    stripePriceId: null, // A creer
-    stripeProductId: null,
+    stripePriceId: process.env.STRIPE_PRICE_LOGISTICIEN_BOURSE || null,
+    stripeProductId: process.env.STRIPE_PRODUCT_LOGISTICIEN_BOURSE || null,
     features: {
       publishCapacity: true,          // Publier capacites
       respondToNeeds: true,           // Repondre aux besoins
@@ -381,12 +381,12 @@ const LOGISTICIEN_PAID_OPTIONS = {
   },
   borneAccueilChauffeur: {
     id: 'borneAccueilChauffeur',
-    name: 'Borne Accueil Chauffeur',
-    description: 'Automatisation de l\'accueil chauffeur avec borne/kiosque',
-    monthlyPrice: 100,
+    name: 'Tablette Accueil Chauffeur',
+    description: 'Automatisation de l\'accueil chauffeur avec tablette/kiosque',
+    monthlyPrice: 150, // PRIX OFFICIEL: 150 EUR/mois
     pricingType: 'fixed_monthly',
-    stripePriceId: null, // A creer
-    stripeProductId: null,
+    stripePriceId: process.env.STRIPE_PRICE_LOGISTICIEN_BORNE || null,
+    stripeProductId: process.env.STRIPE_PRODUCT_LOGISTICIEN_BORNE || null,
     features: {
       kioskMode: true,                // Mode kiosque
       qrCodeCheckin: true,            // Check-in QR code
@@ -431,7 +431,8 @@ const PAID_OPTIONS = {
     pricingType: 'per_usage',
     stripePriceId: 'price_1Sjl36RvJiyzt2LnL15H3uxL',
     stripeProductId: 'prod_Th8gQeBvXhy4fm',
-    stripeMeterId: 'mtr_test_61Tt8OxlYOirANuQK41RvJiyzt2LnK9Q',
+    // IMPORTANT: Configurer le meter ID de production via variable d'environnement
+    stripeMeterId: process.env.STRIPE_METER_OCR || null,
     availableFor: ['industriel_pro', 'industriel_enterprise']
   },
   smsNotifications: {
@@ -443,7 +444,8 @@ const PAID_OPTIONS = {
     pricingType: 'per_usage',
     stripePriceId: 'price_1Sjl37RvJiyzt2LnDjbRXHfg',
     stripeProductId: 'prod_Th8gT88qQ0B7og',
-    stripeMeterId: 'mtr_test_61Tt8OxLUxuqnUcAp41RvJiyzt2LnCSe',
+    // IMPORTANT: Configurer le meter ID de production via variable d'environnement
+    stripeMeterId: process.env.STRIPE_METER_SMS || null,
     availableFor: ['industriel_pro', 'industriel_enterprise']
   },
   stockageDocuments: {
@@ -666,12 +668,12 @@ const FEATURE_DESCRIPTIONS = {
   },
   bourseDeStockage: {
     name: 'Bourse de Stockage',
-    description: 'Acces au marketplace de stockage (150EUR/mois)',
+    description: 'Acces au marketplace de stockage (200EUR/mois)',
     icon: 'Store'
   },
   borneAccueilChauffeur: {
-    name: 'Borne Accueil Chauffeur',
-    description: 'Automatisation accueil avec kiosque (100EUR/mois)',
+    name: 'Tablette Accueil Chauffeur',
+    description: 'Automatisation accueil avec tablette/kiosque (150EUR/mois)',
     icon: 'Monitor'
   },
   advancedAnalytics: {
@@ -871,8 +873,8 @@ function getPlansOverview() {
       FREE: { price: 0, name: 'Gratuit', warehouses: 3, highlight: 'Couvert par abonnement industriel' }
     },
     logisticienOptions: [
-      { id: 'bourseDeStockage', name: 'Bourse de Stockage', price: '150 EUR/mois', highlight: 'Marketplace stockage' },
-      { id: 'borneAccueilChauffeur', name: 'Borne Accueil Chauffeur', price: '100 EUR/mois', highlight: 'Automatisation accueil' }
+      { id: 'bourseDeStockage', name: 'Bourse de Stockage', price: '200 EUR/mois', highlight: 'Marketplace stockage' },
+      { id: 'borneAccueilChauffeur', name: 'Tablette Accueil Chauffeur', price: '150 EUR/mois', highlight: 'Automatisation accueil' }
     ],
     addOns: [
       { id: 'gpsTrackingTomtom', name: 'GPS TomTom', price: '4 EUR/vehicule' },

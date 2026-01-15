@@ -2,14 +2,16 @@
  * SYMPHONI.A - Create Stripe Products for Logisticien Paid Options
  *
  * Run this script to create Stripe products and prices for:
- * - Bourse de Stockage (150 EUR/mois)
- * - Borne Accueil Chauffeur (100 EUR/mois)
+ * - Bourse de Stockage (200 EUR/mois) - PRIX OFFICIEL
+ * - Tablette Accueil Chauffeur (150 EUR/mois) - PRIX OFFICIEL
  *
  * Usage: node create-stripe-logisticien-options.js
  *
  * Prerequisites:
  * - Set STRIPE_SECRET_KEY environment variable
  * - Or run with: STRIPE_SECRET_KEY=sk_live_xxx node create-stripe-logisticien-options.js
+ *
+ * UPDATED: Janvier 2026 - Tarifs commercialisation officiels
  */
 
 require('dotenv').config();
@@ -32,7 +34,7 @@ const LOGISTICIEN_OPTIONS = [
     id: 'bourse_stockage',
     name: 'Bourse de Stockage - Logisticien',
     description: 'Acces a la marketplace de stockage SYMPHONI.A. Publiez vos capacites de stockage, repondez aux besoins des industriels, recevez des recommandations IA.',
-    price: 15000, // 150.00 EUR in cents
+    price: 20000, // 200.00 EUR in cents - PRIX OFFICIEL
     currency: 'eur',
     interval: 'month',
     metadata: {
@@ -43,10 +45,10 @@ const LOGISTICIEN_OPTIONS = [
     }
   },
   {
-    id: 'borne_accueil_chauffeur',
-    name: 'Borne Accueil Chauffeur - Logisticien',
-    description: 'Automatisation de l\'accueil chauffeur avec mode kiosque. Check-in QR code, attribution automatique de quai, file d\'attente chauffeurs, notifications SMS.',
-    price: 10000, // 100.00 EUR in cents
+    id: 'tablette_accueil_chauffeur',
+    name: 'Tablette Accueil Chauffeur - Logisticien',
+    description: 'Automatisation de l\'accueil chauffeur avec tablette/kiosque. Check-in QR code, attribution automatique de quai, file d\'attente chauffeurs, notifications SMS.',
+    price: 15000, // 150.00 EUR in cents - PRIX OFFICIEL
     currency: 'eur',
     interval: 'month',
     metadata: {

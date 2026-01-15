@@ -9,16 +9,61 @@
 const express = require('express');
 const router = express.Router();
 const { ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
 
-// Middleware d'authentification
+// Configuration JWT sécurisée
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production' && (!secret || secret.length < 32)) {
+    throw new Error('[SECURITY] JWT_SECRET must be at least 32 characters in production');
+  }
+  return secret || 'dev-temp-secret-not-for-production';
+};
+
+// SECURITY: Middleware d'authentification JWT
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Token requis' });
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Token d\'authentification requis'
+      }
+    });
   }
-  // TODO: Implement proper JWT verification
-  req.user = { organizationId: 'demo-org-id' };
-  next();
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, getJwtSecret());
+    req.user = {
+      userId: decoded.userId || decoded.id || decoded.sub,
+      organizationId: decoded.organizationId || decoded.orgId,
+      role: decoded.role
+    };
+
+    // Vérifier que l'utilisateur a un organizationId valide
+    if (!req.user.organizationId) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Utilisateur sans organisation associée'
+        }
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('[authMiddleware] JWT verification failed:', error.message);
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'INVALID_TOKEN',
+        message: 'Token invalide ou expiré'
+      }
+    });
+  }
 };
 
 /**

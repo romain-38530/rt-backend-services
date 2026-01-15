@@ -53,21 +53,7 @@ async function extractBLFieldsAWS(imageBuffer, options = {}) {
       };
     }
 
-    // Configuration AWS Textract
-    const textract = new AWS.Textract({
-      region: process.env.AWS_REGION || 'eu-west-1',
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-    });
-
-    // Appel à Textract pour analyser le document
-    const params = {
-      Document: {
-        Bytes: imageBuffer
-      },
-      FeatureTypes: ['FORMS', 'TABLES']
-    };
-
+les 
     const result = await textract.analyzeDocument(params).promise();
 
     // Extraire les informations structurées

@@ -907,11 +907,12 @@ function determineICPERegime(rubrique, volume) {
 
 /**
  * Vérifier si un logisticien peut recevoir des commandes
+ * CORRIGE v2.6.0: Vérifie aussi le champ vigilanceStatus directement
  */
 function canReceiveOrders(logistician, documents) {
   const errors = [];
 
-  // Vérifier le statut
+  // Vérifier le statut principal
   if (logistician.status === LogisticianStatus.BLOCKED) {
     errors.push('Logistician is blocked');
   }
@@ -925,7 +926,13 @@ function canReceiveOrders(logistician, documents) {
     errors.push('Logistician onboarding not completed');
   }
 
-  // Vérifier la vigilance
+  // CORRECTION: Vérifier directement le champ vigilanceStatus
+  // Ce champ peut être mis à jour par un cron/batch même si les documents sont là
+  if (logistician.vigilanceStatus === VigilanceStatus.BLOCKED) {
+    errors.push('Logistician vigilance status is BLOCKED');
+  }
+
+  // Vérifier la vigilance via les documents (double vérification)
   const vigilanceCheck = checkVigilanceStatus(logistician, documents);
   if (!vigilanceCheck.canOperate) {
     if (vigilanceCheck.expiredDocuments.length > 0) {
@@ -944,7 +951,9 @@ function canReceiveOrders(logistician, documents) {
 
   return {
     canReceive: errors.length === 0,
-    errors
+    errors,
+    vigilanceStatus: logistician.vigilanceStatus,
+    vigilanceCheck
   };
 }
 

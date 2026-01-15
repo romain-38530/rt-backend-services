@@ -97,7 +97,7 @@ const TOKEN_EXPIRATION_MS = 24 * 60 * 60 * 1000;
 let sesClient = null;
 
 const SES_CONFIG = {
-  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-west-1'
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-central-1'
 };
 
 const SES_FROM = process.env.SES_FROM_EMAIL || 'notifications@symphonia-controltower.com';

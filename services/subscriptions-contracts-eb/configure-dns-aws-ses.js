@@ -10,26 +10,43 @@
  */
 
 const ovh = require('ovh');
+require('dotenv').config();
 
-const DOMAINE = 'symphonia-controltower.com';
+const DOMAINE = process.env.OVH_DOMAIN || 'symphonia-controltower.com';
 
 // Tokens AWS SES (generes par aws ses verify-domain-dkim)
-const AWS_SES_DKIM_TOKENS = [
-  'fgczi5zfgdlxnwyugnhig4et7twftzlo',
-  'xboinvea7kmbr3vc3fx5dburrvtjp2by',
-  'ynokzonetscm4ph2c3kstjchuptjkxmy'
-];
+// À configurer via variables d'environnement ou ligne de commande
+const AWS_SES_DKIM_TOKENS = (process.env.AWS_SES_DKIM_TOKENS || '').split(',').filter(t => t.length > 0);
 
 // Token de verification du domaine AWS SES
-const AWS_SES_VERIFICATION_TOKEN = 'ZcUvN76qLk2q48sybg8bpzUGRv+8iwJVZfAy0QbyHfs=';
+const AWS_SES_VERIFICATION_TOKEN = process.env.AWS_SES_VERIFICATION_TOKEN || '';
 
-// Credentials OVH (nouveau consumer key avec permissions DNS)
+// Credentials OVH - SECURISE via variables d'environnement
+// IMPORTANT: Ne jamais hardcoder ces valeurs en production
 const OVH_CONFIG = {
-  endpoint: 'ovh-eu',
-  appKey: '7467b1935c28b05e',
-  appSecret: '5dd42ebb267e3e2b97bbaa57fc8329e5',
-  consumerKey: '62b0dcb9c62bdb4ae9f087edfd9b4328'
+  endpoint: process.env.OVH_ENDPOINT || 'ovh-eu',
+  appKey: process.env.OVH_APP_KEY,
+  appSecret: process.env.OVH_APP_SECRET,
+  consumerKey: process.env.OVH_CONSUMER_KEY
 };
+
+// Validation des credentials au démarrage
+function validateOVHConfig() {
+  const required = ['OVH_APP_KEY', 'OVH_APP_SECRET', 'OVH_CONSUMER_KEY'];
+  const missing = required.filter(key => !process.env[key]);
+
+  if (missing.length > 0) {
+    console.error('\x1b[31m[SECURITY ERROR]\x1b[0m Missing required OVH credentials:');
+    console.error(`  ${missing.join(', ')}`);
+    console.error('\nSet these environment variables or create a .env file:');
+    console.error('  OVH_APP_KEY=your_app_key');
+    console.error('  OVH_APP_SECRET=your_app_secret');
+    console.error('  OVH_CONSUMER_KEY=your_consumer_key');
+    console.error('  AWS_SES_VERIFICATION_TOKEN=your_ses_token');
+    console.error('  AWS_SES_DKIM_TOKENS=token1,token2,token3');
+    process.exit(1);
+  }
+}
 
 // Couleurs console
 const c = {
@@ -176,6 +193,11 @@ async function configureSPF(client) {
 async function configureAWSSESVerification(client) {
   header('ETAPE 2/4 - VERIFICATION DOMAINE AWS SES');
 
+  if (!AWS_SES_VERIFICATION_TOKEN) {
+    log('warn', 'AWS_SES_VERIFICATION_TOKEN non défini - étape ignorée');
+    return false;
+  }
+
   const verificationRecord = `"amazonses:${AWS_SES_VERIFICATION_TOKEN}"`;
 
   log('info', 'Ajout token verification AWS SES');
@@ -204,6 +226,12 @@ async function configureAWSSESVerification(client) {
 
 async function configureDKIM(client) {
   header('ETAPE 3/4 - CONFIGURATION DKIM AWS SES');
+
+  if (AWS_SES_DKIM_TOKENS.length !== 3) {
+    log('warn', 'AWS_SES_DKIM_TOKENS doit contenir exactement 3 tokens - étape ignorée');
+    log('info', 'Utilisez --dkim <t1> <t2> <t3> pour configurer DKIM manuellement');
+    return false;
+  }
 
   log('info', 'Ajout des 3 enregistrements CNAME DKIM AWS SES');
 
@@ -343,6 +371,20 @@ async function main() {
   header('CONFIGURATION DNS POUR AWS SES');
   console.log(`Domaine: ${c.bold}${DOMAINE}${c.reset}`);
   console.log('');
+
+  // Valider les credentials OVH
+  validateOVHConfig();
+
+  // Valider les tokens AWS SES pour la configuration complète
+  if (args[0] !== '--verify' && args[0] !== '--dkim') {
+    if (!AWS_SES_VERIFICATION_TOKEN) {
+      log('warn', 'AWS_SES_VERIFICATION_TOKEN non défini - vérification domaine ignorée');
+    }
+    if (AWS_SES_DKIM_TOKENS.length !== 3) {
+      log('warn', 'AWS_SES_DKIM_TOKENS doit contenir 3 tokens séparés par des virgules');
+      log('info', 'Utilisez --dkim <t1> <t2> <t3> pour configurer DKIM manuellement');
+    }
+  }
 
   // Initialiser client OVH
   log('info', 'Connexion API OVH...');

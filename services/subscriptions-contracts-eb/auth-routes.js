@@ -15,7 +15,7 @@ const {
 
 // Security Enhancements v2.5.0 + SEC-012
 const { RateLimiterManager, ProgressiveIPBlocker } = require('./rate-limiter-middleware');
-const { EmailVerificationService } = require('./email-verification-service');
+const { createEmailVerificationService } = require('./email-verification-service');
 
 // Two-Factor Authentication v3.0.0
 const { TwoFactorAuthService } = require('./two-factor-auth-service');
@@ -45,7 +45,7 @@ function createAuthRoutes(mongoClient, mongoConnected) {
       try {
         const db = mongoClient.db();
         rateLimiterManager = new RateLimiterManager(db);
-        emailVerificationService = new EmailVerificationService(db);
+        emailVerificationService = createEmailVerificationService(db);
 
         // Initialiser AWS SES Email Service
         sesEmailService = createAWSSESEmailService();
@@ -742,8 +742,11 @@ function createAuthRoutes(mongoClient, mongoConnected) {
 
       const db = mongoClient.db();
 
+      // SECURITY FIX: Hasher le token avant recherche (les tokens sont stockés hashés)
+      const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
       // Supprimer le refresh token de la DB
-      const result = await db.collection('refresh_tokens').deleteOne({ token: refreshToken });
+      const result = await db.collection('refresh_tokens').deleteOne({ tokenHash: refreshTokenHash });
 
       if (result.deletedCount === 0) {
         return res.status(404).json({

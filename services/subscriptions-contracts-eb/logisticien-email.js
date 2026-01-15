@@ -6,7 +6,7 @@ const crypto = require('crypto');
 
 // Configuration AWS SES
 const SES_CONFIG = {
-  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-west-1'
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'eu-central-1'
 };
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'ne-pas-repondre@symphonia-controltower.com';

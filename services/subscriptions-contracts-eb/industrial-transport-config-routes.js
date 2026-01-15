@@ -1,9 +1,19 @@
 // Industrial Transport Configuration Routes - Configuration des types de transport attendus par industriel
-// RT Backend Services - Version 1.0.0
+// RT Backend Services - Version 1.1.0 - Security Enhanced
 
 const express = require('express');
 const { ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
 const { TransportTypes } = require('./pricing-grids-models');
+
+// Configuration JWT sécurisée
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production' && (!secret || secret.length < 32)) {
+    throw new Error('[SECURITY] JWT_SECRET must be at least 32 characters in production');
+  }
+  return secret || 'dev-temp-secret-not-for-production';
+};
 
 function createIndustrialTransportConfigRoutes(mongoClient, mongoConnected) {
   const router = express.Router();
@@ -22,13 +32,94 @@ function createIndustrialTransportConfigRoutes(mongoClient, mongoConnected) {
     next();
   };
 
+  // SECURITY: Middleware d'authentification JWT
+  const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Token d\'authentification requis'
+        }
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, getJwtSecret());
+      req.user = decoded;
+      next();
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Token invalide ou expiré'
+        }
+      });
+    }
+  };
+
+  // SECURITY: Middleware pour vérifier que l'utilisateur appartient à l'industriel
+  const checkIndustrialOwnership = async (req, res, next) => {
+    try {
+      const { industrialId } = req.params;
+      const userId = req.user.userId || req.user.id || req.user.sub;
+      const userOrgId = req.user.organizationId || req.user.orgId;
+      const userRole = req.user.role;
+
+      // Admin peut accéder à tout
+      if (userRole === 'admin' || userRole === 'superadmin') {
+        return next();
+      }
+
+      // Vérifier que l'utilisateur appartient à cet industriel
+      if (userOrgId && userOrgId === industrialId) {
+        return next();
+      }
+
+      // Vérification supplémentaire en base de données si nécessaire
+      const db = mongoClient.db();
+      const user = await db.collection('users').findOne({
+        _id: new ObjectId(userId),
+        $or: [
+          { organizationId: industrialId },
+          { industrialId: industrialId },
+          { 'organizations': industrialId }
+        ]
+      });
+
+      if (!user) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Vous n\'avez pas accès à cette ressource industrielle'
+          }
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error('[checkIndustrialOwnership] Error:', error);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'Erreur lors de la vérification des droits'
+        }
+      });
+    }
+  };
+
   // ==================== ENDPOINTS CONFIGURATION TYPES DE TRANSPORT ====================
 
   /**
    * GET /api/industrial/:industrialId/transport-config
    * Récupérer la configuration des types de transport pour un industriel
    */
-  router.get('/:industrialId/transport-config', checkMongoDB, async (req, res) => {
+  router.get('/:industrialId/transport-config', authenticateToken, checkIndustrialOwnership, checkMongoDB, async (req, res) => {
     try {
       const { industrialId } = req.params;
 
@@ -77,7 +168,7 @@ function createIndustrialTransportConfigRoutes(mongoClient, mongoConnected) {
    *   minTypesRequired: 2                         // Minimum de types requis par transporteur
    * }
    */
-  router.post('/:industrialId/transport-config', checkMongoDB, async (req, res) => {
+  router.post('/:industrialId/transport-config', authenticateToken, checkIndustrialOwnership, checkMongoDB, async (req, res) => {
     try {
       const { industrialId } = req.params;
       const {
@@ -180,7 +271,7 @@ function createIndustrialTransportConfigRoutes(mongoClient, mongoConnected) {
    * POST /api/industrial/:industrialId/transport-config/add-type
    * Ajouter un type de transport requis
    */
-  router.post('/:industrialId/transport-config/add-type', checkMongoDB, async (req, res) => {
+  router.post('/:industrialId/transport-config/add-type', authenticateToken, checkIndustrialOwnership, checkMongoDB, async (req, res) => {
     try {
       const { industrialId } = req.params;
       const { transportType, required = true, updatedBy } = req.body;
@@ -239,7 +330,7 @@ function createIndustrialTransportConfigRoutes(mongoClient, mongoConnected) {
    * POST /api/industrial/:industrialId/transport-config/remove-type
    * Retirer un type de transport
    */
-  router.post('/:industrialId/transport-config/remove-type', checkMongoDB, async (req, res) => {
+  router.post('/:industrialId/transport-config/remove-type', authenticateToken, checkIndustrialOwnership, checkMongoDB, async (req, res) => {
     try {
       const { industrialId } = req.params;
       const { transportType, updatedBy } = req.body;
@@ -303,7 +394,7 @@ function createIndustrialTransportConfigRoutes(mongoClient, mongoConnected) {
    * GET /api/industrial/:industrialId/carriers/compatibility
    * Vérifier la compatibilité des transporteurs avec les types requis
    */
-  router.get('/:industrialId/carriers/compatibility', checkMongoDB, async (req, res) => {
+  router.get('/:industrialId/carriers/compatibility', authenticateToken, checkIndustrialOwnership, checkMongoDB, async (req, res) => {
     try {
       const { industrialId } = req.params;
 

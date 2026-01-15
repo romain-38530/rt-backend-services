@@ -1,0 +1,263 @@
+# ============================================================================
+# RT SYMPHONI.A - External Services Configuration
+# ============================================================================
+# AWS Elastic Beanstalk Configuration File
+# Version: 1.6.2-security-final
+# Date: 2024-11-26
+# ============================================================================
+#
+# Ce fichier configure les services externes pour RT SYMPHONI.A :
+# - TomTom Telematics API (Tracking GPS)
+# - AWS Textract (OCR Primary)
+# - Google Vision API (OCR Fallback)
+#
+# ============================================================================
+
+option_settings:
+  # ============================================================================
+  # Environment Variables - Services Externes
+  # ============================================================================
+  # Note : Les valeurs sensibles doivent être configurées via AWS Console
+  # ou EB CLI, PAS dans ce fichier !
+  # ============================================================================
+
+  # TomTom Configuration
+  aws:elasticbeanstalk:application:environment:
+    TOMTOM_TRACKING_API_URL: "https://api.tomtom.com/tracking/1"
+
+  # AWS Textract Configuration
+  aws:elasticbeanstalk:application:environment:
+    AWS_REGION: "eu-central-1"
+    OCR_PROVIDER: "AWS_TEXTRACT"
+
+  # Google Vision Configuration
+  aws:elasticbeanstalk:application:environment:
+    GOOGLE_APPLICATION_CREDENTIALS: "/var/app/current/google-credentials.json"
+
+  # OCR General Settings
+  aws:elasticbeanstalk:application:environment:
+    OCR_ENABLE_FALLBACK: "true"
+    OCR_TIMEOUT_MS: "10000"
+    OCR_MIN_CONFIDENCE: "90"
+
+  # Monitoring
+  aws:elasticbeanstalk:application:environment:
+    DEBUG_EXTERNAL_SERVICES: "false"
+    CLOUDWATCH_METRICS_ENABLED: "true"
+    CLOUDWATCH_NAMESPACE: "RTSYMPHONIA/ExternalServices"
+
+  # Rate Limiting
+  aws:elasticbeanstalk:application:environment:
+    TOMTOM_DAILY_QUOTA: "2500"
+    AWS_TEXTRACT_MONTHLY_QUOTA: "10000"
+    GOOGLE_VISION_MONTHLY_QUOTA: "10000"
+
+# ============================================================================
+# Packages Installation
+# ============================================================================
+# Installer les dépendances système nécessaires
+# ============================================================================
+
+packages:
+  yum:
+    # Outils de debugging réseau
+    curl: []
+    wget: []
+    # Outils de traitement d'images (si nécessaire pour OCR)
+    ImageMagick: []
+
+# ============================================================================
+# Files Configuration
+# ============================================================================
+# Créer des fichiers de configuration et scripts utilitaires
+# ============================================================================
+
+files:
+  # Script de test de connexion TomTom
+  "/var/app/current/scripts/test-tomtom.sh":
+    mode: "000755"
+    owner: webapp
+    group: webapp
+    content: |
+      #!/bin/bash
+      # Test TomTom API connectivity
+      echo "Testing TomTom API connection..."
+      TOMTOM_KEY=$TOMTOM_API_KEY
+
+      if [ -z "$TOMTOM_KEY" ]; then
+        echo "ERROR: TOMTOM_API_KEY not set"
+        exit 1
+      fi
+
+      # Test route calculation (Paris to Lyon)
+      curl -s "https://api.tomtom.com/routing/1/calculateRoute/48.8566,2.3522:45.7640,4.8357/json?key=$TOMTOM_KEY" \
+        | grep -q '"lengthInMeters"' && echo "✅ TomTom API OK" || echo "❌ TomTom API FAILED"
+
+  # Script de test AWS Textract
+  "/var/app/current/scripts/test-textract.sh":
+    mode: "000755"
+    owner: webapp
+    group: webapp
+    content: |
+      #!/bin/bash
+      # Test AWS Textract access
+      echo "Testing AWS Textract access..."
+
+      if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+        echo "ERROR: AWS_ACCESS_KEY_ID not set"
+        exit 1
+      fi
+
+      # Test AWS credentials
+      aws sts get-caller-identity &>/dev/null && echo "✅ AWS Textract credentials OK" || echo "❌ AWS Textract credentials FAILED"
+
+  # Healthcheck script pour services externes
+  "/var/app/current/scripts/external-services-health.sh":
+    mode: "000755"
+    owner: webapp
+    group: webapp
+    content: |
+      #!/bin/bash
+      # External Services Health Check
+      echo "=== RT SYMPHONI.A - External Services Health Check ==="
+      echo "Date: $(date)"
+      echo ""
+
+      # Check TomTom
+      echo "1. TomTom API:"
+      if [ -n "$TOMTOM_API_KEY" ]; then
+        echo "   ✅ API Key configured"
+      else
+        echo "   ❌ API Key missing"
+      fi
+
+      # Check AWS Textract
+      echo "2. AWS Textract:"
+      if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+        echo "   ✅ Credentials configured"
+      else
+        echo "   ❌ Credentials missing"
+      fi
+
+      # Check Google Vision
+      echo "3. Google Vision:"
+      if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+        echo "   ✅ Credentials file exists"
+      else
+        echo "   ⚠️  Credentials file not found (Fallback disabled)"
+      fi
+
+      echo ""
+      echo "=== End Health Check ==="
+
+# ============================================================================
+# Container Commands
+# ============================================================================
+# Commandes exécutées APRÈS le déploiement de l'application
+# ============================================================================
+
+container_commands:
+  # 01 - Vérifier que les variables obligatoires sont présentes
+  01_check_env_vars:
+    command: |
+      #!/bin/bash
+      echo "Checking external services environment variables..."
+
+      MISSING_VARS=()
+
+      # Check TomTom
+      [ -z "$TOMTOM_API_KEY" ] && MISSING_VARS+=("TOMTOM_API_KEY")
+
+      # Check AWS Textract
+      [ -z "$AWS_ACCESS_KEY_ID" ] && MISSING_VARS+=("AWS_ACCESS_KEY_ID")
+      [ -z "$AWS_SECRET_ACCESS_KEY" ] && MISSING_VARS+=("AWS_SECRET_ACCESS_KEY")
+
+      if [ ${#MISSING_VARS[@]} -gt 0 ]; then
+        echo "⚠️  WARNING: Missing environment variables:"
+        for var in "${MISSING_VARS[@]}"; do
+          echo "   - $var"
+        done
+        echo "External services may not work correctly!"
+      else
+        echo "✅ All required environment variables are set"
+      fi
+
+  # 02 - Créer le dossier scripts s'il n'existe pas
+  02_create_scripts_dir:
+    command: "mkdir -p /var/app/current/scripts"
+
+  # 03 - Rendre les scripts exécutables
+  03_make_scripts_executable:
+    command: "chmod +x /var/app/current/scripts/*.sh 2>/dev/null || true"
+
+  # 04 - Exécuter le health check
+  04_run_health_check:
+    command: "/var/app/current/scripts/external-services-health.sh"
+    ignoreErrors: true
+
+# ============================================================================
+# CloudWatch Logs
+# ============================================================================
+# Configuration des logs pour les services externes
+# ============================================================================
+
+files:
+  "/opt/elasticbeanstalk/tasks/bundlelogs.d/external-services.conf":
+    mode: "000644"
+    owner: root
+    group: root
+    content: |
+      /var/log/external-services/*.log
+
+  "/opt/elasticbeanstalk/tasks/taillogs.d/external-services.conf":
+    mode: "000644"
+    owner: root
+    group: root
+    content: |
+      /var/log/external-services/*.log
+
+commands:
+  # Créer le dossier de logs pour les services externes
+  01_create_logs_dir:
+    command: "mkdir -p /var/log/external-services && chmod 755 /var/log/external-services"
+
+# ============================================================================
+# Instructions de Configuration
+# ============================================================================
+#
+# Ce fichier configure les VALEURS PAR DÉFAUT des services externes.
+# Les valeurs SENSIBLES (API Keys, Secrets) doivent être configurées via :
+#
+# Option 1 : AWS Console
+#   Elastic Beanstalk → rt-subscriptions-api-prod → Configuration → Software
+#   → Environment properties → Add :
+#     - TOMTOM_API_KEY
+#     - AWS_ACCESS_KEY_ID
+#     - AWS_SECRET_ACCESS_KEY
+#
+# Option 2 : EB CLI
+#   eb setenv TOMTOM_API_KEY=xxx AWS_ACCESS_KEY_ID=yyy AWS_SECRET_ACCESS_KEY=zzz
+#
+# Option 3 : AWS Secrets Manager (Production recommandée)
+#   Créer des secrets dans Secrets Manager et les référencer ici
+#
+# ============================================================================
+# Validation Post-Déploiement
+# ============================================================================
+#
+# Après le déploiement, vérifiez :
+#
+# 1. Variables d'environnement :
+#    eb printenv | grep -E '(TOMTOM|AWS_|GOOGLE|OCR)'
+#
+# 2. Health check :
+#    eb ssh
+#    /var/app/current/scripts/external-services-health.sh
+#
+# 3. Logs :
+#    eb logs | grep -E '(TomTom|Textract|Vision)'
+#
+# 4. Tests de validation :
+#    node /var/app/current/scripts/validate-all-external-services.js
+#
+# ============================================================================

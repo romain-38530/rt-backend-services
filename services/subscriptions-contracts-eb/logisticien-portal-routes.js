@@ -16,8 +16,32 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { ObjectId } = require('mongodb');
+const crypto = require('crypto');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-logisticien-portal-secret-2024';
+// Configuration sécurisée JWT
+// SECURITY: Ne jamais utiliser de fallback hardcodé en production
+const getSecureJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!secret || secret.length < 32) {
+      console.error('[SECURITY] FATAL: JWT_SECRET not set or too short in production');
+      throw new Error('JWT_SECRET must be at least 32 characters in production');
+    }
+    const weakSecrets = ['secret', 'password', 'changeme', 'symphonia-logisticien-portal-secret-2024'];
+    if (weakSecrets.some(ws => secret.toLowerCase().includes(ws.toLowerCase()))) {
+      console.error('[SECURITY] FATAL: JWT_SECRET contains weak/default value');
+      throw new Error('JWT_SECRET contains a weak/default value');
+    }
+  }
+  // En développement, générer un secret temporaire avec avertissement
+  if (!secret) {
+    console.warn('[SECURITY] WARNING: JWT_SECRET not set - using temporary secret (DEV ONLY)');
+    return 'dev-temp-' + crypto.randomBytes(32).toString('hex');
+  }
+  return secret;
+};
+
+const JWT_SECRET = getSecureJwtSecret();
 const JWT_EXPIRY = '8h';
 
 /**

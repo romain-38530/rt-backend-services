@@ -4,7 +4,7 @@ import os
 import zipfile
 from pathlib import Path
 
-VERSION = "v4.3.1-tracking-prices-updated"
+VERSION = "v4.4.5-pricing-grids-routes-fix"
 SOURCE_DIR = Path(__file__).parent
 BUNDLE_DIR = SOURCE_DIR / "bundle"
 OUTPUT_FILE = BUNDLE_DIR / f"deploy-{VERSION}.zip"
@@ -19,6 +19,7 @@ FILES = [
     "ecmr-routes.js",
     "industrial-transport-config-routes.js",
     "pricing-grids-routes.js",
+    "pricing-grids-extended-routes.js",
     "stripe-routes.js",
     "transport-orders-routes.js",
     "affretia-routes.js",
@@ -101,7 +102,7 @@ FILES = [
     "email-ab-testing-routes.js",
 ]
 
-DIRECTORIES = ["middleware", "routes", "integrations"]
+DIRECTORIES = ["middleware", "routes", "integrations", ".ebextensions"]
 
 def main():
     print(f"\n{'='*60}")
@@ -137,6 +138,9 @@ def main():
             if dirpath.exists():
                 for root, dirs, files in os.walk(dirpath):
                     for file in files:
+                        # Skip disabled and example files
+                        if file.endswith('.disabled') or file.endswith('.example'):
+                            continue
                         file_path = Path(root) / file
                         # Create Unix-style archive name
                         arcname = file_path.relative_to(SOURCE_DIR).as_posix()
