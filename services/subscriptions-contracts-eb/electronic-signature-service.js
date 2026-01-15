@@ -25,10 +25,22 @@ const SIGNATURE_CONFIG = {
   hashAlgorithm: 'sha256',
 
   // URL de base pour les liens de signature
-  baseUrl: process.env.SIGNATURE_BASE_URL || process.env.FRONTEND_URL || 'https://app.symphonia-controltower.com',
+  baseUrl: process.env.SIGNATURE_BASE_URL || process.env.FRONTEND_URL || 'https://symphonia-controltower.com',
 
-  // Clé secrète pour signer les tokens (utiliser JWT_SECRET ou générer)
-  secretKey: process.env.SIGNATURE_SECRET_KEY || process.env.JWT_SECRET || 'signature-secret-change-in-production'
+  // Clé secrète pour signer les tokens - REQUIRED, no insecure fallback
+  secretKey: (() => {
+    const key = process.env.SIGNATURE_SECRET_KEY || process.env.JWT_SECRET;
+    if (!key) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[CRITICAL SECURITY] SIGNATURE_SECRET_KEY or JWT_SECRET must be set in production');
+        throw new Error('SIGNATURE_SECRET_KEY required in production');
+      }
+      // Only allow fallback in development with warning
+      console.warn('[SECURITY WARNING] Using insecure default signature key - FOR DEVELOPMENT ONLY');
+      return 'dev-signature-key-unsafe-' + crypto.randomBytes(16).toString('hex');
+    }
+    return key;
+  })()
 };
 
 // ============================================

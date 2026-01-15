@@ -13,22 +13,38 @@ const { SESClient, SendRawEmailCommand } = require('@aws-sdk/client-ses');
 const PDFDocument = require('pdfkit');
 const { authenticateToken } = require('./auth-middleware');
 
-// Configuration Stripe - SECURITY: Webhook secret validation
+// Configuration Stripe - SECURITY: Webhook secret validation (REQUIRED in production)
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 if (process.env.NODE_ENV === 'production' && !STRIPE_WEBHOOK_SECRET) {
-  console.warn('[SECURITY WARNING] STRIPE_WEBHOOK_SECRET not set - webhook validation will fail');
+  console.error('[CRITICAL SECURITY] STRIPE_WEBHOOK_SECRET not set in production - webhooks will be REJECTED');
 }
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://symphonia-controltower.com' : 'http://localhost:3000');
 
-// SECURITY: Admin key validation helper
+// SECURITY: Admin key validation helper with timing-safe comparison
 function validateAdminKey(providedKey) {
+  const crypto = require('crypto');
   const expectedKey = process.env.ADMIN_SETUP_KEY;
+
   if (process.env.NODE_ENV === 'production' && !expectedKey) {
     console.error('[SECURITY] ADMIN_SETUP_KEY not configured in production');
     return false;
   }
+
   const keyToCheck = expectedKey || 'dev-admin-key-not-for-production';
-  return providedKey === keyToCheck;
+
+  // Use timing-safe comparison to prevent timing attacks
+  if (!providedKey || providedKey.length !== keyToCheck.length) {
+    return false;
+  }
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(providedKey, 'utf8'),
+      Buffer.from(keyToCheck, 'utf8')
+    );
+  } catch {
+    return false;
+  }
 }
 
 // Configuration AWS SES
@@ -1606,34 +1622,43 @@ function createStripeRoutes(mongoClient, mongoConnected) {
 
   /**
    * GET /api/stripe/invoices
-   * Récupérer les factures d'un client par email ou stripeCustomerId
-   * Public (utilisé depuis le portail client)
+   * Récupérer les factures d'un client - REQUIRES AUTHENTICATION
+   * L'utilisateur ne peut voir que ses propres factures
    */
-  router.get('/invoices', checkMongoDB, async (req, res) => {
+  router.get('/invoices', authenticateToken, checkMongoDB, async (req, res) => {
     try {
-      const { email, customerId, limit = 50 } = req.query;
+      const { limit = 50 } = req.query;
+      const userId = req.user.userId;
 
-      if (!email && !customerId) {
-        return res.status(400).json({
+      // Récupérer l'utilisateur pour obtenir son email et stripeCustomerId
+      const db = mongoClient.db();
+      const user = await db.collection('users').findOne({
+        _id: new ObjectId(userId)
+      });
+
+      if (!user) {
+        return res.status(404).json({
           success: false,
-          error: { code: 'MISSING_PARAMS', message: 'email or customerId required' }
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
         });
       }
 
-      const db = mongoClient.db();
-      const filter = {};
+      // Filtrer par l'email de l'utilisateur connecté uniquement
+      const filter = {
+        $or: [
+          { clientEmail: user.email?.toLowerCase() },
+          { stripeCustomerId: user.stripeCustomerId }
+        ].filter(f => Object.values(f)[0]) // Remove undefined filters
+      };
 
-      if (email) {
-        filter.clientEmail = email.toLowerCase();
-      }
-      if (customerId) {
-        filter.stripeCustomerId = customerId;
+      if (filter.$or.length === 0) {
+        return res.json({ success: true, data: [], count: 0 });
       }
 
       const invoices = await db.collection('invoices')
         .find(filter)
         .sort({ invoiceDate: -1 })
-        .limit(parseInt(limit))
+        .limit(Math.min(parseInt(limit) || 50, 100)) // Max 100
         .project({
           invoiceNumber: 1,
           invoiceDate: 1,
@@ -1656,7 +1681,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
       console.error('[Invoices] Error fetching invoices:', error.message);
       res.status(500).json({
         success: false,
-        error: { code: 'SERVER_ERROR', message: error.message }
+        error: { code: 'SERVER_ERROR', message: 'Failed to fetch invoices' }
       });
     }
   });

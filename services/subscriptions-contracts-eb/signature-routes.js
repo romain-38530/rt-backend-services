@@ -6,12 +6,37 @@
  */
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { ElectronicSignatureService } = require('./electronic-signature-service');
 const { authenticateToken } = require('./auth-middleware');
 
 function createSignatureRoutes(mongoClient, mongoConnected, sesClient = null) {
   const router = express.Router();
   const signatureService = new ElectronicSignatureService(mongoClient);
+
+  // Rate limiting for public signature endpoints (prevent brute force)
+  const signatureRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // 30 requests per window
+    message: {
+      success: false,
+      error: { code: 'RATE_LIMIT', message: 'Too many requests, please try again later' }
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+
+  // Stricter rate limiting for signature submission
+  const signRateLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10, // 10 signature attempts per hour
+    message: {
+      success: false,
+      error: { code: 'RATE_LIMIT', message: 'Too many signature attempts, please try again later' }
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+  });
 
   // Middleware to check MongoDB connection
   const checkMongoDB = (req, res, next) => {
@@ -40,7 +65,7 @@ function createSignatureRoutes(mongoClient, mongoConnected, sesClient = null) {
    * Vérifier un token de signature et récupérer les infos du contrat
    * Utilisé par la page de signature frontend
    */
-  router.get('/verify/:token', checkMongoDB, async (req, res) => {
+  router.get('/verify/:token', signatureRateLimiter, checkMongoDB, async (req, res) => {
     try {
       const { token } = req.params;
 
@@ -79,7 +104,7 @@ function createSignatureRoutes(mongoClient, mongoConnected, sesClient = null) {
    * GET /api/signature/pdf/:token
    * Récupérer le PDF du contrat pour prévisualisation
    */
-  router.get('/pdf/:token', checkMongoDB, async (req, res) => {
+  router.get('/pdf/:token', signatureRateLimiter, checkMongoDB, async (req, res) => {
     try {
       const { token } = req.params;
 
@@ -108,7 +133,7 @@ function createSignatureRoutes(mongoClient, mongoConnected, sesClient = null) {
    * POST /api/signature/sign/:token
    * Signer le contrat
    */
-  router.post('/sign/:token', checkMongoDB, async (req, res) => {
+  router.post('/sign/:token', signRateLimiter, checkMongoDB, async (req, res) => {
     try {
       const { token } = req.params;
       const {
