@@ -1,8 +1,35 @@
 // Stripe Payment Routes - Checkout & Subscription Management
-// RT Backend Services - Version 2.5.2 - Migrated to AWS SES
+// RT Backend Services - Version 2.5.3 - Security Enhanced
 
 const express = require('express');
 const { ObjectId } = require('mongodb');
+const rateLimit = require('express-rate-limit');
+
+// SECURITY: Rate limiters for sensitive endpoints
+const paymentRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 payment attempts per 15 min
+  message: { success: false, error: { code: 'RATE_LIMIT', message: 'Too many payment attempts, please try again later' } },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const sessionRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // 20 session creations per hour
+  message: { success: false, error: { code: 'RATE_LIMIT', message: 'Too many requests, please try again later' } },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const invoiceRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // 50 invoice requests per 15 min
+  message: { success: false, error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // SECURITY: Stripe secret key validation
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 if (process.env.NODE_ENV === 'production' && !STRIPE_SECRET_KEY) {
@@ -46,6 +73,31 @@ function validateAdminKey(providedKey) {
     return false;
   }
 }
+
+// SECURITY: Input validation helpers
+const validator = {
+  isValidEmail: (email) => {
+    if (!email || typeof email !== 'string') return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email) && email.length <= 254;
+  },
+  isValidObjectId: (id) => {
+    if (!id || typeof id !== 'string') return false;
+    return /^[a-fA-F0-9]{24}$/.test(id);
+  },
+  isValidInvoiceNumber: (num) => {
+    if (!num || typeof num !== 'string') return false;
+    return /^FAC-\d{6}-\d{4}$/.test(num) && num.length <= 20;
+  },
+  sanitizeString: (str, maxLength = 255) => {
+    if (!str || typeof str !== 'string') return '';
+    return str.slice(0, maxLength).replace(/[<>]/g, '');
+  },
+  isPositiveInteger: (val) => {
+    const num = parseInt(val);
+    return !isNaN(num) && num > 0 && num <= 1000000;
+  }
+};
 
 // Configuration AWS SES
 const SES_CONFIG = {
@@ -729,7 +781,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
    *   metadata: { ... }                    // Métadonnées optionnelles
    * }
    */
-  router.post('/create-checkout-session', authenticateToken, checkMongoDB, async (req, res) => {
+  router.post('/create-checkout-session', paymentRateLimiter, authenticateToken, checkMongoDB, async (req, res) => {
     try {
       const { priceId, successUrl = '/success', cancelUrl = '/cancel', metadata = {} } = req.body;
 
@@ -837,7 +889,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
    *   metadata: { ... }
    * }
    */
-  router.post('/create-payment-intent', authenticateToken, checkMongoDB, async (req, res) => {
+  router.post('/create-payment-intent', paymentRateLimiter, authenticateToken, checkMongoDB, async (req, res) => {
     try {
       const { amount, currency = 'eur', metadata = {} } = req.body;
 
@@ -1520,7 +1572,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
    *   cancelUrl: "..."               // URL de redirection après annulation
    * }
    */
-  router.post('/create-session', checkMongoDB, async (req, res) => {
+  router.post('/create-session', sessionRateLimiter, checkMongoDB, async (req, res) => {
     try {
       const { requestId, email, successUrl, cancelUrl } = req.body;
 
@@ -1625,7 +1677,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
    * Récupérer les factures d'un client - REQUIRES AUTHENTICATION
    * L'utilisateur ne peut voir que ses propres factures
    */
-  router.get('/invoices', authenticateToken, checkMongoDB, async (req, res) => {
+  router.get('/invoices', invoiceRateLimiter, authenticateToken, checkMongoDB, async (req, res) => {
     try {
       const { limit = 50 } = req.query;
       const userId = req.user.userId;
@@ -1688,13 +1740,42 @@ function createStripeRoutes(mongoClient, mongoConnected) {
 
   /**
    * GET /api/stripe/invoices/:invoiceNumber
-   * Récupérer une facture spécifique
+   * Récupérer une facture spécifique - REQUIRES AUTHENTICATION
+   * L'utilisateur ne peut voir que ses propres factures
    */
-  router.get('/invoices/:invoiceNumber', checkMongoDB, async (req, res) => {
+  router.get('/invoices/:invoiceNumber', authenticateToken, checkMongoDB, async (req, res) => {
     try {
+      const invoiceNumber = req.params.invoiceNumber;
+
+      // SECURITY: Validate invoice number format
+      if (!validator.isValidInvoiceNumber(invoiceNumber)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INVOICE_NUMBER', message: 'Invalid invoice number format' }
+        });
+      }
+
       const db = mongoClient.db();
+
+      // Get user to verify ownership
+      const user = await db.collection('users').findOne({
+        _id: new ObjectId(req.user.userId)
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+        });
+      }
+
+      // SECURITY: Only return invoice if it belongs to the authenticated user
       const invoice = await db.collection('invoices').findOne({
-        invoiceNumber: req.params.invoiceNumber
+        invoiceNumber: invoiceNumber,
+        $or: [
+          { clientEmail: user.email?.toLowerCase() },
+          { stripeCustomerId: user.stripeCustomerId }
+        ].filter(f => Object.values(f)[0])
       });
 
       if (!invoice) {
@@ -1712,20 +1793,49 @@ function createStripeRoutes(mongoClient, mongoConnected) {
       console.error('[Invoices] Error fetching invoice:', error.message);
       res.status(500).json({
         success: false,
-        error: { code: 'SERVER_ERROR', message: error.message }
+        error: { code: 'SERVER_ERROR', message: 'Failed to fetch invoice' }
       });
     }
   });
 
   /**
    * GET /api/stripe/invoices/:invoiceNumber/pdf
-   * Télécharger le PDF d'une facture
+   * Télécharger le PDF d'une facture - REQUIRES AUTHENTICATION
+   * L'utilisateur ne peut télécharger que ses propres factures
    */
-  router.get('/invoices/:invoiceNumber/pdf', checkMongoDB, async (req, res) => {
+  router.get('/invoices/:invoiceNumber/pdf', authenticateToken, checkMongoDB, async (req, res) => {
     try {
+      const invoiceNumber = req.params.invoiceNumber;
+
+      // SECURITY: Validate invoice number format
+      if (!validator.isValidInvoiceNumber(invoiceNumber)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INVOICE_NUMBER', message: 'Invalid invoice number format' }
+        });
+      }
+
       const db = mongoClient.db();
+
+      // Get user to verify ownership
+      const user = await db.collection('users').findOne({
+        _id: new ObjectId(req.user.userId)
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+        });
+      }
+
+      // SECURITY: Only return invoice PDF if it belongs to the authenticated user
       const invoice = await db.collection('invoices').findOne({
-        invoiceNumber: req.params.invoiceNumber
+        invoiceNumber: invoiceNumber,
+        $or: [
+          { clientEmail: user.email?.toLowerCase() },
+          { stripeCustomerId: user.stripeCustomerId }
+        ].filter(f => Object.values(f)[0])
       });
 
       if (!invoice) {
@@ -1754,7 +1864,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
       console.error('[Invoices] Error generating PDF:', error.message);
       res.status(500).json({
         success: false,
-        error: { code: 'SERVER_ERROR', message: error.message }
+        error: { code: 'SERVER_ERROR', message: 'Failed to generate PDF' }
       });
     }
   });
@@ -1833,13 +1943,32 @@ function createStripeRoutes(mongoClient, mongoConnected) {
 
   /**
    * POST /api/stripe/invoices/:invoiceNumber/resend
-   * Renvoyer une facture par email
+   * Renvoyer une facture par email - ADMIN ONLY
    */
   router.post('/invoices/:invoiceNumber/resend', checkMongoDB, async (req, res) => {
     try {
+      // SECURITY: Admin only endpoint
+      const adminKey = req.headers['x-admin-key'];
+      if (!validateAdminKey(adminKey)) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Admin access required' }
+        });
+      }
+
+      const invoiceNumber = req.params.invoiceNumber;
+
+      // SECURITY: Validate invoice number format
+      if (!validator.isValidInvoiceNumber(invoiceNumber)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INVOICE_NUMBER', message: 'Invalid invoice number format' }
+        });
+      }
+
       const db = mongoClient.db();
       const invoice = await db.collection('invoices').findOne({
-        invoiceNumber: req.params.invoiceNumber
+        invoiceNumber: invoiceNumber
       });
 
       if (!invoice) {
@@ -1879,7 +2008,7 @@ function createStripeRoutes(mongoClient, mongoConnected) {
       console.error('[Invoices] Error resending invoice:', error.message);
       res.status(500).json({
         success: false,
-        error: { code: 'SERVER_ERROR', message: error.message }
+        error: { code: 'SERVER_ERROR', message: 'Failed to resend invoice' }
       });
     }
   });
