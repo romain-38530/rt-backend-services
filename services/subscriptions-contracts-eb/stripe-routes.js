@@ -33,9 +33,9 @@ const invoiceRateLimiter = rateLimit({
 // SECURITY: Stripe secret key validation
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 if (process.env.NODE_ENV === 'production' && !STRIPE_SECRET_KEY) {
-  throw new Error('[SECURITY] STRIPE_SECRET_KEY is required in production');
+  console.error('[CRITICAL SECURITY] STRIPE_SECRET_KEY not set in production - Stripe features will be unavailable');
 }
-const stripe = require('stripe')(STRIPE_SECRET_KEY || 'sk_test_dev_placeholder');
+const stripe = STRIPE_SECRET_KEY ? require('stripe')(STRIPE_SECRET_KEY) : null;
 const { SESClient, SendRawEmailCommand } = require('@aws-sdk/client-ses');
 const PDFDocument = require('pdfkit');
 const { authenticateToken } = require('./auth-middleware');
