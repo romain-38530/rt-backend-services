@@ -64,14 +64,35 @@ const SUBSCRIPTION_PLANS = {
   },
   transporteur_premium: {
     name: 'Transporteur Premium',
-    description: 'Accès à la bourse AFFRET.IA + prospection client + visibilité élargie.',
-    monthlyPrice: 299,
+    description: 'Accès complet aux fonctions Transporteur et Industriel. Inclut AFFRET.IA et Tracking IA.',
+    monthlyPrice: 849,  // Base 499€ + AFFRET.IA 200€ + Tracking IA 150€
+    breakdown: {
+      base: 499,
+      affretia: 200,
+      trackingIA: 150
+    },
     features: [
+      // Features Transporteur
       'Accès bourse AFFRET.IA',
       'Prospection clients industriels',
       'Visibilité élargie sur la plateforme',
       'Matching IA opportunités',
-      'Alertes temps réel'
+      'Alertes temps réel',
+      'Planification automatisée',
+      'Contrôle de vigilance documents légaux',
+      // Features Industriel
+      'Espace industriel complet',
+      'Gestion des expéditions',
+      'Suivi temps réel des livraisons',
+      'Documents transport dématérialisés',
+      'Reporting avancé',
+      'API intégration',
+      // Options incluses
+      'AFFRET.IA Premium inclus',
+      'Tracking IA inclus',
+      'Utilisateurs illimités',
+      'Support prioritaire',
+      'Formation incluse'
     ]
   },
   transporteur_pro: {

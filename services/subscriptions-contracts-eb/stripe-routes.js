@@ -153,6 +153,28 @@ const PRICING_PLANS = {
     stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_INDUSTRIE || 'price_1SoX3KRzJcFnHbQGuBkHkP0r',
     activatedFeatures: ['bourse_fret', 'matching_ia', 'vigilance', 'alertes_temps_reel', 'referentiel_transporteurs', 'planning', 'kpi', 'scoring', 'appels_offres', 'utilisateurs_illimites']
   },
+  // Plan Premium: Transporteur + Fonctions Industriel (même univers)
+  // Base: 499€/mois + Options: AFFRET.IA 200€ + Tracking IA 150€ = 849€/mois
+  transporteur_premium: {
+    name: 'Transporteur Premium',
+    monthlyPrice: 499,  // Prix de base
+    annualPrice: 5988,
+    stripePriceId: process.env.STRIPE_PRICE_TRANSPORTEUR_PREMIUM || 'price_transporteur_premium',
+    includedOptions: ['affretia', 'tracking_ia'],  // Options incluses dans le pack
+    activatedFeatures: [
+      // Features Transporteur
+      'bourse_fret', 'matching_ia', 'vigilance', 'alertes_temps_reel',
+      'referentiel_transporteurs', 'planning', 'kpi', 'scoring', 'appels_offres',
+      // Features Industriel
+      'espace_industriel', 'gestion_expeditions', 'suivi_temps_reel', 'documents_transport',
+      'facturation_transport', 'reporting_avance', 'api_integration', 'multi_sites',
+      // Features communes premium
+      'utilisateurs_illimites', 'support_prioritaire', 'formation_incluse',
+      // Options incluses
+      'affretia_premium', 'tracking_ia'
+    ],
+    description: 'Accès complet aux fonctions Transporteur et Industriel sur le même univers'
+  },
   transporteur_tms: {
     name: 'Connexion TMS',
     monthlyPrice: 149,
@@ -179,6 +201,13 @@ const OPTION_PRICES = {
     monthlyPrice: 200,
     stripePriceId: process.env.STRIPE_PRICE_OPTION_AFFRET_IA || 'price_1Sa0Q9RzJcFnHbQGo9MPpKLL',
     type: 'monthly'
+  },
+  trackingIA: {
+    name: 'Tracking IA',
+    monthlyPrice: 150,
+    stripePriceId: process.env.STRIPE_PRICE_OPTION_TRACKING_IA || 'price_tracking_ia',
+    type: 'monthly',
+    description: 'Suivi intelligent des expéditions avec prédiction ETA'
   },
   thirdPartyConnection: {
     name: 'Connexion outil tiers',
