@@ -401,6 +401,69 @@ const LOGISTICIEN_PAID_OPTIONS = {
 // ==================== ADD-ONS / OPTIONS PAYANTES ====================
 
 const PAID_OPTIONS = {
+  // ===== OPTIONS TRANSPORTEUR =====
+  // Pack Industriel Complet pour Transporteurs - 499 EUR/mois
+  accessIndustrielComplet: {
+    id: 'accessIndustrielComplet',
+    name: 'Acces Industriel Complet',
+    description: 'Fonctionnalites equivalentes au plan Industriel Pro (dashboard KPI, commandes, planning, etc.)',
+    monthlyPrice: 499,
+    pricingType: 'fixed_monthly',
+    stripePriceId: process.env.STRIPE_PRICE_ACCESS_INDUSTRIEL || null,
+    stripeProductId: process.env.STRIPE_PRODUCT_ACCESS_INDUSTRIEL || null,
+    availableFor: ['transporteur_starter', 'transporteur_premium', 'transporteur_business', 'transporteur_elite'],
+    features: {
+      dashboardIndustriel: true,
+      commandesIndustrielles: true,
+      indicateursKpi: true,
+      alertesCritiques: true,
+      demandesTransport: true,
+      facturation: true,
+      palettesEurope: true,
+      bourseStockage: true,
+      referencementTransporteurs: true,
+      grillesTarifaires: true,
+      planningChargement: true,
+      vigilanceDocuments: true
+    }
+  },
+  // AFFRET.IA pour Transporteurs - 200 EUR/mois
+  affretIATransporteur: {
+    id: 'affretIATransporteur',
+    name: 'AFFRET.IA Transporteur',
+    description: 'Module AFFRET.IA - Affretement intelligent automatise (equivalent industriel)',
+    monthlyPrice: 200,
+    pricingType: 'fixed_monthly',
+    stripePriceId: process.env.STRIPE_PRICE_AFFRET_IA_TRANSPORTEUR || null,
+    stripeProductId: process.env.STRIPE_PRODUCT_AFFRET_IA_TRANSPORTEUR || null,
+    availableFor: ['transporteur_starter', 'transporteur_premium', 'transporteur_business', 'transporteur_elite'],
+    features: {
+      affretIA: true,
+      carrierShortlist: true,
+      multiChannelBroadcast: true,
+      autoNegotiation: true,
+      carrierScoringSelection: true
+    }
+  },
+  // Tracking IA Autonome - 150 EUR/mois
+  trackingIAAutonome: {
+    id: 'trackingIAAutonome',
+    name: 'Tracking IA Autonome',
+    description: 'Systeme de tracking intelligent autonome par email (sans GPS TomTom)',
+    monthlyPrice: 150,
+    pricingType: 'fixed_monthly',
+    stripePriceId: process.env.STRIPE_PRICE_TRACKING_IA || null,
+    stripeProductId: process.env.STRIPE_PRODUCT_TRACKING_IA || null,
+    availableFor: ['transporteur_starter', 'transporteur_premium', 'transporteur_business', 'transporteur_elite'],
+    features: {
+      trackingIA: true,
+      emailTracking: true,
+      etaMonitoring: true,
+      delayAlerts: true,
+      deliveryConfirmation: true
+    }
+  },
+  // ===== OPTIONS INDUSTRIEL =====
   gpsTrackingTomtom: {
     id: 'gpsTrackingTomtom',
     name: 'GPS Tracking TomTom',
@@ -680,6 +743,48 @@ const FEATURE_DESCRIPTIONS = {
     name: 'Statistiques Avancees',
     description: 'Rapports et analyses detailles',
     icon: 'PieChart'
+  },
+
+  // Options Transporteur pour acces fonctions industrielles
+  accessIndustrielComplet: {
+    name: 'Acces Industriel Complet',
+    description: 'Pack complet fonctionnalites industrielles pour transporteurs (499EUR/mois)',
+    icon: 'Factory'
+  },
+  affretIATransporteur: {
+    name: 'AFFRET.IA Transporteur',
+    description: 'Module affretement intelligent pour transporteurs (200EUR/mois)',
+    icon: 'Brain'
+  },
+  trackingIAAutonome: {
+    name: 'Tracking IA Autonome',
+    description: 'Tracking intelligent par email sans GPS TomTom (150EUR/mois)',
+    icon: 'Mail'
+  },
+  trackingIA: {
+    name: 'Tracking IA',
+    description: 'Systeme de suivi intelligent des livraisons',
+    icon: 'Radar'
+  },
+  emailTracking: {
+    name: 'Email Tracking',
+    description: 'Notifications de suivi par email',
+    icon: 'MailCheck'
+  },
+  etaMonitoring: {
+    name: 'ETA Monitoring',
+    description: 'Surveillance temps estime d\'arrivee',
+    icon: 'Clock'
+  },
+  delayAlerts: {
+    name: 'Alertes Retard',
+    description: 'Notifications automatiques en cas de retard',
+    icon: 'AlertCircle'
+  },
+  deliveryConfirmation: {
+    name: 'Confirmation Livraison',
+    description: 'Confirmation automatique de livraison',
+    icon: 'CheckCircle'
   }
 };
 
@@ -876,6 +981,14 @@ function getPlansOverview() {
       { id: 'bourseDeStockage', name: 'Bourse de Stockage', price: '200 EUR/mois', highlight: 'Marketplace stockage' },
       { id: 'borneAccueilChauffeur', name: 'Tablette Accueil Chauffeur', price: '150 EUR/mois', highlight: 'Automatisation accueil' }
     ],
+    // Options Transporteur (pour avoir acces aux fonctions industrielles)
+    transporteurOptions: [
+      { id: 'accessIndustrielComplet', name: 'Acces Industriel Complet', price: '499 EUR/mois', highlight: 'Dashboard KPI, commandes, planning...' },
+      { id: 'affretIATransporteur', name: 'AFFRET.IA', price: '200 EUR/mois', highlight: 'Affretement intelligent' },
+      { id: 'trackingIAAutonome', name: 'Tracking IA Autonome', price: '150 EUR/mois', highlight: 'Tracking par email sans GPS' }
+    ],
+    // Exemple: Pack SETT Transports = Starter (200) + accessIndustrielComplet (499) + affretIA (200) + trackingIA (150) = 849 EUR (hors starter car inclus dans accessIndustriel)
+    // Ou: accessIndustrielComplet (499) + affretIA (200) + trackingIA (150) = 849 EUR
     addOns: [
       { id: 'gpsTrackingTomtom', name: 'GPS TomTom', price: '4 EUR/vehicule' },
       { id: 'emailTrackingMailgun', name: 'Email Mailgun', price: '50 EUR/mois' },

@@ -1054,36 +1054,93 @@ function createStripeRoutes(mongoClient, mongoConnected) {
   /**
    * GET /api/stripe/features
    * Récupérer les features activées de l'utilisateur connecté
+   * Cherche dans rt-auth (source de vérité pour les plans/modules)
    */
   router.get('/features', authenticateToken, checkMongoDB, async (req, res) => {
     try {
-      const db = mongoClient.db();
-      const user = await db.collection('users').findOne({ _id: new ObjectId(req.user.userId) });
+      // Chercher dans rt-auth (source de vérité)
+      const authDb = mongoClient.db('rt-auth');
+      let user = null;
+
+      // Essayer de trouver par ID d'abord
+      if (req.user.userId) {
+        try {
+          user = await authDb.collection('users').findOne({ _id: new ObjectId(req.user.userId) });
+        } catch (e) {
+          // ObjectId invalide, ignorer
+        }
+      }
+
+      // Si pas trouvé par ID, chercher par email
+      if (!user && req.user.email) {
+        user = await authDb.collection('users').findOne({ email: req.user.email.toLowerCase() });
+      }
+
+      if (!user) {
+        // Fallback: chercher dans rt-subscriptions
+        const subDb = mongoClient.db('rt-subscriptions');
+        if (req.user.userId) {
+          try {
+            user = await subDb.collection('users').findOne({ _id: new ObjectId(req.user.userId) });
+          } catch (e) {}
+        }
+        if (!user && req.user.email) {
+          user = await subDb.collection('users').findOne({ email: req.user.email.toLowerCase() });
+        }
+      }
 
       if (!user) {
         return res.json({
           success: true,
           data: {
             currentPlan: 'transporteur_free',
+            planLevel: 'GRATUIT',
+            planName: 'Transporteur Gratuit',
             activatedFeatures: ['base_access'],
-            subscriptionStatus: null
+            subscriptionStatus: null,
+            modules: {}
           }
         });
       }
 
-      // Récupérer le plan et les features
-      const currentPlan = user.currentPlan || 'transporteur_free';
-      const plan = PRICING_PLANS[currentPlan];
-      const activatedFeatures = user.activatedFeatures || plan?.activatedFeatures || ['base_access'];
+      // Déterminer le plan depuis les différentes sources possibles
+      const planLevel = user.planLevel || user.subscription?.planLevel || 'GRATUIT';
+      const planId = user.subscription?.plan || user.currentPlan || 'transporteur_free';
+      const planName = user.subscription?.planName || PRICING_PLANS[planId]?.name ||
+                       (planLevel === 'PREMIUM' ? 'Transporteur Premium' :
+                        planLevel === 'STARTER' ? 'Transporteur Starter' : 'Transporteur Gratuit');
+
+      // Construire les features activées depuis les modules
+      const modules = user.modules || {};
+      const activatedFeatures = ['base_access'];
+
+      // Mapper les modules vers les features
+      if (modules.affretIA || modules.bourse_fret) activatedFeatures.push('bourse_fret');
+      if (modules.affretIA) activatedFeatures.push('matching_ia');
+      if (modules.vigilanceDocuments || modules.alertesCritiques) activatedFeatures.push('vigilance', 'alertes_temps_reel');
+      if (modules.referencementTransporteurs || modules.carrierReferencing) activatedFeatures.push('referentiel_transporteurs');
+      if (modules.planningChargement || modules.planningIA) activatedFeatures.push('planning');
+      if (modules.indicateursKpi || modules.kpiDashboard || modules.dashboardIndustriel) activatedFeatures.push('kpi');
+      if (modules.carrierScoringSelection) activatedFeatures.push('scoring');
+      if (modules.reponseAppelsOffres === true || modules.reponseAppelsOffres === -1) activatedFeatures.push('appels_offres');
+      if (modules.multiUtilisateurs === -1 || user.subscription?.options?.includes('accessIndustrielComplet')) activatedFeatures.push('utilisateurs_illimites');
+      if (modules.apiAccess) activatedFeatures.push('api_rest', 'tms_sync', 'webhooks');
+
+      // Dédupliquer
+      const uniqueFeatures = [...new Set(activatedFeatures)];
 
       res.json({
         success: true,
         data: {
-          currentPlan,
-          planName: plan?.name || 'Transporteur Gratuit',
-          activatedFeatures,
-          subscriptionStatus: user.subscriptionStatus || null,
-          planActivatedAt: user.planActivatedAt || null
+          currentPlan: planId,
+          planLevel: planLevel,
+          planName: planName,
+          price: user.subscription?.price || 0,
+          activatedFeatures: uniqueFeatures,
+          subscriptionStatus: user.subscription?.status || user.subscriptionStatus || (planLevel !== 'GRATUIT' ? 'active' : null),
+          planActivatedAt: user.subscription?.startDate || user.planActivatedAt || null,
+          modules: modules,
+          options: user.subscription?.options || []
         }
       });
     } catch (error) {

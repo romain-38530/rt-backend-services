@@ -1,12 +1,13 @@
 // Créer un ZIP avec chemins Unix pour AWS Linux
-// Version 2.5.3 - AWS SES Email Migration + Anti-Spam Headers
+// Version 4.0.6 - Fix features endpoint to read from rt-auth
 const fs = require('fs');
 const path = require('path');
 // Utiliser le chemin absolu pour pnpm
-const archiver = require('c:/Users/rtard/rt-backend-services/node_modules/.pnpm/archiver@7.0.1/node_modules/archiver');
+const archiver = require('c:/Users/rtard/rt-backend-services/node_modules/.pnpm/archiver@5.3.2/node_modules/archiver');
 
-const VERSION = 'v4.2.5-stripe-admin-setup';
-const outputPath = path.join(__dirname, 'bundle', `deploy-${VERSION}.zip`);
+const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+const VERSION = `v4.0.7-complete-bundle-${timestamp}`;
+const outputPath = path.join(__dirname, `deploy-bundle.zip`);
 
 // Créer le dossier bundle s'il n'existe pas
 if (!fs.existsSync(path.join(__dirname, 'bundle'))) {
@@ -51,6 +52,7 @@ const files = [
   'ecmr-routes.js',
   'industrial-transport-config-routes.js',
   'pricing-grids-routes.js',
+  'pricing-grids-extended-routes.js',
   'stripe-routes.js',
   'transport-orders-routes.js',
   'affretia-routes.js',
@@ -100,6 +102,12 @@ const files = [
   'ecmr-pdf.js',
   'ecmr-yousign.js',
   'ecmr-archive.js',
+  // Contract & Signature System
+  'contract-routes.js',
+  'contract-service.js',
+  'signature-routes.js',
+  'electronic-signature-service.js',
+  'auth-sync-service.js',
   // Subscription Management System
   'subscription-features.js',
   'subscription-guard.middleware.js',

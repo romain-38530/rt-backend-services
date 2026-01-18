@@ -133,17 +133,52 @@ const commonSchemas = {
 const authSchemas = {
   /**
    * POST /api/auth/register
+   * Supporte l'onboarding complet avec subscription et modules
    */
   register: Joi.object({
     email: commonSchemas.email.required(),
     password: commonSchemas.password.required(),
     companyName: commonSchemas.companyName,
+    firstName: Joi.string().max(100).allow(null, ''),
+    lastName: Joi.string().max(100).allow(null, ''),
+    phone: commonSchemas.phone.allow(null, ''),
     role: Joi.string()
-      .valid('carrier', 'industrial', 'logistician')
+      .valid('carrier', 'industrial', 'logistician', 'admin')
       .required()
       .messages({
-        'any.only': 'Role must be one of: carrier, industrial, logistician'
+        'any.only': 'Role must be one of: carrier, industrial, logistician, admin'
       }),
+    // Subscription pour onboarding avec plan spécifique
+    subscription: Joi.object({
+      plan: Joi.string().max(100),
+      planId: Joi.string().max(100),
+      planLevel: Joi.string().valid('FREE', 'STARTER', 'PREMIUM', 'BUSINESS', 'ELITE', 'PRO', 'ENTERPRISE'),
+      status: Joi.string().valid('active', 'inactive', 'pending', 'cancelled'),
+      price: Joi.number().min(0),
+      currency: Joi.string().valid('EUR', 'USD'),
+      features: Joi.array().items(Joi.string()),
+      billingPeriod: Joi.string().valid('monthly', 'yearly'),
+      startDate: Joi.date().iso(),
+      currentPeriodEnd: Joi.date().iso()
+    }).allow(null),
+    // Modules activés
+    modules: Joi.object().pattern(
+      Joi.string(),
+      Joi.boolean()
+    ).allow(null),
+    // Organisation pour les infos entreprise
+    organization: Joi.object({
+      name: Joi.string().max(200),
+      siret: Joi.string().pattern(/^\d{14}$/).allow(null, ''),
+      siren: Joi.string().pattern(/^\d{9}$/).allow(null, ''),
+      vatNumber: Joi.string().max(50).allow(null, ''),
+      address: Joi.object({
+        street: Joi.string().max(500),
+        postalCode: Joi.string().max(20),
+        city: Joi.string().max(100),
+        country: Joi.string().max(100)
+      }).allow(null)
+    }).allow(null),
     metadata: Joi.object().default({})
   }),
 
