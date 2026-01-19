@@ -1,0 +1,231 @@
+# ============================================================================
+# RT SYMPHONI.A - AWS Textract IAM Configuration
+# ============================================================================
+# AWS Elastic Beanstalk Configuration File
+# Version: 1.6.2-security-final
+# Date: 2024-11-26
+# ============================================================================
+#
+# Ce fichier configure les permissions IAM nécessaires pour AWS Textract
+# et les autres services AWS utilisés par RT SYMPHONI.A
+#
+# IMPORTANT : Cette configuration attache des policies à l'instance profile
+# d'Elastic Beanstalk, permettant à l'application d'accéder aux services AWS
+# sans credentials explicites
+#
+# ============================================================================
+
+Resources:
+  # ============================================================================
+  # Custom IAM Policy pour AWS Textract
+  # ============================================================================
+  # Cette policy donne les permissions minimales nécessaires pour :
+  # - Analyser des documents avec Textract
+  # - Lire/écrire dans le bucket S3 des documents
+  # - Logger dans CloudWatch
+  # ============================================================================
+
+  RTSympho niaTextractPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyName: RT-SYMPHONIA-Textract-EB-Policy
+      Description: "IAM policy for RT SYMPHONI.A Textract OCR processing"
+      Path: "/"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Textract - Analyse de documents
+          - Sid: TextractAnalyzeDocument
+            Effect: Allow
+            Action:
+              - textract:AnalyzeDocument
+              - textract:DetectDocumentText
+              - textract:GetDocumentAnalysis
+              - textract:GetDocumentTextDetection
+              - textract:StartDocumentAnalysis
+              - textract:StartDocumentTextDetection
+            Resource: "*"
+
+          # S3 - Accès au bucket de documents
+          - Sid: S3DocumentsAccess
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - "arn:aws:s3:::rt-ecmr-documents"
+              - "arn:aws:s3:::rt-ecmr-documents/*"
+              - "arn:aws:s3:::elasticbeanstalk-eu-central-1-004843574253"
+              - "arn:aws:s3:::elasticbeanstalk-eu-central-1-004843574253/*"
+
+          # CloudWatch Logs - Pour le logging
+          - Sid: CloudWatchLogsAccess
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+            Resource:
+              - "arn:aws:logs:eu-central-1:004843574253:log-group:/aws/elasticbeanstalk/rt-subscriptions-api-prod/*"
+              - "arn:aws:logs:eu-central-1:004843574253:log-group:RTSYMPHONIA/ExternalServices/*"
+
+          # CloudWatch Metrics - Pour les métriques personnalisées
+          - Sid: CloudWatchMetricsAccess
+            Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+              - cloudwatch:GetMetricStatistics
+              - cloudwatch:ListMetrics
+            Resource: "*"
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: "RTSYMPHONIA/ExternalServices"
+
+  # ============================================================================
+  # Attacher la policy au rôle Elastic Beanstalk
+  # ============================================================================
+  # Cette ressource attache notre policy personnalisée au rôle EC2
+  # utilisé par les instances Elastic Beanstalk
+  # ============================================================================
+
+  AttachPolicyToRole:
+    Type: AWS::IAM::PolicyAttachment
+    Properties:
+      PolicyName: !Ref RTSymphoniaTextractPolicy
+      Roles:
+        - !Ref AWSEBInstanceRole
+
+# ============================================================================
+# Alternative : Utiliser une Policy AWS Managed (Plus Simple)
+# ============================================================================
+# Si vous préférez utiliser les policies AWS prédéfinies au lieu de créer
+# une policy personnalisée, décommentez la section ci-dessous et commentez
+# la section "Resources" ci-dessus
+# ============================================================================
+
+# Resources:
+#   AttachTextractFullAccess:
+#     Type: AWS::IAM::PolicyAttachment
+#     Properties:
+#       PolicyName: AmazonTextractFullAccess
+#       Roles:
+#         - !Ref AWSEBInstanceRole
+#
+#   AttachS3Access:
+#     Type: AWS::IAM::PolicyAttachment
+#     Properties:
+#       PolicyName: AmazonS3FullAccess
+#       Roles:
+#         - !Ref AWSEBInstanceRole
+
+# ============================================================================
+# Configuration via Instance Profile (Méthode Recommandée)
+# ============================================================================
+# Au lieu d'utiliser des Access Keys explicites, cette configuration permet
+# à l'application de s'authentifier automatiquement via l'Instance Profile
+# de l'instance EC2
+#
+# Avantages :
+# - Pas besoin de stocker des credentials dans les variables d'environnement
+# - Rotation automatique des credentials par AWS
+# - Plus sécurisé (pas de credentials en clair)
+# - Conforme aux best practices AWS
+#
+# Pour utiliser cette méthode dans votre code :
+#
+#   const AWS = require('aws-sdk');
+#
+#   // Ne pas spécifier accessKeyId et secretAccessKey
+#   // AWS SDK utilisera automatiquement l'Instance Profile
+#   const textract = new AWS.Textract({
+#     region: process.env.AWS_REGION || 'eu-central-1'
+#   });
+#
+# ============================================================================
+
+# ============================================================================
+# Validation Post-Déploiement
+# ============================================================================
+#
+# Après le déploiement, vérifiez que les permissions sont correctement
+# configurées :
+#
+# 1. Se connecter à l'instance EB :
+#    eb ssh
+#
+# 2. Vérifier l'Instance Profile :
+#    curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
+#
+# 3. Tester l'accès Textract :
+#    aws textract detect-document-text --document '{"Bytes":"..."}' --region eu-central-1
+#
+# 4. Vérifier les logs CloudWatch :
+#    aws logs describe-log-groups --log-group-name-prefix /aws/elasticbeanstalk
+#
+# ============================================================================
+
+# ============================================================================
+# Troubleshooting
+# ============================================================================
+#
+# Erreur : "AccessDenied - User is not authorized to perform textract:AnalyzeDocument"
+# Solution :
+#   - Vérifier que la policy est bien attachée au rôle
+#   - Vérifier que le rôle est bien attaché à l'instance profile
+#   - Attendre 5-10 minutes pour la propagation des permissions IAM
+#
+# Erreur : "No credentials found"
+# Solution :
+#   - Vérifier que l'instance profile est correctement configuré
+#   - Redéployer l'application : eb deploy
+#
+# Erreur : "Policy document too large"
+# Solution :
+#   - Utiliser plusieurs policies plus petites
+#   - Ou utiliser des AWS Managed Policies
+#
+# ============================================================================
+
+# ============================================================================
+# Sécurité et Best Practices
+# ============================================================================
+#
+# ✅ Principe du moindre privilège :
+#   - Chaque action est explicitement listée (pas de wildcards inutiles)
+#   - Restrictions par Resource ARN quand possible
+#   - Conditions sur les namespaces CloudWatch
+#
+# ✅ Audit et monitoring :
+#   - Activer AWS CloudTrail pour auditer les accès Textract
+#   - Configurer CloudWatch Alarms sur les erreurs d'accès
+#
+# ✅ Rotation et révocation :
+#   - Les credentials temporaires de l'Instance Profile sont automatiquement
+#     rotés par AWS toutes les heures
+#   - En cas de compromission, révoquer le rôle IAM immédiatement
+#
+# ============================================================================
+
+# ============================================================================
+# Coûts Associés
+# ============================================================================
+#
+# Cette configuration n'entraîne PAS de coûts supplémentaires.
+#
+# Les coûts sont liés à l'UTILISATION des services, pas à la configuration IAM :
+# - AWS Textract : ~$0.065 par page analysée
+# - S3 Storage : ~$0.023 par GB/mois
+# - CloudWatch Logs : ~$0.50 par GB ingéré
+# - CloudWatch Metrics : Premières 10,000 métriques gratuites
+#
+# Estimation pour 10,000 documents/mois :
+# - Textract : $650 (~580€)
+# - S3 (1GB) : $0.023 (~0.02€)
+# - CloudWatch : $5 (~4.50€)
+# ───────────────────────────────
+# TOTAL : ~585€/mois
+#
+# ============================================================================

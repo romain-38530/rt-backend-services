@@ -1,0 +1,5 @@
+commands:
+  01_npm_install:
+    command: "npm install --production"
+    cwd: /var/app/staging
+    ignoreErrors: false

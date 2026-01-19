@@ -182,7 +182,21 @@ function createAuthRoutes(mongoClient, mongoConnected) {
   router.post('/register', rateLimitRegister, validate(authSchemas.register), checkMongoDB, async (req, res) => {
     try {
       // Données validées et sanitisées par Joi
-      const { email, password, companyName, role = 'carrier', metadata = {} } = req.body;
+      // Ajout: subscription, modules, organization pour onboarding complet
+      const {
+        email,
+        password,
+        companyName,
+        role = 'carrier',
+        metadata = {},
+        // Nouveaux champs pour l'onboarding complet
+        subscription = null,    // { plan, price, features, status }
+        modules = null,         // { affretIA, trackingIA, ... }
+        organization = null,    // { siret, vatNumber, address }
+        firstName = null,
+        lastName = null,
+        phone = null
+      } = req.body;
 
       // Valider le format de l'email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -237,13 +251,59 @@ function createAuthRoutes(mongoClient, mongoConnected) {
       // Hasher le mot de passe
       const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-      // Créer l'utilisateur
+      // Créer l'utilisateur avec subscription et modules si fournis
       const now = new Date();
+
+      // Déterminer le plan par défaut selon le rôle si non spécifié
+      const defaultSubscription = {
+        plan: role === 'carrier' ? 'transporteur-gratuit' : 'industriel-starter',
+        planLevel: 'FREE',
+        status: 'active',
+        price: 0,
+        currency: 'EUR',
+        features: [],
+        startDate: now
+      };
+
+      // Fusionner avec la subscription fournie
+      const userSubscription = subscription ? {
+        ...defaultSubscription,
+        ...subscription,
+        startDate: subscription.startDate ? new Date(subscription.startDate) : now
+      } : defaultSubscription;
+
+      // Modules par défaut (gratuit = accès limité)
+      const defaultModules = {
+        dashboard: true,
+        profilEntreprise: true,
+        // Tout le reste désactivé par défaut
+        affretIA: false,
+        trackingIA: false,
+        gestionCommandes: false,
+        ecmr: false,
+        planningIA: false,
+        carrierReferencing: false
+      };
+
+      // Fusionner avec les modules fournis
+      const userModules = modules ? { ...defaultModules, ...modules } : defaultModules;
+
       const newUser = {
         email: email.toLowerCase(),
         password: hashedPassword,
         companyName: companyName || null,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        name: firstName && lastName ? `${firstName} ${lastName}` : companyName,
+        phone: phone || null,
         role,
+        // Nouveaux champs pour le plan et les modules
+        subscription: userSubscription,
+        planLevel: userSubscription.planLevel || 'FREE',
+        modules: userModules,
+        organization: organization || null,
+        accountType: userSubscription.planLevel === 'FREE' ? 'free' : 'premium',
+        accountStatus: 'active',
         metadata,
         isActive: true,
         emailVerified: false,
@@ -264,10 +324,18 @@ function createAuthRoutes(mongoClient, mongoConnected) {
         const syncResult = await syncUserToAuthDb({
           email: newUser.email,
           password: hashedPassword, // Mot de passe déjà hashé
-          name: newUser.companyName,
+          name: newUser.name,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
           role: newUser.role,
           companyName: newUser.companyName,
-          accountStatus: 'active'
+          phone: newUser.phone,
+          organization: newUser.organization,
+          // Synchroniser le plan et les modules
+          subscription: newUser.subscription,
+          modules: newUser.modules,
+          accountType: newUser.accountType,
+          accountStatus: newUser.accountStatus
         });
         if (syncResult.success) {
           console.log(`[Register] User synced to rt-auth: ${syncResult.action} (${syncResult.userId})`);

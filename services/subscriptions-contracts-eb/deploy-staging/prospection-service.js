@@ -4,7 +4,7 @@
  */
 
 const { MongoClient } = require('mongodb');
-const ProspectCarrier = require('../models/ProspectCarrier');
+const ProspectCarrier = require('./prospect-carrier-model');
 
 // AWS SES SDK
 let sesClient = null;
@@ -100,65 +100,65 @@ class ProspectionService {
       await this.b2pwebClient.connect();
       console.log('[PROSPECTION SERVICE] Connected to B2PWeb database');
     }
-    // Use rt-admin database where transport companies are stored
-    return this.b2pwebClient.db('rt-admin');
+    return this.b2pwebClient.db('affret_ia');
   }
 
   /**
    * Synchroniser les transporteurs depuis B2PWeb vers ProspectCarrier
-   * Lit depuis la collection transportcompanies dans rt-admin
    */
   async syncCarriersFromB2PWeb() {
     try {
       const db = await this.connectToB2PWeb();
-      const companiesCollection = db.collection('transportcompanies');
+      const carriersCollection = db.collection('carrier_interactions');
 
-      // Lire les entreprises de transport scrapees
-      const companies = await companiesCollection.find({
-        email: { $ne: null, $ne: '' },
-        isActive: true
-      }).toArray();
-
-      console.log(`[PROSPECTION SERVICE] Found ${companies.length} transport companies to sync`);
+      // Aggregation pour obtenir les transporteurs uniques avec leurs stats
+      const carriers = await carriersCollection.aggregate([
+        {
+          $group: {
+            _id: '$carrier_email',
+            carrier_name: { $first: '$carrier_name' },
+            carrier_phone: { $first: '$carrier_phone' },
+            interaction_count: { $sum: 1 },
+            first_seen: { $min: '$interaction_date' },
+            last_seen: { $max: '$interaction_date' },
+            routes: {
+              $push: {
+                from: '$from_city',
+                to: '$to_city',
+                fromPostal: { $substr: ['$reference', 0, 2] }
+              }
+            }
+          }
+        },
+        { $match: { _id: { $ne: null, $ne: '' } } }
+      ]).toArray();
 
       let created = 0;
       let updated = 0;
 
-      for (const company of companies) {
-        if (!company.email) continue;
-
+      for (const carrier of carriers) {
         // Verifier si existe deja
-        let prospect = await ProspectCarrier.findOne({ carrierEmail: company.email.toLowerCase() });
+        let prospect = await ProspectCarrier.findOne({ carrierEmail: carrier._id });
 
-        // Extraire le nom du contact
-        const contactName = company.mainContact?.firstName && company.mainContact?.lastName
-          ? `${company.mainContact.firstName} ${company.mainContact.lastName.toUpperCase()}`
-          : this.parseContactNameFromEmail(company.email);
-
-        // Extraire les zones d'activite depuis activeSearches
-        const activityZones = (company.activeSearches || []).map(search => ({
-          fromCity: search.route?.origin?.city || '',
-          toCity: search.route?.destination?.city || '',
-          fromPostalCode: search.route?.origin?.departmentCode || '',
-          toPostalCode: search.route?.destination?.departmentCode || '',
-          frequency: 1
-        })).filter(z => z.fromCity || z.toCity);
+        // Extraire le nom du contact depuis l'email (seulement si format reconnu)
+        const contactName = this.parseContactNameFromEmail(carrier._id);
 
         if (!prospect) {
           // Creer nouveau prospect
           const prospectData = {
-            carrierName: company.companyName,
-            carrierEmail: company.email.toLowerCase(),
-            carrierPhone: company.phone || company.mainContact?.phone || '',
+            carrierName: carrier.carrier_name,
+            carrierEmail: carrier._id,
+            carrierPhone: carrier.carrier_phone,
             source: {
               type: 'b2pweb',
-              firstSeenAt: company.createdAt || new Date(),
-              lastSeenAt: company.source?.scrapedAt || company.updatedAt || new Date(),
-              interactionCount: company.activeSearches?.length || 1
+              firstSeenAt: carrier.first_seen,
+              lastSeenAt: carrier.last_seen,
+              interactionCount: carrier.interaction_count
             },
-            activityZones: activityZones.slice(0, 10)
+            activityZones: this.extractActivityZones(carrier.routes)
           };
 
+          // Ajouter contactName seulement si detecte
           if (contactName) {
             prospectData.contactName = contactName;
           }
@@ -168,20 +168,16 @@ class ProspectionService {
           created++;
         } else {
           // Mettre a jour
-          prospect.source.lastSeenAt = company.source?.scrapedAt || company.updatedAt || new Date();
-          prospect.source.interactionCount = (prospect.source.interactionCount || 0) + (company.activeSearches?.length || 0);
+          prospect.source.lastSeenAt = carrier.last_seen;
+          prospect.source.interactionCount = carrier.interaction_count;
           prospect.activityZones = this.mergeActivityZones(
-            prospect.activityZones || [],
-            activityZones
+            prospect.activityZones,
+            this.extractActivityZones(carrier.routes)
           );
 
+          // Ajouter contactName si pas deja present et detecte
           if (contactName && !prospect.contactName) {
             prospect.contactName = contactName;
-          }
-
-          // Mettre a jour le telephone si vide
-          if (!prospect.carrierPhone && (company.phone || company.mainContact?.phone)) {
-            prospect.carrierPhone = company.phone || company.mainContact?.phone;
           }
 
           await prospect.save();
@@ -190,7 +186,7 @@ class ProspectionService {
       }
 
       console.log(`[PROSPECTION SERVICE] Sync complete: ${created} created, ${updated} updated`);
-      return { created, updated, total: companies.length };
+      return { created, updated, total: carriers.length };
 
     } catch (error) {
       console.error('[PROSPECTION SERVICE] Sync error:', error);

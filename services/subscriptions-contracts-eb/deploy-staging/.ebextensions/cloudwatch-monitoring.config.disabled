@@ -1,0 +1,273 @@
+####################################################################################################
+# RT SYMPHONI.A - CloudWatch Monitoring Configuration
+# Version: 1.0.0
+# Description: Configure CloudWatch agent and custom metrics for subscriptions-contracts-eb
+####################################################################################################
+
+option_settings:
+  # Enable enhanced health reporting
+  aws:elasticbeanstalk:healthreporting:system:
+    SystemType: enhanced
+    EnhancedHealthAuthEnabled: true
+
+  # CloudWatch Logs configuration
+  aws:elasticbeanstalk:cloudwatch:logs:
+    StreamLogs: true
+    DeleteOnTerminate: false
+    RetentionInDays: 30
+
+  # CloudWatch custom metrics
+  aws:elasticbeanstalk:cloudwatch:logs:health:
+    HealthStreamingEnabled: true
+    DeleteOnTerminate: false
+    RetentionInDays: 7
+
+  # Environment properties for CloudWatch
+  aws:elasticbeanstalk:application:environment:
+    CLOUDWATCH_ENABLED: 'true'
+    CLOUDWATCH_NAMESPACE: 'RT/SYMPHONIA/SubscriptionsContracts'
+    CLOUDWATCH_LOG_LEVEL: 'info'
+    METRICS_ENABLED: 'true'
+
+files:
+  # CloudWatch Agent configuration
+  "/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json":
+    mode: "000644"
+    owner: root
+    group: root
+    content: |
+      {
+        "agent": {
+          "metrics_collection_interval": 60,
+          "run_as_user": "cwagent"
+        },
+        "metrics": {
+          "namespace": "CWAgent",
+          "metrics_collected": {
+            "cpu": {
+              "measurement": [
+                {
+                  "name": "cpu_usage_idle",
+                  "rename": "CPU_IDLE",
+                  "unit": "Percent"
+                },
+                {
+                  "name": "cpu_usage_iowait",
+                  "rename": "CPU_IOWAIT",
+                  "unit": "Percent"
+                }
+              ],
+              "metrics_collection_interval": 60,
+              "totalcpu": false
+            },
+            "disk": {
+              "measurement": [
+                {
+                  "name": "used_percent",
+                  "rename": "DiskSpaceUtilization",
+                  "unit": "Percent"
+                },
+                {
+                  "name": "inodes_free",
+                  "rename": "InodesFree",
+                  "unit": "Count"
+                }
+              ],
+              "metrics_collection_interval": 60,
+              "resources": [
+                "*"
+              ]
+            },
+            "diskio": {
+              "measurement": [
+                {
+                  "name": "io_time",
+                  "rename": "IO_TIME",
+                  "unit": "Milliseconds"
+                },
+                {
+                  "name": "write_bytes",
+                  "rename": "WRITE_BYTES",
+                  "unit": "Bytes"
+                },
+                {
+                  "name": "read_bytes",
+                  "rename": "READ_BYTES",
+                  "unit": "Bytes"
+                }
+              ],
+              "metrics_collection_interval": 60
+            },
+            "mem": {
+              "measurement": [
+                {
+                  "name": "mem_used_percent",
+                  "rename": "MemoryUtilization",
+                  "unit": "Percent"
+                }
+              ],
+              "metrics_collection_interval": 60
+            },
+            "netstat": {
+              "measurement": [
+                {
+                  "name": "tcp_established",
+                  "rename": "TCP_ESTABLISHED",
+                  "unit": "Count"
+                },
+                {
+                  "name": "tcp_time_wait",
+                  "rename": "TCP_TIME_WAIT",
+                  "unit": "Count"
+                }
+              ],
+              "metrics_collection_interval": 60
+            },
+            "swap": {
+              "measurement": [
+                {
+                  "name": "swap_used_percent",
+                  "rename": "SWAP_USED",
+                  "unit": "Percent"
+                }
+              ],
+              "metrics_collection_interval": 60
+            }
+          }
+        },
+        "logs": {
+          "logs_collected": {
+            "files": {
+              "collect_list": [
+                {
+                  "file_path": "/var/app/current/logs/application.log",
+                  "log_group_name": "/aws/elasticbeanstalk/subscriptions-contracts-eb/application",
+                  "log_stream_name": "{instance_id}/application.log",
+                  "timestamp_format": "%Y-%m-%dT%H:%M:%S.%fZ"
+                },
+                {
+                  "file_path": "/var/log/nodejs/nodejs.log",
+                  "log_group_name": "/aws/elasticbeanstalk/subscriptions-contracts-eb/nodejs",
+                  "log_stream_name": "{instance_id}/nodejs.log",
+                  "timestamp_format": "%Y-%m-%dT%H:%M:%S.%fZ"
+                },
+                {
+                  "file_path": "/var/log/eb-engine.log",
+                  "log_group_name": "/aws/elasticbeanstalk/subscriptions-contracts-eb/eb-engine",
+                  "log_stream_name": "{instance_id}/eb-engine.log"
+                }
+              ]
+            }
+          }
+        }
+      }
+
+  # Node.js process monitoring script
+  "/opt/elasticbeanstalk/tasks/bundlelogs.d/01-app-logs.conf":
+    mode: "000644"
+    owner: root
+    group: root
+    content: |
+      /var/app/current/logs/*.log
+      /var/log/nodejs/*.log
+
+  # Custom metrics collection script
+  "/opt/rt-monitoring/collect-metrics.sh":
+    mode: "000755"
+    owner: root
+    group: root
+    content: |
+      #!/bin/bash
+      # RT SYMPHONI.A - Custom Metrics Collection Script
+
+      NAMESPACE="RT/SYMPHONIA/SubscriptionsContracts"
+      REGION=$(ec2-metadata --availability-zone | awk '{print substr($2, 1, length($2)-1)}')
+
+      # Get Node.js process metrics
+      NODE_PID=$(pgrep -f "node.*index.js" | head -1)
+
+      if [ -n "$NODE_PID" ]; then
+        # CPU usage
+        CPU_USAGE=$(ps -p $NODE_PID -o %cpu | tail -1 | awk '{print $1}')
+        aws cloudwatch put-metric-data --namespace "$NAMESPACE" \
+          --metric-name NodeProcessCPU \
+          --value $CPU_USAGE \
+          --unit Percent \
+          --region $REGION
+
+        # Memory usage
+        MEM_USAGE=$(ps -p $NODE_PID -o %mem | tail -1 | awk '{print $1}')
+        aws cloudwatch put-metric-data --namespace "$NAMESPACE" \
+          --metric-name NodeProcessMemory \
+          --value $MEM_USAGE \
+          --unit Percent \
+          --region $REGION
+
+        # Process uptime
+        UPTIME=$(ps -p $NODE_PID -o etimes | tail -1 | awk '{print $1}')
+        aws cloudwatch put-metric-data --namespace "$NAMESPACE" \
+          --metric-name NodeProcessUptime \
+          --value $UPTIME \
+          --unit Seconds \
+          --region $REGION
+      fi
+
+      # Check MongoDB connectivity
+      MONGO_CHECK=$(curl -s http://localhost:8080/health | jq -r '.mongodb.status')
+      if [ "$MONGO_CHECK" == "active" ]; then
+        aws cloudwatch put-metric-data --namespace "$NAMESPACE" \
+          --metric-name MongoDBHealthy \
+          --value 1 \
+          --unit Count \
+          --region $REGION
+      else
+        aws cloudwatch put-metric-data --namespace "$NAMESPACE" \
+          --metric-name MongoDBHealthy \
+          --value 0 \
+          --unit Count \
+          --region $REGION
+      fi
+
+commands:
+  01_install_cloudwatch_agent:
+    command: |
+      # Install CloudWatch Agent if not already installed
+      if ! command -v amazon-cloudwatch-agent-ctl &> /dev/null; then
+        wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+        rpm -U ./amazon-cloudwatch-agent.rpm
+        rm -f ./amazon-cloudwatch-agent.rpm
+      fi
+    ignoreErrors: true
+
+  02_install_jq:
+    command: yum install -y jq
+    ignoreErrors: true
+
+  03_start_cloudwatch_agent:
+    command: |
+      /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+        -a fetch-config \
+        -m ec2 \
+        -s \
+        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    ignoreErrors: true
+
+  04_setup_metrics_cron:
+    command: |
+      # Add cron job for custom metrics collection (every 5 minutes)
+      echo "*/5 * * * * /opt/rt-monitoring/collect-metrics.sh >> /var/log/rt-metrics.log 2>&1" | crontab -
+    ignoreErrors: true
+
+container_commands:
+  01_ensure_log_directory:
+    command: |
+      mkdir -p /var/app/current/logs
+      chmod 755 /var/app/current/logs
+      chown webapp:webapp /var/app/current/logs
+    ignoreErrors: true
+
+  02_create_monitoring_directory:
+    command: |
+      mkdir -p /opt/rt-monitoring
+      chmod 755 /opt/rt-monitoring
+    ignoreErrors: true

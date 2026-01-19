@@ -1,0 +1,102 @@
+####################################################################################################
+# RT SYMPHONI.A - CloudWatch Logs Configuration
+# Version: 1.0.0
+# Description: Configure log streaming to CloudWatch Logs
+####################################################################################################
+
+files:
+  # Application log configuration
+  "/etc/awslogs/config/app-logs.conf":
+    mode: "000644"
+    owner: root
+    group: root
+    content: |
+      [/var/app/current/logs/application.log]
+      log_group_name = /aws/elasticbeanstalk/subscriptions-contracts-eb/application
+      log_stream_name = {instance_id}/application
+      datetime_format = %Y-%m-%dT%H:%M:%S.%fZ
+      file = /var/app/current/logs/application.log*
+      buffer_duration = 5000
+      initial_position = start_of_file
+
+      [/var/app/current/logs/error.log]
+      log_group_name = /aws/elasticbeanstalk/subscriptions-contracts-eb/errors
+      log_stream_name = {instance_id}/errors
+      datetime_format = %Y-%m-%dT%H:%M:%S.%fZ
+      file = /var/app/current/logs/error.log*
+      buffer_duration = 5000
+      initial_position = start_of_file
+
+      [/var/app/current/logs/access.log]
+      log_group_name = /aws/elasticbeanstalk/subscriptions-contracts-eb/access
+      log_stream_name = {instance_id}/access
+      file = /var/app/current/logs/access.log*
+      buffer_duration = 5000
+      initial_position = start_of_file
+
+      [/var/app/current/logs/security.log]
+      log_group_name = /aws/elasticbeanstalk/subscriptions-contracts-eb/security
+      log_stream_name = {instance_id}/security
+      datetime_format = %Y-%m-%dT%H:%M:%S.%fZ
+      file = /var/app/current/logs/security.log*
+      buffer_duration = 5000
+      initial_position = start_of_file
+
+      [/var/app/current/logs/business-metrics.log]
+      log_group_name = /aws/elasticbeanstalk/subscriptions-contracts-eb/business-metrics
+      log_stream_name = {instance_id}/business-metrics
+      datetime_format = %Y-%m-%dT%H:%M:%S.%fZ
+      file = /var/app/current/logs/business-metrics.log*
+      buffer_duration = 5000
+      initial_position = start_of_file
+
+  # Logrotate configuration for application logs
+  "/etc/logrotate.d/rt-app-logs":
+    mode: "000644"
+    owner: root
+    group: root
+    content: |
+      /var/app/current/logs/*.log {
+        daily
+        rotate 7
+        missingok
+        notifempty
+        compress
+        delaycompress
+        sharedscripts
+        postrotate
+          /usr/bin/killall -SIGUSR1 nodejs
+        endscript
+      }
+
+commands:
+  01_create_log_groups:
+    command: |
+      REGION=$(ec2-metadata --availability-zone | awk '{print substr($2, 1, length($2)-1)}')
+
+      # Create CloudWatch Log Groups if they don't exist
+      for LOG_GROUP in \
+        "/aws/elasticbeanstalk/subscriptions-contracts-eb/application" \
+        "/aws/elasticbeanstalk/subscriptions-contracts-eb/errors" \
+        "/aws/elasticbeanstalk/subscriptions-contracts-eb/access" \
+        "/aws/elasticbeanstalk/subscriptions-contracts-eb/security" \
+        "/aws/elasticbeanstalk/subscriptions-contracts-eb/business-metrics"
+      do
+        aws logs create-log-group --log-group-name "$LOG_GROUP" --region "$REGION" 2>/dev/null || true
+        aws logs put-retention-policy --log-group-name "$LOG_GROUP" --retention-in-days 30 --region "$REGION" 2>/dev/null || true
+      done
+    ignoreErrors: true
+
+  02_restart_awslogs:
+    command: |
+      service awslogsd restart
+    ignoreErrors: true
+
+container_commands:
+  01_ensure_log_files:
+    command: |
+      cd /var/app/current/logs
+      touch application.log error.log access.log security.log business-metrics.log
+      chmod 644 *.log
+      chown webapp:webapp *.log
+    ignoreErrors: true
