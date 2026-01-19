@@ -467,6 +467,330 @@ app.post('/api/v1/notifications/broadcast', async (req, res) => {
   }
 });
 
+// ==================== RELANCE RULES ROUTES ====================
+
+// GET /api/v1/relance-rules - Get all relance rules for a carrier
+app.get('/api/v1/relance-rules', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ success: false, error: 'MongoDB not available' });
+  }
+
+  try {
+    const { carrierId } = req.query;
+
+    if (!carrierId) {
+      return res.status(400).json({ success: false, error: 'carrierId is required' });
+    }
+
+    const rules = await db.collection('relance_rules')
+      .find({ carrierId })
+      .sort({ createdAt: 1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      data: rules
+    });
+  } catch (error) {
+    console.error('[ERROR] Get relance rules:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/v1/relance-rules/:id - Get single relance rule
+app.get('/api/v1/relance-rules/:id', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ success: false, error: 'MongoDB not available' });
+  }
+
+  try {
+    let filter;
+    try {
+      filter = { _id: new ObjectId(req.params.id) };
+    } catch (e) {
+      filter = { _id: req.params.id };
+    }
+
+    const rule = await db.collection('relance_rules').findOne(filter);
+
+    if (!rule) {
+      return res.status(404).json({ success: false, error: 'Rule not found' });
+    }
+
+    res.json({ success: true, data: rule });
+  } catch (error) {
+    console.error('[ERROR] Get relance rule:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/v1/relance-rules - Create a new relance rule
+app.post('/api/v1/relance-rules', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ success: false, error: 'MongoDB not available' });
+  }
+
+  try {
+    const {
+      carrierId,
+      name,
+      type, // 'chargement' or 'livraison'
+      triggerMinutesBefore,
+      enabled = true,
+      notificationChannels = ['email'],
+      message
+    } = req.body;
+
+    if (!carrierId || !name || !type || triggerMinutesBefore === undefined || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'carrierId, name, type, triggerMinutesBefore, and message are required'
+      });
+    }
+
+    if (!['chargement', 'livraison'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'type must be "chargement" or "livraison"'
+      });
+    }
+
+    const rule = {
+      carrierId,
+      name,
+      type,
+      triggerMinutesBefore: parseInt(triggerMinutesBefore),
+      enabled,
+      notificationChannels,
+      message,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('relance_rules').insertOne(rule);
+    rule._id = result.insertedId;
+
+    res.status(201).json({
+      success: true,
+      data: rule
+    });
+  } catch (error) {
+    console.error('[ERROR] Create relance rule:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/v1/relance-rules/:id - Update a relance rule
+app.put('/api/v1/relance-rules/:id', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ success: false, error: 'MongoDB not available' });
+  }
+
+  try {
+    const {
+      name,
+      type,
+      triggerMinutesBefore,
+      enabled,
+      notificationChannels,
+      message
+    } = req.body;
+
+    const updateData = { updatedAt: new Date() };
+
+    if (name !== undefined) updateData.name = name;
+    if (type !== undefined) {
+      if (!['chargement', 'livraison'].includes(type)) {
+        return res.status(400).json({
+          success: false,
+          error: 'type must be "chargement" or "livraison"'
+        });
+      }
+      updateData.type = type;
+    }
+    if (triggerMinutesBefore !== undefined) updateData.triggerMinutesBefore = parseInt(triggerMinutesBefore);
+    if (enabled !== undefined) updateData.enabled = enabled;
+    if (notificationChannels !== undefined) updateData.notificationChannels = notificationChannels;
+    if (message !== undefined) updateData.message = message;
+
+    let filter;
+    try {
+      filter = { _id: new ObjectId(req.params.id) };
+    } catch (e) {
+      filter = { _id: req.params.id };
+    }
+
+    const result = await db.collection('relance_rules').findOneAndUpdate(
+      filter,
+      { $set: updateData },
+      { returnDocument: 'after' }
+    );
+
+    if (!result.value && !result) {
+      return res.status(404).json({ success: false, error: 'Rule not found' });
+    }
+
+    res.json({
+      success: true,
+      data: result.value || result
+    });
+  } catch (error) {
+    console.error('[ERROR] Update relance rule:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PATCH /api/v1/relance-rules/:id/toggle - Toggle enabled status
+app.patch('/api/v1/relance-rules/:id/toggle', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ success: false, error: 'MongoDB not available' });
+  }
+
+  try {
+    let filter;
+    try {
+      filter = { _id: new ObjectId(req.params.id) };
+    } catch (e) {
+      filter = { _id: req.params.id };
+    }
+
+    // First get current state
+    const rule = await db.collection('relance_rules').findOne(filter);
+    if (!rule) {
+      return res.status(404).json({ success: false, error: 'Rule not found' });
+    }
+
+    // Toggle enabled
+    const result = await db.collection('relance_rules').findOneAndUpdate(
+      filter,
+      { $set: { enabled: !rule.enabled, updatedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+
+    res.json({
+      success: true,
+      data: result.value || result
+    });
+  } catch (error) {
+    console.error('[ERROR] Toggle relance rule:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/v1/relance-rules/:id - Delete a relance rule
+app.delete('/api/v1/relance-rules/:id', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ success: false, error: 'MongoDB not available' });
+  }
+
+  try {
+    let filter;
+    try {
+      filter = { _id: new ObjectId(req.params.id) };
+    } catch (e) {
+      filter = { _id: req.params.id };
+    }
+
+    const result = await db.collection('relance_rules').deleteOne(filter);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Rule not found' });
+    }
+
+    res.json({ success: true, message: 'Rule deleted' });
+  } catch (error) {
+    console.error('[ERROR] Delete relance rule:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/v1/relance-rules/init-defaults - Initialize default rules for a carrier
+app.post('/api/v1/relance-rules/init-defaults', async (req, res) => {
+  if (!mongoConnected || !db) {
+    return res.status(503).json({ success: false, error: 'MongoDB not available' });
+  }
+
+  try {
+    const { carrierId } = req.body;
+
+    if (!carrierId) {
+      return res.status(400).json({ success: false, error: 'carrierId is required' });
+    }
+
+    // Check if carrier already has rules
+    const existingRules = await db.collection('relance_rules').countDocuments({ carrierId });
+    if (existingRules > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Carrier already has relance rules configured'
+      });
+    }
+
+    // Create default rules
+    const now = new Date();
+    const defaultRules = [
+      {
+        carrierId,
+        name: 'Rappel chargement J-1',
+        type: 'chargement',
+        triggerMinutesBefore: 1440, // 24h
+        enabled: true,
+        notificationChannels: ['email'],
+        message: 'Rappel: Chargement prevu demain a {heure} chez {client}',
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        carrierId,
+        name: 'Rappel chargement H-2',
+        type: 'chargement',
+        triggerMinutesBefore: 120, // 2h
+        enabled: true,
+        notificationChannels: ['sms', 'push'],
+        message: 'Chargement dans 2h chez {client} - {adresse}',
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        carrierId,
+        name: 'Rappel livraison J-1',
+        type: 'livraison',
+        triggerMinutesBefore: 1440,
+        enabled: true,
+        notificationChannels: ['email'],
+        message: 'Rappel: Livraison prevue demain a {heure} - {client}',
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        carrierId,
+        name: 'Rappel livraison H-1',
+        type: 'livraison',
+        triggerMinutesBefore: 60,
+        enabled: true,
+        notificationChannels: ['sms', 'push'],
+        message: 'Livraison dans 1h - {client}, {adresse}',
+        createdAt: now,
+        updatedAt: now
+      }
+    ];
+
+    const result = await db.collection('relance_rules').insertMany(defaultRules);
+
+    res.status(201).json({
+      success: true,
+      data: defaultRules.map((rule, index) => ({
+        ...rule,
+        _id: result.insertedIds[index]
+      })),
+      count: result.insertedCount
+    });
+  } catch (error) {
+    console.error('[ERROR] Init default rules:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== LEGACY ROUTES (backward compatibility) ====================
 
 // GET /api/notifications - Legacy route
