@@ -478,7 +478,12 @@ app.get('/api/notifications', async (req, res) => {
   try {
     const { userId, limit = 20 } = req.query;
 
-    const filter = userId ? { userId } : {};
+    // userId is required to ensure users only see their own notifications
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const filter = { userId };
 
     const notifications = await db
       .collection('notifications')

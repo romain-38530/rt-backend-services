@@ -111,7 +111,12 @@ app.get('/api/storage-market/needs', async (req, res) => {
   }
 
   try {
-    const needs = await db.collection('storage_needs').find({}).sort({ createdAt: -1 }).toArray();
+    // Build filter to ensure users only see their own storage needs
+    const filter = {};
+    if (req.query.customerId) filter.customerId = req.query.customerId;
+    if (req.query.providerId) filter.providerId = req.query.providerId;
+
+    const needs = await db.collection('storage_needs').find(filter).sort({ createdAt: -1 }).toArray();
     res.json({
       success: true,
       data: {

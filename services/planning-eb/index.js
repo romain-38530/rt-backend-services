@@ -147,17 +147,23 @@ app.get('/appointments', async (req, res) => {
       });
     }
 
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, carrierId, customerId, siteId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // Build filter to ensure users only see their own appointments
+    const filter = {};
+    if (carrierId) filter.carrierId = carrierId;
+    if (customerId) filter.customerId = customerId;
+    if (siteId) filter.siteId = siteId;
+
     const appointments = await db.collection('appointments')
-      .find({})
+      .find(filter)
       .sort({ scheduledDate: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .toArray();
 
-    const total = await db.collection('appointments').countDocuments();
+    const total = await db.collection('appointments').countDocuments(filter);
 
     res.json({
       success: true,

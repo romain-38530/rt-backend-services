@@ -254,10 +254,13 @@ app.post('/api/v1/ecmr', async (req, res) => {
 // GET /api/v1/ecmr - List eCMRs
 app.get('/api/v1/ecmr', async (req, res) => {
   try {
-    const { status, orderId, limit = 50 } = req.query;
+    const { status, orderId, carrierId, customerId, limit = 50 } = req.query;
     const filter = {};
     if (status) filter.status = status;
     if (orderId) filter.orderId = orderId;
+    // Filter by user to ensure users only see their own eCMRs
+    if (carrierId) filter['carrier.carrierId'] = carrierId;
+    if (customerId) filter['shipper.customerId'] = customerId;
 
     const ecmrs = await ECMR.find(filter)
       .select('-shipper.signatureImage -carrier.signatureImage -consignee.signatureImage')

@@ -99,9 +99,18 @@ app.get('/api/tracking', async (req, res) => {
   }
 
   try {
+    // Build filter to ensure users only see their own vehicles
+    const filter = {};
+    if (req.query.carrierId) {
+      filter.carrierId = req.query.carrierId;
+    }
+    if (req.query.companyId) {
+      filter.companyId = req.query.companyId;
+    }
+
     const positions = await db
       .collection('vehicle_tracking')
-      .find({})
+      .find(filter)
       .sort({ updatedAt: -1 })
       .limit(100)
       .toArray();
