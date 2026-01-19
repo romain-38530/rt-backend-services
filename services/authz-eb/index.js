@@ -534,6 +534,8 @@ app.get('/', (req, res) => {
       'GET /',
       'POST /api/auth/register',
       'POST /api/auth/login',
+      'POST /auth/admin/login',
+      'POST /api/auth/admin/login',
       'GET /api/auth/me',
       'POST /api/vat/validate-format',
       'POST /api/vat/validate',
@@ -682,6 +684,95 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ message: error.message || 'Internal server error' });
   }
 });
+
+// Admin Login - endpoint for backoffice-admin (both /auth and /api/auth paths)
+// Accepts either 'password' or 'adminKey' for flexibility
+const adminLoginHandler = async (req, res) => {
+  try {
+    console.log('Admin login request body:', JSON.stringify(req.body));
+    const { email, password, adminKey } = req.body || {};
+    const credential = password || adminKey;
+
+    if (!email || !credential) {
+      return res.status(400).json({ success: false, error: 'Email et cle admin requis' });
+    }
+
+    if (!mongoConnected || !db) {
+      return res.status(503).json({ success: false, error: 'Base de données non connectée' });
+    }
+
+    // First try admin_keys collection (simple admin key auth)
+    const adminKeyDoc = await db.collection('admin_keys').findOne({
+      email: email.toLowerCase(),
+      active: true
+    });
+
+    if (adminKeyDoc && adminKeyDoc.key === credential) {
+      const token = jwt.sign(
+        { userId: adminKeyDoc._id, email: adminKeyDoc.email, role: 'admin', roles: ['admin', 'super_admin'], portal: 'admin' },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      return res.status(200).json({
+        success: true,
+        token,
+        accessToken: token,
+        user: {
+          id: adminKeyDoc._id,
+          email: adminKeyDoc.email,
+          role: 'admin',
+          accountType: 'admin'
+        }
+      });
+    }
+
+    // Then try users collection with admin role
+    const user = await db.collection('users').findOne({
+      email: email.toLowerCase(),
+      $or: [
+        { role: 'admin' },
+        { role: 'superadmin' },
+        { accountType: 'admin' },
+        { portal: 'admin' }
+      ]
+    });
+
+    if (user) {
+      const isPasswordValid = await bcrypt.compare(credential, user.password);
+      if (isPasswordValid) {
+        const token = jwt.sign(
+          { userId: user._id, email: user.email, role: user.role || 'admin', roles: [user.role || 'admin', 'super_admin'], portal: 'admin' },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        return res.status(200).json({
+          success: true,
+          token,
+          accessToken: token,
+          user: {
+            id: user._id,
+            email: user.email,
+            name: user.name || user.firstName,
+            role: user.role || 'admin',
+            accountType: user.accountType || 'admin'
+          }
+        });
+      }
+    }
+
+    return res.status(401).json({ success: false, error: 'Identifiants invalides ou accès non autorisé' });
+
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Erreur serveur' });
+  }
+};
+
+// Register both paths for admin login
+app.post('/auth/admin/login', adminLoginHandler);
+app.post('/api/auth/admin/login', adminLoginHandler);
 
 // Get current user
 app.get('/api/auth/me', async (req, res) => {
