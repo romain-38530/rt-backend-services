@@ -369,6 +369,17 @@ app.get('/api/v1/orders', async (req, res) => {
     // Build MongoDB query from filters
     const query = {};
 
+    // IMPORTANT: Filter by user (customerId for industriels, carrierId for transporteurs)
+    // This ensures users only see their own orders, not demo data from other companies
+    if (req.query.customerId) {
+      // Mode Industriel: filter by customerId (user is the client/donneur d'ordre)
+      query.customerId = req.query.customerId;
+    }
+    if (req.query.carrierId) {
+      // Mode Transporteur: filter by carrierId (user is the assigned carrier)
+      query.carrierId = req.query.carrierId;
+    }
+
     // Search filter (search in reference, carrierName, industrialName)
     if (req.query.search) {
       const searchRegex = new RegExp(req.query.search, 'i');
@@ -882,6 +893,17 @@ app.get('/api/orders', async (req, res) => {
   try {
     // Build MongoDB query from filters
     const query = {};
+
+    // IMPORTANT: Filter by user (customerId for industriels, carrierId for transporteurs)
+    // This ensures users only see their own orders, not demo data from other companies
+    if (req.query.customerId) {
+      // Mode Industriel: filter by customerId (user is the client/donneur d'ordre)
+      query.customerId = req.query.customerId;
+    }
+    if (req.query.carrierId) {
+      // Mode Transporteur: filter by carrierId (user is the assigned carrier)
+      query.carrierId = req.query.carrierId;
+    }
 
     // Search filter
     if (req.query.search) {
