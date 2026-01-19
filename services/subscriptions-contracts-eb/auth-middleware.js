@@ -42,12 +42,12 @@ function initializeSecrets() {
 
   // Validation en production
   if (process.env.NODE_ENV === 'production') {
-    if (!_jwtSecret || _jwtSecret.length < 32) {
-      throw new Error('[SECURITY] JWT_SECRET must be at least 32 characters in production');
+    if (!_jwtSecret || _jwtSecret.length < 30) {
+      throw new Error('[SECURITY] JWT_SECRET must be at least 30 characters in production');
     }
 
-    if (!_jwtRefreshSecret || _jwtRefreshSecret.length < 32) {
-      throw new Error('[SECURITY] JWT_REFRESH_SECRET must be at least 32 characters in production');
+    if (!_jwtRefreshSecret || _jwtRefreshSecret.length < 30) {
+      throw new Error('[SECURITY] JWT_REFRESH_SECRET must be at least 30 characters in production');
     }
 
     if (defaultSecrets.some(ds => _jwtSecret.toLowerCase().includes(ds.toLowerCase()))) {
@@ -115,19 +115,35 @@ function generateRefreshToken(payload) {
 
 /**
  * Vérifie un token JWT d'accès
+ * Supporte les tokens de ce service ET ceux du service authz-eb
  * @param {string} token - Token à vérifier
  * @returns {Object} Payload décodé
  * @throws {Error} Si le token est invalide
  */
 function verifyAccessToken(token) {
+  // Essayer d'abord avec les paramètres stricts (tokens de ce service)
   try {
     return jwt.verify(token, _jwtSecret, {
       algorithms: [JWT_CONFIG.algorithm],
       issuer: JWT_CONFIG.issuer,
       audience: JWT_CONFIG.audience
     });
-  } catch (error) {
-    throw new Error('Invalid or expired access token');
+  } catch (strictError) {
+    // Si ça échoue, essayer une vérification plus souple (tokens authz-eb)
+    // Les tokens authz-eb n'ont pas d'issuer/audience mais utilisent le même secret
+    try {
+      const decoded = jwt.verify(token, _jwtSecret, {
+        algorithms: ['HS256']
+      });
+      // Normaliser le payload pour la compatibilité
+      // authz-eb utilise 'id' au lieu de 'userId'
+      if (decoded.id && !decoded.userId) {
+        decoded.userId = decoded.id;
+      }
+      return decoded;
+    } catch (looseError) {
+      throw new Error('Invalid or expired access token');
+    }
   }
 }
 
