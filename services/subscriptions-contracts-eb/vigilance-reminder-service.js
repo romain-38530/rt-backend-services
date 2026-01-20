@@ -12,9 +12,9 @@
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 
-// Configuration AWS
-const sesClient = new SESClient({ region: process.env.AWS_REGION || 'eu-west-3' });
-const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'eu-west-3' });
+// Configuration AWS - SES et SNS sont dans eu-central-1
+const sesClient = new SESClient({ region: process.env.SES_REGION || 'eu-central-1' });
+const snsClient = new SNSClient({ region: process.env.SNS_REGION || 'eu-central-1' });
 
 // Configuration des documents de vigilance
 const vigilanceDocumentsConfig = {
