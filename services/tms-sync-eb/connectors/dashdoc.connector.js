@@ -67,6 +67,8 @@ class DashdocConnector {
     if (options.limit) params.append('limit', options.limit);
     if (options.page) params.append('page', options.page);
     if (options.status) params.append('status', options.status);
+    if (options.status__in) params.append('status__in', options.status__in);
+    if (options.tags__in) params.append('tags__in', options.tags__in);
     if (options.ordering) params.append('ordering', options.ordering);
     if (options.created__gte) params.append('created__gte', options.created__gte);
     if (options.created__lte) params.append('created__lte', options.created__lte);

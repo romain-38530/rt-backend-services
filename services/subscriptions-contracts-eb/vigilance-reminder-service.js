@@ -739,6 +739,71 @@ function getVigilanceSummary(carrier) {
   return summary;
 }
 
+/**
+ * Envoyer tous les emails de test pour validation
+ */
+async function sendTestEmails(recipientEmail) {
+  const testData = {
+    companyName: 'Transport Durand & Fils',
+    documentName: 'Attestation URSSAF',
+    expiryDate: '15/02/2026',
+    portalUrl: 'https://portail.symphonia-controltower.com',
+    invitingCompany: 'SETT Transports',
+    invitationUrl: 'https://portail.symphonia-controltower.com/invitation/abc123xyz'
+  };
+
+  const results = [];
+  const templateNames = ['reminder_30', 'reminder_15', 'reminder_7', 'reminder_3', 'reminder_1', 'expired', 'invitation_decouverte'];
+
+  console.log(`[Test Emails] Sending test emails to ${recipientEmail}...`);
+
+  for (const templateName of templateNames) {
+    const template = emailTemplates[templateName];
+    if (!template) {
+      results.push({ templateName, success: false, error: 'Template not found' });
+      continue;
+    }
+
+    try {
+      const subject = replaceTemplateVars(template.subject, testData);
+      const body = replaceTemplateVars(template.body, testData);
+
+      const result = await sendEmail(
+        recipientEmail,
+        `[TEST] ${subject}`,
+        body
+      );
+
+      results.push({
+        templateName,
+        success: result.success,
+        messageId: result.messageId,
+        error: result.error
+      });
+
+      console.log(`[Test Emails] ${templateName}: ${result.success ? '✅' : '❌'}`);
+
+      // Pause between emails to avoid throttling
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (error) {
+      results.push({ templateName, success: false, error: error.message });
+      console.error(`[Test Emails] ${templateName}: ❌ ${error.message}`);
+    }
+  }
+
+  const summary = {
+    recipient: recipientEmail,
+    total: results.length,
+    success: results.filter(r => r.success).length,
+    failed: results.filter(r => !r.success).length,
+    results
+  };
+
+  console.log(`[Test Emails] Summary: ${summary.success}/${summary.total} sent successfully`);
+
+  return summary;
+}
+
 module.exports = {
   vigilanceDocumentsConfig,
   emailTemplates,
@@ -749,5 +814,6 @@ module.exports = {
   runDailyVigilanceCheck,
   checkSingleCarrier,
   getVigilanceSummary,
-  getDaysUntilExpiration
+  getDaysUntilExpiration,
+  sendTestEmails
 };

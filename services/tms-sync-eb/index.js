@@ -78,7 +78,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.0.0',
+    version: '2.1.0',
     features: ['dashdoc', 'auto-sync', 'real-time-counters'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -106,7 +106,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.0.0',
+    version: '2.1.0',
     supportedTMS: ['dashdoc'],
     endpoints: [
       'GET /health',
@@ -392,6 +392,87 @@ app.get('/api/v1/tms/connections/:id/stats', requireMongo, async (req, res) => {
         drivers,
         total: orders + companies + contacts + fleet + drivers
       }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Recuperer les transports/commandes avec filtres (tag, status, etc.)
+ * GET /api/v1/tms/orders?tag=Symphonia&status=ongoing
+ */
+app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
+  try {
+    const { tag, status, limit = 100, skip = 0 } = req.query;
+
+    const query = { externalSource: 'dashdoc' };
+
+    // Filtre par tag
+    if (tag) {
+      query['externalData.tags'] = { $elemMatch: { name: tag } };
+    }
+
+    // Filtre par status
+    if (status) {
+      query['externalData.status'] = status;
+    }
+
+    const [orders, total] = await Promise.all([
+      db.collection('orders')
+        .find(query)
+        .skip(parseInt(skip))
+        .limit(parseInt(limit))
+        .sort({ 'externalData.created': -1 })
+        .toArray(),
+      db.collection('orders').countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      total,
+      limit: parseInt(limit),
+      skip: parseInt(skip),
+      orders
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Recuperer les transports Dashdoc en temps reel via API
+ * GET /api/v1/tms/dashdoc/transports?tag=Symphonia
+ */
+app.get('/api/v1/tms/dashdoc/transports', requireMongo, async (req, res) => {
+  try {
+    const { tag, status, limit = 50 } = req.query;
+
+    // Recuperer la premiere connexion Dashdoc active
+    const connection = await db.collection('tmsConnections').findOne({
+      tmsType: 'dashdoc',
+      isActive: true
+    });
+
+    if (!connection) {
+      return res.status(404).json({ error: 'No active Dashdoc connection found' });
+    }
+
+    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
+      baseUrl: connection.credentials.apiUrl
+    });
+
+    // Appeler l'API Dashdoc avec filtre tag
+    const params = { limit: parseInt(limit) };
+    if (tag) params.tags__in = tag;
+    if (status) params.status__in = status;
+
+    const result = await dashdoc.getTransports(params);
+
+    res.json({
+      success: true,
+      total: result.count || result.results?.length || 0,
+      transports: result.results || []
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

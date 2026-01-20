@@ -25,6 +25,7 @@ const createSignatureRoutes = require('./signature-routes');
 const createTransportOrdersRoutes = require('./transport-orders-routes');
 const scheduledJobs = require('./scheduled-jobs');
 const notificationService = require('./notification-service');
+const vigilanceReminderService = require('./vigilance-reminder-service');
 const { configureAffretiaRoutes } = require('./affretia-routes');
 const { createPlanningRoutes } = require('./planning-routes');
 const { PlanningWebSocketService } = require('./planning-websocket');
@@ -1885,6 +1886,22 @@ async function startServer() {
       smsBody: `RT Test: ${message || 'Ceci est un test.'}`
     });
     res.json(result);
+  });
+
+  // Send vigilance test emails (all commercial templates)
+  app.post('/api/admin/vigilance/test-emails', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+      console.log(`[Admin] Sending vigilance test emails to ${email}`);
+      const result = await vigilanceReminderService.sendTestEmails(email);
+      res.json(result);
+    } catch (error) {
+      console.error('[Admin] Error sending test emails:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Start scheduled jobs after MongoDB is connected

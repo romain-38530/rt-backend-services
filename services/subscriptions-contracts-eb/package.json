@@ -25,6 +25,7 @@
     "@aws-sdk/client-glacier": "^3.490.0",
     "@aws-sdk/client-textract": "^3.490.0",
     "@aws-sdk/client-ses": "^3.490.0",
+    "@aws-sdk/client-sns": "^3.490.0",
     "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
     "stripe": "^14.10.0",

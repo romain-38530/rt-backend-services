@@ -151,6 +151,10 @@ const files = [
   'b2p-dashboard-routes.js',
   'email-ab-testing-service.js',
   'email-ab-testing-routes.js',
+  // v4.0.7 - Vigilance Reminder System (Transporteur Premium)
+  'vigilance-reminder-service.js',
+  'subcontractor-invitation-models.js',
+  'send-test-emails.js',
 ];
 
 console.log('');
