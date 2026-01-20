@@ -15,6 +15,9 @@ const { createInvitationTokenService } = require('./invitation-token-service');
 const { createWebhookService } = require('./webhook-service');
 const { ProgressiveIPBlocker } = require('./rate-limiter-middleware');
 
+// Vigilance: Relances automatiques documents transporteurs
+const vigilanceReminderService = require('./vigilance-reminder-service');
+
 /**
  * Configuration des intervalles (en millisecondes)
  */
@@ -24,7 +27,8 @@ const INTERVALS = {
   DETECT_DELAYS: 2 * 60 * 1000,        // 2 minutes
   CLEANUP_OLD_TRACKING: 60 * 60 * 1000, // 1 heure
   CLEANUP_SECURITY: 6 * 60 * 60 * 1000, // 6 heures - SEC-015
-  RETRY_WEBHOOKS: 5 * 60 * 1000         // 5 minutes - SEC-015
+  RETRY_WEBHOOKS: 5 * 60 * 1000,        // 5 minutes - SEC-015
+  VIGILANCE_CHECK: 24 * 60 * 60 * 1000  // 24 heures - Vérification documents transporteurs
 };
 
 /**
@@ -268,6 +272,39 @@ async function runCleanupSecurity() {
 }
 
 /**
+ * Vérification quotidienne des documents de vigilance transporteurs
+ * Envoie les relances automatiques (J-30, J-15, J-7, J-3, J-1)
+ * Bloque les transporteurs avec documents expirés
+ * Exécuté toutes les 24 heures (à 8h du matin)
+ */
+async function runVigilanceCheck() {
+  if (!db) {
+    console.warn('⚠️ [CRON] vigilanceCheck: Database not connected');
+    return;
+  }
+
+  try {
+    console.log('🔄 [CRON] Running vigilanceCheck...');
+    const stats = await vigilanceReminderService.runDailyVigilanceCheck(db);
+
+    console.log(`✅ [CRON] vigilanceCheck completed:`);
+    console.log(`   - Carriers checked: ${stats.totalCarriers}`);
+    console.log(`   - Carriers with alerts: ${stats.carriersWithAlerts}`);
+    console.log(`   - Reminders sent: ${stats.remindersSent}`);
+    console.log(`   - Carriers blocked: ${stats.carriersBlocked}`);
+
+    if (stats.errors.length > 0) {
+      console.warn(`   - Errors: ${stats.errors.length}`);
+    }
+
+    return stats;
+  } catch (error) {
+    console.error('❌ [CRON] vigilanceCheck error:', error.message);
+    return { error: error.message };
+  }
+}
+
+/**
  * SEC-015: Réessayer les webhooks en échec
  * Exécuté toutes les 5 minutes
  */
@@ -387,12 +424,16 @@ function startAllJobs(database) {
   jobIntervals.cleanupSecurity = setInterval(runCleanupSecurity, INTERVALS.CLEANUP_SECURITY);
   jobIntervals.retryWebhooks = setInterval(runRetryWebhooks, INTERVALS.RETRY_WEBHOOKS);
 
+  // Vigilance: Relances documents transporteurs (quotidien)
+  jobIntervals.vigilanceCheck = setInterval(runVigilanceCheck, INTERVALS.VIGILANCE_CHECK);
+
   console.log('✅ [CRON] checkTimeouts: every 5 minutes');
   console.log('✅ [CRON] monitorETA: every 1 minute');
   console.log('✅ [CRON] detectDelays: every 2 minutes');
   console.log('✅ [CRON] cleanupOldTracking: every 1 hour');
   console.log('✅ [CRON] cleanupSecurity: every 6 hours (SEC-015)');
   console.log('✅ [CRON] retryWebhooks: every 5 minutes (SEC-015)');
+  console.log('✅ [CRON] vigilanceCheck: every 24 hours (documents transporteurs)');
   console.log('============================================================================');
 
   // Exécuter immédiatement une première fois
@@ -457,6 +498,11 @@ function getJobsStatus() {
       retryWebhooks: {
         interval: '5 minutes',
         active: !!jobIntervals.retryWebhooks
+      },
+      vigilanceCheck: {
+        interval: '24 hours',
+        active: !!jobIntervals.vigilanceCheck,
+        description: 'Document expiration reminders & carrier blocking'
       }
     }
   };
@@ -474,7 +520,8 @@ async function runJobManually(jobName) {
     detectDelays: runDetectDelays,
     cleanupOldTracking: runCleanupOldTracking,
     cleanupSecurity: runCleanupSecurity,
-    retryWebhooks: runRetryWebhooks
+    retryWebhooks: runRetryWebhooks,
+    vigilanceCheck: runVigilanceCheck
   };
 
   if (!jobs[jobName]) {
@@ -515,5 +562,7 @@ module.exports = {
   runCleanupOldTracking,
   // SEC-015: Security jobs
   runCleanupSecurity,
-  runRetryWebhooks
+  runRetryWebhooks,
+  // Vigilance: Document reminders
+  runVigilanceCheck
 };
