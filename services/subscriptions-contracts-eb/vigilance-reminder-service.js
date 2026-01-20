@@ -61,118 +61,238 @@ const vigilanceDocumentsConfig = {
   }
 };
 
-// Templates d'emails
+// Templates d'emails - Orientation commerciale et professionnelle
 const emailTemplates = {
   reminder_30: {
-    subject: '[SYMPHONI.A] Rappel: Document {documentName} expire dans 30 jours',
+    subject: 'SYMPHONI.A - Optimisez votre conformité : {documentName} à renouveler',
     body: `
 Bonjour {companyName},
 
-Votre document "{documentName}" expire le {expiryDate}.
+Nous espérons que votre activité se porte bien !
 
-Il vous reste 30 jours pour le renouveler afin de maintenir votre statut de transporteur référencé.
+Dans le cadre de notre partenariat et pour vous garantir un accès continu à notre réseau de donneurs d'ordres premium, nous vous informons que votre document "{documentName}" arrive à échéance le {expiryDate}.
 
-Pour mettre à jour votre document:
-1. Connectez-vous à votre portail SYMPHONI.A
-2. Accédez à la section "Documents de conformité"
-3. Téléchargez la nouvelle version du document
+🎯 POURQUOI C'EST IMPORTANT POUR VOUS ?
 
-Si votre document n'est pas renouvelé avant son expiration, votre compte sera automatiquement suspendu et vous ne pourrez plus recevoir de nouvelles commandes.
+En maintenant vos documents à jour, vous bénéficiez :
+• D'une visibilité maximale auprès de nos 150+ donneurs d'ordres industriels
+• D'un accès prioritaire aux offres de fret via AFFRET.IA
+• D'un score de fiabilité optimisé (+15% de chances d'attribution)
+• De la confiance renforcée de vos partenaires
 
-Cordialement,
+📋 MISE À JOUR SIMPLIFIÉE (2 minutes)
+
+1. Connectez-vous à votre espace : {portalUrl}
+2. Section "Documents de conformité"
+3. Glissez-déposez votre nouveau document
+4. Validation automatique sous 24h
+
+💡 ASTUCE : Activez les rappels automatiques dans vos paramètres pour ne plus jamais manquer une échéance !
+
+Notre équipe reste à votre disposition pour vous accompagner.
+
+Excellente continuation,
+
 L'équipe SYMPHONI.A
-
----
-Cet email est envoyé automatiquement. Ne pas répondre directement.
+──────────────────────────
+📞 Support : 04 76 XX XX XX
+📧 support@symphonia-controltower.com
+🌐 www.symphonia-controltower.com
     `
   },
   reminder_15: {
-    subject: '[SYMPHONI.A] URGENT: Document {documentName} expire dans 15 jours',
+    subject: 'SYMPHONI.A - Action requise : {documentName} expire dans 15 jours',
     body: `
 Bonjour {companyName},
 
-⚠️ ATTENTION: Votre document "{documentName}" expire le {expiryDate}.
+Le temps passe vite ! Votre document "{documentName}" expire le {expiryDate}.
 
-Il ne vous reste que 15 jours pour le renouveler.
+⏰ IL VOUS RESTE 15 JOURS
 
-Action requise immédiatement:
-→ Connectez-vous sur {portalUrl}
-→ Mettez à jour votre document dans "Documents de conformité"
+Ne laissez pas cette échéance impacter votre activité. Chaque jour, des transporteurs avec des documents à jour remportent les meilleurs contrats sur notre plateforme.
 
-Sans action de votre part, votre compte sera suspendu à l'expiration du document.
+📈 VOS AVANTAGES EN RÈGLE :
+• Accès à +500 offres de fret/jour via AFFRET.IA
+• Référencement prioritaire dans notre réseau industriel
+• Badge "Transporteur Vérifié" visible par les donneurs d'ordres
+• Statistiques : les transporteurs conformes obtiennent 35% de missions en plus
 
-Cordialement,
-L'équipe SYMPHONI.A
+🚀 RENOUVELEZ EN 1 CLIC
+{portalUrl}
+
+Besoin d'aide ? Notre équipe vous accompagne gratuitement dans vos démarches administratives.
+
+À très bientôt sur SYMPHONI.A,
+
+L'équipe Partenariats
+──────────────────────────
+📞 04 76 XX XX XX (9h-18h)
+💬 Chat disponible sur votre portail
     `
   },
   reminder_7: {
-    subject: '[SYMPHONI.A] CRITIQUE: Document {documentName} expire dans 7 jours',
+    subject: 'SYMPHONI.A - Dernière semaine : {documentName} expire bientôt !',
     body: `
 Bonjour {companyName},
 
-🚨 ALERTE CRITIQUE: Votre document "{documentName}" expire le {expiryDate}.
+⚡ ALERTE - Plus que 7 jours !
 
-DERNIÈRE SEMAINE pour renouveler votre document!
+Votre document "{documentName}" expire le {expiryDate}.
 
-→ Portail: {portalUrl}
-→ Section: Documents de conformité
+Nous tenons à vous car vous êtes un partenaire précieux de notre réseau. Ne perdez pas les avantages que vous avez construits :
 
-⚠️ Suspension automatique dans 7 jours si non renouvelé.
+✅ Votre historique de missions préservé
+✅ Votre score de fiabilité maintenu
+✅ Votre visibilité auprès des industriels
+✅ Vos tarifs négociés conservés
+
+❌ SANS RENOUVELLEMENT :
+• Suspension temporaire de votre compte
+• Perte de visibilité sur la bourse de fret
+• Missions en cours potentiellement réattribuées
+
+👉 AGISSEZ MAINTENANT : {portalUrl}
+
+Notre équipe peut vous rappeler pour vous aider : répondez simplement "RAPPEL" à cet email.
+
+Nous comptons sur vous,
 
 L'équipe SYMPHONI.A
     `
   },
   reminder_3: {
-    subject: '[SYMPHONI.A] DERNIER RAPPEL: Document {documentName} expire dans 3 jours',
+    subject: '⚠️ SYMPHONI.A - URGENT : {documentName} expire dans 3 jours',
     body: `
-🚨🚨🚨 DERNIER RAPPEL 🚨🚨🚨
-
 {companyName},
+
+🔴 SITUATION URGENTE - 3 JOURS RESTANTS
 
 Votre document "{documentName}" expire le {expiryDate}.
 
-Plus que 3 JOURS avant suspension de votre compte.
+Nous ne voulons pas vous perdre ! Vous faites partie des transporteurs de confiance de notre réseau, et nous souhaitons continuer à travailler ensemble.
 
-RENOUVELEZ MAINTENANT: {portalUrl}
+⚡ ACTION IMMÉDIATE REQUISE ⚡
+
+→ Cliquez ici : {portalUrl}
+→ Uploadez votre document renouvelé
+→ Continuez à recevoir des missions
+
+📞 BESOIN D'AIDE URGENTE ?
+Appelez-nous directement : 04 76 XX XX XX
+Notre équipe est mobilisée pour vous aider.
+
+Nous croyons en votre entreprise,
 
 L'équipe SYMPHONI.A
     `
   },
   reminder_1: {
-    subject: '[SYMPHONI.A] EXPIRATION DEMAIN: Document {documentName}',
+    subject: '🚨 SYMPHONI.A - DERNIER JOUR : {documentName} expire DEMAIN',
     body: `
-⛔ EXPIRATION IMMINENTE ⛔
-
 {companyName},
 
-Votre document "{documentName}" EXPIRE DEMAIN ({expiryDate}).
+⏰ DERNIÈRES HEURES - Votre document "{documentName}" expire DEMAIN ({expiryDate})
 
-Votre compte sera SUSPENDU demain si le document n'est pas renouvelé.
+C'est le moment d'agir. Après demain, votre compte sera temporairement suspendu et vous ne pourrez plus :
+• Recevoir de nouvelles propositions de transport
+• Accéder à la bourse AFFRET.IA
+• Être visible dans le référentiel transporteurs
 
-ACTION IMMEDIATE REQUISE: {portalUrl}
+🆘 NOUS SOMMES LÀ POUR VOUS
+
+Nous comprenons que les démarches administratives peuvent être chronophages. Si vous rencontrez des difficultés pour obtenir votre document à temps, contactez-nous MAINTENANT.
+
+📱 LIGNE DIRECTE : 04 76 XX XX XX
+📧 urgent@symphonia-controltower.com
+
+→ RENOUVELER MON DOCUMENT : {portalUrl}
+
+Ne laissez pas une formalité administrative freiner votre croissance.
+
+Cordialement,
 
 L'équipe SYMPHONI.A
     `
   },
   expired: {
-    subject: '[SYMPHONI.A] Compte suspendu - Document {documentName} expiré',
+    subject: 'SYMPHONI.A - Votre compte attend votre retour ({documentName})',
     body: `
 Bonjour {companyName},
 
-Votre compte transporteur a été SUSPENDU car le document "{documentName}" a expiré le {expiryDate}.
+Votre document "{documentName}" a expiré le {expiryDate}, et votre compte est actuellement en pause.
 
-Vous ne pouvez plus:
-- Recevoir de nouvelles commandes
-- Accéder à la bourse de fret AFFRET.IA
-- Être visible dans le référentiel transporteurs
+🤝 NOUS GARDONS VOTRE PLACE
 
-Pour réactiver votre compte:
-1. Connectez-vous à {portalUrl}
-2. Téléchargez le document renouvelé
-3. Attendez la validation (sous 24h ouvrées)
+Bonne nouvelle : votre historique, votre score et vos paramètres sont préservés. Dès que vous aurez mis à jour votre document, tout sera réactivé instantanément.
 
-Cordialement,
+CE QUI VOUS ATTEND À VOTRE RETOUR :
+• Votre score de fiabilité intact
+• Vos relations donneurs d'ordres préservées
+• Accès immédiat à +500 offres/jour sur AFFRET.IA
+• Badge "Transporteur Vérifié" restauré
+
+🔓 RÉACTIVATION EXPRESS (24h)
+
+1. Connectez-vous : {portalUrl}
+2. Uploadez votre nouveau document
+3. Validation sous 24h ouvrées
+4. Reprenez votre activité !
+
+💬 BESOIN D'ACCOMPAGNEMENT ?
+Notre équipe peut vous guider pas à pas.
+📞 04 76 XX XX XX | 📧 support@symphonia-controltower.com
+
+Nous avons hâte de vous retrouver,
+
 L'équipe SYMPHONI.A
+
+P.S. : Saviez-vous que vous pouvez activer les rappels automatiques pour ne plus jamais manquer une échéance ? Découvrez cette fonctionnalité dans vos paramètres !
+    `
+  },
+  // Email d'invitation sous-traitant avec offre découverte
+  invitation_decouverte: {
+    subject: 'SYMPHONI.A x {invitingCompany} - Votre invitation exclusive + 10 transports offerts',
+    body: `
+Bonjour,
+
+{invitingCompany} vous invite à rejoindre SYMPHONI.A, la plateforme qui connecte les meilleurs transporteurs aux donneurs d'ordres industriels.
+
+🎁 OFFRE EXCLUSIVE DE BIENVENUE
+
+En tant que partenaire de {invitingCompany}, vous bénéficiez de :
+• 10 transports AFFRET.IA GRATUITS (valeur ~500€)
+• Accès au portail SYMPHONI.A pendant 90 jours
+• Dépôt sécurisé de vos documents de conformité
+• Scoring transporteur et visibilité réseau
+
+🚀 POURQUOI REJOINDRE SYMPHONI.A ?
+
+✅ +500 offres de fret quotidiennes via notre IA AFFRET.IA
+✅ +150 donneurs d'ordres industriels (Carrefour, Danone, L'Oréal...)
+✅ Paiement garanti sous 30 jours
+✅ Application mobile pour vos chauffeurs
+✅ eCMR et signature électronique inclus
+
+📋 INSCRIPTION EN 3 ÉTAPES
+
+1. Cliquez sur le lien ci-dessous
+2. Complétez vos informations (5 min)
+3. Déposez vos documents de conformité
+4. Commencez à recevoir des offres !
+
+👉 ACTIVER MON COMPTE : {invitationUrl}
+
+Cette offre est valable 30 jours. Ne manquez pas cette opportunité de développer votre activité !
+
+Des questions ? Notre équipe est disponible :
+📞 04 76 XX XX XX | 📧 partenariats@symphonia-controltower.com
+
+À très bientôt sur SYMPHONI.A,
+
+L'équipe Partenariats
+──────────────────────────
+SYMPHONI.A - La plateforme transport nouvelle génération
+🌐 www.symphonia-controltower.com
     `
   }
 };
