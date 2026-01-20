@@ -206,6 +206,146 @@ class DashdocConnector {
   }
 
   /**
+   * Recuperer les transporteurs partenaires (sous-traitants)
+   * Filtre les entreprises qui sont des transporteurs (carriers)
+   */
+  async getCarriers(options = {}) {
+    const params = new URLSearchParams();
+    if (options.limit) params.append('limit', options.limit || 500);
+    if (options.page) params.append('page', options.page);
+    // Filtrer uniquement les transporteurs
+    params.append('is_carrier', 'true');
+
+    const response = await this.client.get(`/companies/?${params.toString()}`);
+    return {
+      count: response.data.count,
+      results: response.data.results.map(c => this.mapCarrier(c))
+    };
+  }
+
+  /**
+   * Mapper un transporteur Dashdoc vers format SYMPHONI.A SubContractor
+   */
+  mapCarrier(c) {
+    return {
+      externalId: c.pk?.toString(),
+      externalSource: 'dashdoc',
+      remoteId: c.remote_id,
+
+      // Infos entreprise
+      companyName: c.name,
+      legalName: c.name,
+      siret: c.trade_number || c.siren,
+      siren: c.siren,
+      vatNumber: c.vat_number,
+
+      // Contact
+      email: c.email,
+      phone: c.phone_number,
+      website: c.website,
+
+      // Adresse
+      address: c.primary_address ? {
+        street: c.primary_address.address,
+        city: c.primary_address.city,
+        postalCode: c.primary_address.postcode,
+        country: c.primary_address.country || 'France',
+        location: c.primary_address.latitude ? {
+          type: 'Point',
+          coordinates: [c.primary_address.longitude, c.primary_address.latitude]
+        } : null
+      } : null,
+
+      // Statut
+      isVerified: c.is_verified,
+      accountType: c.account_type,
+      logo: c.logo,
+
+      // Metadata
+      tags: c.tags || [],
+      country: c.country || 'FR',
+      legalForm: c.legal_form,
+
+      // Stats (a enrichir avec les transports)
+      totalOrders: 0,
+      lastOrderAt: null,
+
+      // Niveau par defaut pour import
+      level: c.is_verified ? 'N1_referenced' : 'N2_guest',
+      status: 'pending', // A valider apres import
+
+      // Documents status par defaut
+      documentsStatus: {
+        valid: 0,
+        expiringSoon: 0,
+        expired: 0,
+        missing: 7 // Documents a fournir
+      }
+    };
+  }
+
+  /**
+   * Recuperer les stats de transports par transporteur
+   * Pour enrichir les donnees des carriers
+   */
+  async getCarrierStats(carrierId) {
+    try {
+      const params = new URLSearchParams();
+      params.append('carrier', carrierId);
+      params.append('limit', '1000');
+
+      const response = await this.client.get(`/transports/?${params.toString()}`);
+      const transports = response.data.results || [];
+
+      const completed = transports.filter(t => t.status === 'done');
+      const lastOrder = transports.sort((a, b) => new Date(b.created) - new Date(a.created))[0];
+
+      return {
+        totalOrders: transports.length,
+        completedOrders: completed.length,
+        lastOrderAt: lastOrder?.created || null,
+        onTimeRate: completed.length > 0 ? Math.round((completed.length / transports.length) * 100) : 0
+      };
+    } catch (error) {
+      console.error('Error fetching carrier stats:', error.message);
+      return {
+        totalOrders: 0,
+        completedOrders: 0,
+        lastOrderAt: null,
+        onTimeRate: 0
+      };
+    }
+  }
+
+  /**
+   * Synchroniser les transporteurs avec enrichissement des stats
+   */
+  async syncCarriersWithStats(options = {}) {
+    const carriers = await this.getCarriers(options);
+
+    // Enrichir avec les stats (en parallele par batch)
+    const enrichedCarriers = await Promise.all(
+      carriers.results.map(async (carrier) => {
+        if (carrier.externalId) {
+          const stats = await this.getCarrierStats(carrier.externalId);
+          return {
+            ...carrier,
+            totalOrders: stats.totalOrders,
+            lastOrderAt: stats.lastOrderAt,
+            score: stats.onTimeRate
+          };
+        }
+        return carrier;
+      })
+    );
+
+    return {
+      count: carriers.count,
+      results: enrichedCarriers
+    };
+  }
+
+  /**
    * Synchronisation complete - recupere toutes les donnees
    */
   async fullSync(options = {}) {
