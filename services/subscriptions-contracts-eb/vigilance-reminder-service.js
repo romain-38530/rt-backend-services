@@ -251,15 +251,16 @@ P.S. : Saviez-vous que vous pouvez activer les rappels automatiques pour ne plus
   },
   // Email d'invitation sous-traitant avec offre découverte
   invitation_decouverte: {
-    subject: 'SYMPHONI.A x {invitingCompany} - Votre invitation exclusive + 10 transports offerts',
+    subject: 'Invitation SYMPHONI.A - {invitingCompany} vous référence + 10 transports offerts',
     body: `
 Bonjour,
 
-{invitingCompany} vous invite à rejoindre SYMPHONI.A, la plateforme qui connecte les meilleurs transporteurs aux donneurs d'ordres industriels.
+{invitingCompany} a sélectionné SYMPHONI.A pour la gestion de son devoir de vigilance et vous référence en tant que sous-traitant partenaire.
 
-🎁 OFFRE EXCLUSIVE DE BIENVENUE
+Pour vous permettre de découvrir notre plateforme, SYMPHONI.A vous offre 10 transports gratuits sur AFFRET.IA !
 
-En tant que partenaire de {invitingCompany}, vous bénéficiez de :
+🎁 VOTRE OFFRE DÉCOUVERTE SYMPHONI.A
+
 • 10 transports AFFRET.IA GRATUITS (valeur ~500€)
 • Accès au portail SYMPHONI.A pendant 90 jours
 • Dépôt sécurisé de vos documents de conformité
@@ -268,19 +269,20 @@ En tant que partenaire de {invitingCompany}, vous bénéficiez de :
 🚀 POURQUOI REJOINDRE SYMPHONI.A ?
 
 ✅ +500 offres de fret quotidiennes via notre IA AFFRET.IA
-✅ +150 donneurs d'ordres industriels (Carrefour, Danone, L'Oréal...)
+✅ +150 donneurs d'ordres industriels partenaires
 ✅ Paiement garanti sous 30 jours
 ✅ Application mobile pour vos chauffeurs
 ✅ eCMR et signature électronique inclus
 
 📋 INSCRIPTION EN 3 ÉTAPES
 
-1. Cliquez sur le lien ci-dessous
+1. Cliquez sur le bouton ci-dessous
 2. Complétez vos informations (5 min)
 3. Déposez vos documents de conformité
 4. Commencez à recevoir des offres !
 
-👉 ACTIVER MON COMPTE : {invitationUrl}
+👉 CRÉER MON COMPTE SYMPHONI.A :
+{invitationUrl}
 
 Cette offre est valable 30 jours. Ne manquez pas cette opportunité de développer votre activité !
 
@@ -289,7 +291,7 @@ Des questions ? Notre équipe est disponible :
 
 À très bientôt sur SYMPHONI.A,
 
-L'équipe Partenariats
+L'équipe Partenariats SYMPHONI.A
 ──────────────────────────
 SYMPHONI.A - La plateforme transport nouvelle génération
 🌐 www.symphonia-controltower.com
@@ -749,7 +751,7 @@ async function sendTestEmails(recipientEmail) {
     expiryDate: '15/02/2026',
     portalUrl: 'https://portail.symphonia-controltower.com',
     invitingCompany: 'SETT Transports',
-    invitationUrl: 'https://portail.symphonia-controltower.com/invitation/abc123xyz'
+    invitationUrl: 'https://portail.symphonia-controltower.com/inscription?invitation=abc123xyz&offre=decouverte'
   };
 
   const results = [];

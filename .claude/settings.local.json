@@ -6,7 +6,9 @@
       "Bash(aws elasticbeanstalk describe-environment-health:*)",
       "Bash(done)",
       "Bash(aws elasticbeanstalk update-environment:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(aws elasticbeanstalk request-environment-info:*)",
+      "Bash(aws elasticbeanstalk retrieve-environment-info:*)"
     ],
     "deny": [],
     "ask": []
