@@ -59,10 +59,32 @@ async function connectMongoDB() {
 
 // Middleware
 app.use(helmet());
+
+// CORS configuration - Allow specific origins with credentials
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(',') || [
+  'https://transporteur.symphonia-controltower.com',
+  'https://d3800xay5mlft6.cloudfront.net',
+  'http://localhost:3102',
+  'http://localhost:3000'
+];
+
 app.use(cors({
-  origin: process.env.CORS_ALLOWED_ORIGINS?.split(',') || true,
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins === true) {
+      callback(null, true);
+    } else {
+      console.log(`[CORS] Blocked origin: ${origin}`);
+      callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
 
 // Request logging
