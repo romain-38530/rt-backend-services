@@ -26,7 +26,57 @@ class TMSConnectionService {
     await this.connectionsCollection.createIndex({ isActive: 1 });
     await this.syncLogsCollection.createIndex({ connectionId: 1, startedAt: -1 });
 
-    console.log('[TMS CONNECTION SERVICE] Initialized');
+    // Creer les index pour la collection orders (filtrage avance)
+    const ordersCollection = this.db.collection('orders');
+
+    // Index composite pour filtrage business
+    await ordersCollection.createIndex({
+      externalSource: 1,
+      status: 1,
+      createdAt: -1
+    });
+
+    // Index pour filtrage geolocalise (ville)
+    await ordersCollection.createIndex({
+      'pickup.address.city': 1,
+      'delivery.address.city': 1
+    });
+
+    // Index pour filtrage geolocalise (code postal)
+    await ordersCollection.createIndex({
+      'pickup.address.postalCode': 1,
+      'delivery.address.postalCode': 1
+    });
+
+    // Index geospatial 2dsphere pour recherche par coordonnees GPS
+    await ordersCollection.createIndex({
+      'pickup.address.location': '2dsphere'
+    });
+
+    await ordersCollection.createIndex({
+      'delivery.address.location': '2dsphere'
+    });
+
+    // Index pour filtrage marchandises
+    await ordersCollection.createIndex({
+      'cargo.category': 1,
+      'cargo.isDangerous': 1,
+      'cargo.isRefrigerated': 1
+    });
+
+    // Index pour poids
+    await ordersCollection.createIndex({ 'cargo.weight': 1 });
+
+    // Index pour transporteur
+    await ordersCollection.createIndex({ 'carrier.externalId': 1 });
+    await ordersCollection.createIndex({ 'carrier.name': 1 });
+
+    // Index pour dates
+    await ordersCollection.createIndex({ createdAt: -1 });
+    await ordersCollection.createIndex({ updatedAt: -1 });
+    await ordersCollection.createIndex({ syncedAt: -1 });
+
+    console.log('[TMS CONNECTION SERVICE] Initialized with advanced indexes');
   }
 
   /**
@@ -241,12 +291,26 @@ class TMSConnectionService {
           const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
             baseUrl: connection.credentials.apiUrl
           });
-          syncResult = await dashdoc.fullSync({
+
+          // Préparer les options de synchronisation
+          const syncOptions = {
             transportLimit: options.transportLimit || connection.syncConfig.transportLimit,
             companyLimit: options.companyLimit || 500,
             contactLimit: options.contactLimit || 500,
-            invoiceLimit: options.invoiceLimit || 100
-          });
+            invoiceLimit: options.invoiceLimit || 100,
+            maxPages: options.maxPages || 100,
+            tags__in: options.tags__in || connection.syncConfig.tags
+          };
+
+          // Support du filtre "À planifier" (to plan)
+          if (options.toPlan === true || options.toPlan === 'true') {
+            syncOptions.status__in = 'created,unassigned';
+            console.log('[SYNC] Filtering for "À planifier" orders only (created, unassigned)');
+          } else if (options.status__in) {
+            syncOptions.status__in = options.status__in;
+          }
+
+          syncResult = await dashdoc.fullSync(syncOptions);
           break;
 
         default:

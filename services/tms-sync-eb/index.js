@@ -21,6 +21,7 @@ const helmet = require('helmet');
 const { MongoClient, ObjectId } = require('mongodb');
 const TMSConnectionService = require('./services/tms-connection.service');
 const DashdocConnector = require('./connectors/dashdoc.connector');
+const scheduledJobs = require('./scheduled-jobs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -78,7 +79,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.1.0',
+    version: '2.1.1',
     features: ['dashdoc', 'auto-sync', 'real-time-counters'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -106,7 +107,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.1.0',
+    version: '2.1.1',
     supportedTMS: ['dashdoc'],
     endpoints: [
       'GET /health',
@@ -276,6 +277,17 @@ app.post('/api/v1/tms/connections/:id/test', requireMongo, async (req, res) => {
 
 /**
  * Lancer une synchronisation
+ * POST /api/v1/tms/connections/:id/sync
+ *
+ * Body params:
+ * - transportLimit: number (0 = illimité avec pagination, default: config)
+ * - maxPages: number (limite de pages pour pagination, default: 100)
+ * - toPlan: boolean (true = uniquement les commandes "À planifier" = created, unassigned)
+ * - status__in: string (liste de statuts séparés par virgule, ex: "created,assigned")
+ * - tags__in: string (filtrer par tags Dashdoc)
+ * - companyLimit: number (default: 500)
+ * - contactLimit: number (default: 500)
+ * - invoiceLimit: number (default: 100)
  */
 app.post('/api/v1/tms/connections/:id/sync', requireMongo, async (req, res) => {
   try {
@@ -416,6 +428,9 @@ app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
     // Filtre par status
     if (status) {
       query['externalData.status'] = status;
+    } else {
+      // Par defaut, exclure les commandes annulees (cancelled, declined)
+      query['externalData.status'] = { $nin: ['cancelled', 'declined'] };
     }
 
     const [orders, total] = await Promise.all([
@@ -436,6 +451,197 @@ app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
       orders
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Filtrage avance des commandes
+ * GET /api/v1/tms/orders/filtered
+ *
+ * Query params:
+ * - status: string (PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED)
+ * - toPlan: boolean (true = uniquement les commandes "À planifier" = DRAFT ou PENDING)
+ * - city: string (ville de pickup ou delivery, recherche partielle)
+ * - postalCode: string (code postal pickup ou delivery, exact)
+ * - cargoType: string (type de marchandise, recherche partielle)
+ * - minWeight: number (poids minimum en kg)
+ * - maxWeight: number (poids maximum en kg)
+ * - carrierId: string (external ID du transporteur)
+ * - carrierName: string (nom du transporteur, recherche partielle)
+ * - dateFrom: ISO date (createdAt >= dateFrom)
+ * - dateTo: ISO date (createdAt <= dateTo)
+ * - isDangerous: boolean (marchandise dangereuse)
+ * - isRefrigerated: boolean (marchandise refrigeree)
+ * - skip: number (pagination offset, defaut: 0)
+ * - limit: number (pagination limit, defaut: 50, max: 100)
+ * - sortBy: string (champ de tri, defaut: createdAt)
+ * - sortOrder: string (asc ou desc, defaut: desc)
+ */
+app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
+  try {
+    const {
+      status,
+      toPlan,
+      city,
+      postalCode,
+      cargoType,
+      minWeight,
+      maxWeight,
+      carrierId,
+      carrierName,
+      dateFrom,
+      dateTo,
+      isDangerous,
+      isRefrigerated,
+      skip = 0,
+      limit = 50,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Construction du filtre MongoDB
+    const query = { externalSource: 'dashdoc' };
+
+    // Filtre "À planifier" (to plan) - commandes créées ou non assignées
+    if (toPlan === 'true') {
+      query.status = { $in: ['DRAFT', 'PENDING'] };
+      console.log('[FILTER] Filtering for "À planifier" orders only (DRAFT, PENDING)');
+    }
+    // Filtre par statut spécifique
+    else if (status) {
+      query.status = status;
+    }
+    // Par défaut, exclure les commandes annulées
+    else {
+      query.status = { $ne: 'CANCELLED' };
+    }
+
+    // Filtre geolocalise: ville (pickup OU delivery)
+    if (city) {
+      query.$or = [
+        { 'pickup.address.city': { $regex: city, $options: 'i' } },
+        { 'delivery.address.city': { $regex: city, $options: 'i' } }
+      ];
+    }
+
+    // Filtre geolocalise: code postal (pickup OU delivery)
+    if (postalCode) {
+      // Si $or existe deja, on fusionne
+      if (query.$or) {
+        query.$and = [
+          { $or: query.$or },
+          {
+            $or: [
+              { 'pickup.address.postalCode': postalCode },
+              { 'delivery.address.postalCode': postalCode }
+            ]
+          }
+        ];
+        delete query.$or;
+      } else {
+        query.$or = [
+          { 'pickup.address.postalCode': postalCode },
+          { 'delivery.address.postalCode': postalCode }
+        ];
+      }
+    }
+
+    // Filtre par type de marchandise
+    if (cargoType) {
+      query['cargo.category'] = { $regex: cargoType, $options: 'i' };
+    }
+
+    // Filtre par poids (utilise le premier cargo)
+    if (minWeight || maxWeight) {
+      query['cargo.0.weight'] = {};
+      if (minWeight) query['cargo.0.weight'].$gte = parseFloat(minWeight);
+      if (maxWeight) query['cargo.0.weight'].$lte = parseFloat(maxWeight);
+    }
+
+    // Filtre par transporteur (external ID)
+    if (carrierId) {
+      query['carrier.externalId'] = carrierId;
+    }
+
+    // Filtre par nom transporteur
+    if (carrierName) {
+      query['carrier.name'] = { $regex: carrierName, $options: 'i' };
+    }
+
+    // Filtre par date de creation
+    if (dateFrom || dateTo) {
+      query.createdAt = {};
+      if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) query.createdAt.$lte = new Date(dateTo);
+    }
+
+    // Filtre marchandise dangereuse
+    if (isDangerous === 'true' || isDangerous === true) {
+      query['cargo.isDangerous'] = true;
+    }
+
+    // Filtre marchandise refrigeree
+    if (isRefrigerated === 'true' || isRefrigerated === true) {
+      query['cargo.isRefrigerated'] = true;
+    }
+
+    // Parametres de pagination
+    const skipNum = parseInt(skip) || 0;
+    const limitNum = Math.min(parseInt(limit) || 50, 100); // Max 100
+
+    // Tri
+    const sortField = sortBy || 'createdAt';
+    const sortDir = sortOrder === 'asc' ? 1 : -1;
+    const sort = { [sortField]: sortDir };
+
+    console.log('[TMS ORDERS FILTERED] Query:', JSON.stringify(query, null, 2));
+
+    // Execution de la requete avec pagination
+    const [orders, total] = await Promise.all([
+      db.collection('orders')
+        .find(query)
+        .sort(sort)
+        .skip(skipNum)
+        .limit(limitNum)
+        .toArray(),
+      db.collection('orders').countDocuments(query)
+    ]);
+
+    // Metadata de pagination
+    const meta = {
+      total,
+      skip: skipNum,
+      limit: limitNum,
+      returned: orders.length,
+      page: Math.floor(skipNum / limitNum) + 1,
+      totalPages: Math.ceil(total / limitNum),
+      hasNext: skipNum + limitNum < total,
+      hasPrev: skipNum > 0
+    };
+
+    res.json({
+      success: true,
+      filters: {
+        status,
+        city,
+        postalCode,
+        cargoType,
+        minWeight,
+        maxWeight,
+        carrierId,
+        carrierName,
+        dateFrom,
+        dateTo,
+        isDangerous,
+        isRefrigerated
+      },
+      meta,
+      orders
+    });
+
+  } catch (error) {
+    console.error('Error filtering orders:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -467,13 +673,71 @@ app.get('/api/v1/tms/dashdoc/transports', requireMongo, async (req, res) => {
     if (tag) params.tags__in = tag;
     if (status) params.status__in = status;
 
-    const result = await dashdoc.getTransports(params);
+    // Appeler l'API directement pour eviter les erreurs de mapping
+    const axios = require('axios');
+    const client = axios.create({
+      baseURL: connection.credentials.apiUrl || 'https://www.dashdoc.eu/api/v4',
+      timeout: 30000,
+      headers: {
+        'Authorization': `Token ${connection.credentials.apiToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const urlParams = new URLSearchParams();
+    urlParams.append('limit', params.limit);
+    if (params.tags__in) urlParams.append('tags__in', params.tags__in);
+    if (params.status__in) urlParams.append('status__in', params.status__in);
+
+    const response = await client.get(`/transports/?${urlParams.toString()}`);
+    const data = response.data;
 
     res.json({
       success: true,
-      total: result.count || result.results?.length || 0,
-      transports: result.results || []
+      total: data.count || 0,
+      transports: data.results || []
     });
+  } catch (error) {
+    console.error('Error fetching Dashdoc transports:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SCHEDULED JOBS ROUTES ====================
+
+/**
+ * Status des jobs planifies
+ */
+app.get('/api/v1/jobs/status', (req, res) => {
+  res.json({ success: true, status: scheduledJobs.getJobsStatus() });
+});
+
+/**
+ * Demarrer tous les jobs
+ */
+app.post('/api/v1/jobs/start', (req, res) => {
+  if (!mongoConnected || !tmsService) {
+    return res.status(503).json({ error: 'Database or service not available' });
+  }
+  scheduledJobs.startAllJobs(db, tmsService);
+  res.json({ success: true, message: 'Jobs started' });
+});
+
+/**
+ * Arreter tous les jobs
+ */
+app.post('/api/v1/jobs/stop', (req, res) => {
+  scheduledJobs.stopAllJobs();
+  res.json({ success: true, message: 'Jobs stopped' });
+});
+
+/**
+ * Executer un job manuellement
+ */
+app.post('/api/v1/jobs/:jobName/run', async (req, res) => {
+  try {
+    const result = await scheduledJobs.runJobManually(req.params.jobName);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -490,9 +754,17 @@ async function startServer() {
   await connectMongoDB();
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RT TMS Sync API v2.0.0 listening on port ${PORT}`);
+    console.log(`RT TMS Sync API v2.1.1 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`MongoDB: ${mongoConnected ? 'Connected' : 'Not connected'}`);
+
+    // Demarrer les jobs scheduled si MongoDB connecte
+    if (mongoConnected && tmsService) {
+      console.log('Starting scheduled jobs...');
+      scheduledJobs.startAllJobs(db, tmsService);
+    } else {
+      console.warn('⚠️  Scheduled jobs NOT started - MongoDB not connected');
+    }
   });
 }
 

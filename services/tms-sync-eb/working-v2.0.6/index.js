@@ -1,0 +1,418 @@
+/**
+ * RT TMS Sync API
+ * Service de synchronisation avec les TMS externes (Dashdoc, Transporeon, etc.)
+ *
+ * Endpoints:
+ * - POST   /api/v1/tms/connections           - Creer une connexion TMS
+ * - GET    /api/v1/tms/connections           - Liste des connexions
+ * - GET    /api/v1/tms/connections/:id       - Details d'une connexion
+ * - PUT    /api/v1/tms/connections/:id       - Modifier une connexion
+ * - DELETE /api/v1/tms/connections/:id       - Supprimer une connexion
+ * - POST   /api/v1/tms/connections/:id/test  - Tester une connexion
+ * - POST   /api/v1/tms/connections/:id/sync  - Lancer une synchronisation
+ * - GET    /api/v1/tms/connections/:id/logs  - Logs de sync
+ * - GET    /api/v1/tms/connections/:id/counters - Compteurs temps reel
+ * - GET    /api/v1/tms/connections/:id/data/:type - Donnees synchronisees
+ */
+
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const { MongoClient, ObjectId } = require('mongodb');
+const TMSConnectionService = require('./services/tms-connection.service');
+const DashdocConnector = require('./connectors/dashdoc.connector');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// MongoDB connection
+let db = null;
+let mongoClient = null;
+let mongoConnected = false;
+let tmsService = null;
+
+async function connectMongoDB() {
+  if (!process.env.MONGODB_URI) {
+    console.log('Warning: MongoDB URI not configured');
+    return false;
+  }
+
+  try {
+    mongoClient = new MongoClient(process.env.MONGODB_URI);
+    await mongoClient.connect();
+    db = mongoClient.db();
+    mongoConnected = true;
+
+    // Initialiser le service TMS
+    tmsService = new TMSConnectionService(db);
+    await tmsService.init();
+
+    console.log('Connected to MongoDB');
+    return true;
+  } catch (error) {
+    console.error('MongoDB connection failed:', error.message);
+    mongoConnected = false;
+    return false;
+  }
+}
+
+// Middleware
+app.use(helmet());
+app.use(cors({
+  origin: process.env.CORS_ALLOWED_ORIGINS?.split(',') || true,
+  credentials: true
+}));
+app.use(express.json());
+
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  next();
+});
+
+// Health check
+app.get('/health', async (req, res) => {
+  const health = {
+    status: 'healthy',
+    service: 'tms-sync',
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    env: process.env.NODE_ENV || 'development',
+    version: '2.0.0',
+    features: ['dashdoc', 'auto-sync', 'real-time-counters'],
+    mongodb: {
+      configured: !!process.env.MONGODB_URI,
+      connected: mongoConnected
+    }
+  };
+
+  if (mongoConnected && mongoClient) {
+    try {
+      await mongoClient.db().admin().ping();
+      health.mongodb.status = 'active';
+    } catch (error) {
+      health.mongodb.status = 'error';
+      health.mongodb.error = error.message;
+    }
+  } else {
+    health.mongodb.status = 'not connected';
+  }
+
+  const statusCode = mongoConnected ? 200 : 503;
+  res.status(statusCode).json(health);
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'RT TMS Sync API',
+    version: '2.0.0',
+    supportedTMS: ['dashdoc'],
+    endpoints: [
+      'GET /health',
+      'POST /api/v1/tms/connections',
+      'GET /api/v1/tms/connections',
+      'GET /api/v1/tms/connections/:id',
+      'PUT /api/v1/tms/connections/:id',
+      'DELETE /api/v1/tms/connections/:id',
+      'POST /api/v1/tms/connections/:id/test',
+      'POST /api/v1/tms/connections/:id/sync',
+      'GET /api/v1/tms/connections/:id/logs',
+      'GET /api/v1/tms/connections/:id/counters',
+      'GET /api/v1/tms/connections/:id/data/:type',
+      'POST /api/v1/tms/test-token'
+    ]
+  });
+});
+
+// Middleware to check MongoDB connection
+const requireMongo = (req, res, next) => {
+  if (!mongoConnected || !tmsService) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
+  next();
+};
+
+// ==================== TMS CONNECTION ROUTES ====================
+
+/**
+ * Tester un token API directement (sans creer de connexion)
+ */
+app.post('/api/v1/tms/test-token', async (req, res) => {
+  try {
+    const { tmsType, apiToken, apiUrl } = req.body;
+
+    if (!tmsType || !apiToken) {
+      return res.status(400).json({ error: 'tmsType and apiToken required' });
+    }
+
+    let result;
+    switch (tmsType) {
+      case 'dashdoc':
+        const dashdoc = new DashdocConnector(apiToken, { baseUrl: apiUrl });
+        result = await dashdoc.testConnection();
+        break;
+      default:
+        return res.status(400).json({ error: `TMS type ${tmsType} not supported` });
+    }
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Creer une nouvelle connexion TMS
+ */
+app.post('/api/v1/tms/connections', requireMongo, async (req, res) => {
+  try {
+    const connection = await tmsService.createConnection(req.body);
+    res.status(201).json({ success: true, connection });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Liste des connexions (optionnel: par organisation)
+ */
+app.get('/api/v1/tms/connections', requireMongo, async (req, res) => {
+  try {
+    let connections;
+    if (req.query.organizationId) {
+      connections = await tmsService.getConnectionsByOrganization(req.query.organizationId);
+    } else {
+      connections = await db.collection('tmsConnections').find({}).toArray();
+    }
+
+    // Ne pas exposer les credentials
+    connections = connections.map(c => ({
+      ...c,
+      credentials: {
+        apiUrl: c.credentials?.apiUrl,
+        hasToken: !!c.credentials?.apiToken
+      }
+    }));
+
+    res.json({ success: true, connections });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Details d'une connexion
+ */
+app.get('/api/v1/tms/connections/:id', requireMongo, async (req, res) => {
+  try {
+    const connection = await tmsService.getConnection(req.params.id);
+    if (!connection) {
+      return res.status(404).json({ error: 'Connection not found' });
+    }
+
+    // Ne pas exposer le token
+    connection.credentials = {
+      apiUrl: connection.credentials?.apiUrl,
+      hasToken: !!connection.credentials?.apiToken
+    };
+
+    res.json({ success: true, connection });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Modifier une connexion
+ */
+app.put('/api/v1/tms/connections/:id', requireMongo, async (req, res) => {
+  try {
+    const updates = { ...req.body };
+
+    // Si un nouveau token est fourni, le mettre dans credentials
+    if (updates.apiToken) {
+      updates['credentials.apiToken'] = updates.apiToken;
+      delete updates.apiToken;
+    }
+
+    const connection = await tmsService.updateConnection(req.params.id, updates);
+    if (!connection) {
+      return res.status(404).json({ error: 'Connection not found' });
+    }
+
+    res.json({ success: true, connection });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Supprimer une connexion
+ */
+app.delete('/api/v1/tms/connections/:id', requireMongo, async (req, res) => {
+  try {
+    const result = await tmsService.deleteConnection(req.params.id);
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Connection not found' });
+    }
+    res.json({ success: true, message: 'Connection deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Tester une connexion
+ */
+app.post('/api/v1/tms/connections/:id/test', requireMongo, async (req, res) => {
+  try {
+    const result = await tmsService.testConnection(req.params.id);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Lancer une synchronisation
+ */
+app.post('/api/v1/tms/connections/:id/sync', requireMongo, async (req, res) => {
+  try {
+    const result = await tmsService.executeSync(req.params.id, req.body);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Logs de synchronisation
+ */
+app.get('/api/v1/tms/connections/:id/logs', requireMongo, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const logs = await tmsService.getSyncLogs(req.params.id, limit);
+    res.json({ success: true, logs });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Compteurs temps reel
+ */
+app.get('/api/v1/tms/connections/:id/counters', requireMongo, async (req, res) => {
+  try {
+    const counters = await tmsService.getRealtimeCounters(req.params.id);
+    res.json({ success: true, counters });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Donnees synchronisees par type
+ */
+app.get('/api/v1/tms/connections/:id/data/:type', requireMongo, async (req, res) => {
+  try {
+    const { id, type } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = parseInt(req.query.skip) || 0;
+
+    const collectionMap = {
+      'transports': 'orders',
+      'orders': 'orders',
+      'companies': 'companies',
+      'contacts': 'contacts',
+      'vehicles': 'fleet',
+      'trailers': 'fleet',
+      'drivers': 'drivers',
+      'truckers': 'drivers'
+    };
+
+    const collectionName = collectionMap[type];
+    if (!collectionName) {
+      return res.status(400).json({ error: `Unknown data type: ${type}` });
+    }
+
+    const collection = db.collection(collectionName);
+    const query = {
+      tmsConnectionId: id,
+      externalSource: 'dashdoc'
+    };
+
+    // Pour fleet, filtrer par type
+    if (type === 'vehicles') {
+      query.type = 'vehicle';
+    } else if (type === 'trailers') {
+      query.type = 'trailer';
+    }
+
+    const [data, total] = await Promise.all([
+      collection.find(query).skip(skip).limit(limit).sort({ syncedAt: -1 }).toArray(),
+      collection.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      type,
+      total,
+      limit,
+      skip,
+      data
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Statistiques globales des donnees synchronisees
+ */
+app.get('/api/v1/tms/connections/:id/stats', requireMongo, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [orders, companies, contacts, fleet, drivers] = await Promise.all([
+      db.collection('orders').countDocuments({ tmsConnectionId: id, externalSource: 'dashdoc' }),
+      db.collection('companies').countDocuments({ tmsConnectionId: id, externalSource: 'dashdoc' }),
+      db.collection('contacts').countDocuments({ tmsConnectionId: id, externalSource: 'dashdoc' }),
+      db.collection('fleet').countDocuments({ tmsConnectionId: id, externalSource: 'dashdoc' }),
+      db.collection('drivers').countDocuments({ tmsConnectionId: id, externalSource: 'dashdoc' })
+    ]);
+
+    res.json({
+      success: true,
+      stats: {
+        orders,
+        companies,
+        contacts,
+        fleet,
+        drivers,
+        total: orders + companies + contacts + fleet + drivers
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: err.message });
+});
+
+// Start server
+async function startServer() {
+  await connectMongoDB();
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`RT TMS Sync API v2.0.0 listening on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`MongoDB: ${mongoConnected ? 'Connected' : 'Not connected'}`);
+  });
+}
+
+startServer();

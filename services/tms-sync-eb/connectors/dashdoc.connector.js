@@ -91,6 +91,60 @@ class DashdocConnector {
   }
 
   /**
+   * Recuperer TOUS les transports avec pagination automatique
+   * Parcourt toutes les pages jusqu'a obtenir tous les resultats
+   * @param {Object} options - Options de filtre (tags__in, status__in, ordering, etc.)
+   * @param {Number} maxPages - Limite de securite (defaut: 100 pages = 10 000 transports)
+   * @returns {Promise<Array>} Tous les transports
+   */
+  async getAllTransportsWithPagination(options = {}, maxPages = 100) {
+    const allTransports = [];
+    let page = 1;
+    let hasMorePages = true;
+    const limit = 100; // Limite API Dashdoc
+
+    console.log('[DASHDOC] Starting full pagination...');
+    console.log('[DASHDOC] Options:', options);
+
+    while (hasMorePages && page <= maxPages) {
+      try {
+        console.log(`[DASHDOC] Fetching page ${page}...`);
+
+        const result = await this.getTransports({
+          ...options,
+          limit,
+          page
+        });
+
+        allTransports.push(...result.results);
+
+        console.log(`[DASHDOC] Page ${page}: ${result.results.length} transports, Total: ${allTransports.length}/${result.count}`);
+
+        // Verifier si il y a une page suivante
+        hasMorePages = result.next !== null && allTransports.length < result.count;
+        page++;
+
+        // Petit delai pour ne pas surcharger l'API
+        if (hasMorePages) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+      } catch (error) {
+        console.error(`[DASHDOC] Error fetching page ${page}:`, error.message);
+        // Continuer avec ce qu'on a recupere
+        break;
+      }
+    }
+
+    if (page >= maxPages && hasMorePages) {
+      console.warn(`[DASHDOC] Reached max pages limit (${maxPages}). Some transports may be missing.`);
+    }
+
+    console.log(`[DASHDOC] Pagination complete: ${allTransports.length} total transports`);
+    return allTransports;
+  }
+
+  /**
    * Recuperer les livraisons
    */
   async getDeliveries(options = {}) {
@@ -367,14 +421,41 @@ class DashdocConnector {
       // Compteurs
       results.counters = await this.getCounters();
 
-      // Transports (limiter pour perf)
-      const transports = await this.getTransports({
-        limit: options.transportLimit || 100,
-        ordering: '-created'
-      });
-      results.transports.count = transports.count;
-      results.transports.synced = transports.results.length;
-      results.transports.data = transports.results;
+      // Transports avec pagination automatique
+      console.log('[DASHDOC] Starting FULL SYNC with automatic pagination...');
+
+      // Definir les statuts a exclure (annules)
+      // Si aucun filtre status__in specifie, on exclut automatiquement les cancelled/declined
+      let statusFilter = options.status__in;
+      if (!statusFilter && options.excludeCancelled !== false) {
+        // Par defaut, on recupere tous les statuts SAUF cancelled et declined
+        statusFilter = 'created,unassigned,assigned,confirmed,on_loading_site,loading_complete,on_unloading_site,unloading_complete,done';
+        console.log('[DASHDOC] Excluding cancelled and declined orders by default');
+      }
+
+      // Si transportLimit = 0, on utilise la pagination automatique
+      let allTransports;
+      if (options.transportLimit === 0 || !options.transportLimit) {
+        allTransports = await this.getAllTransportsWithPagination({
+          ordering: '-created',
+          tags__in: options.tags__in,
+          status__in: statusFilter
+        }, options.maxPages || 100);
+      } else {
+        // Ancienne methode pour compatibilite
+        const transports = await this.getTransports({
+          limit: options.transportLimit,
+          ordering: '-created',
+          status__in: statusFilter
+        });
+        allTransports = transports.results;
+      }
+
+      console.log(`[DASHDOC] Retrieved ${allTransports.length} transports (cancelled orders excluded)`);
+
+      results.transports.count = allTransports.length;
+      results.transports.synced = allTransports.length;
+      results.transports.data = allTransports;
 
       // Entreprises
       const companies = await this.getCompanies({ limit: options.companyLimit || 500 });

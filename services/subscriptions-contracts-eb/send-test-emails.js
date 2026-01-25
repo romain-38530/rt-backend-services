@@ -3,15 +3,12 @@
  * Envoie tous les templates à r.tardy@rt-groupe.com pour validation
  */
 
+require('dotenv').config();
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
-// Configuration AWS SES
+// Configuration AWS SES - utilise la région eu-central-1 où SES est vérifié
 const sesClient = new SESClient({
-  region: process.env.AWS_REGION || 'eu-west-3',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-  }
+  region: 'eu-central-1'
 });
 
 const TEST_EMAIL = 'r.tardy@rt-groupe.com';
@@ -24,7 +21,7 @@ const testData = {
   expiryDate: '15/02/2026',
   portalUrl: 'https://portail.symphonia-controltower.com',
   invitingCompany: 'SETT Transports',
-  invitationUrl: 'https://portail.symphonia-controltower.com/invitation/abc123xyz'
+  invitationUrl: 'https://transporteur.symphonia-controltower.com/inscription?ref=sett-transports&trial=10'
 };
 
 // Templates d'emails commerciaux
@@ -61,7 +58,7 @@ Excellente continuation,
 
 L'équipe SYMPHONI.A
 ──────────────────────────
-📞 Support : 04 76 XX XX XX
+📞 Support : 04 76 33 23 78
 📧 support@symphonia-controltower.com
 🌐 www.symphonia-controltower.com
     `
@@ -92,7 +89,7 @@ Besoin d'aide ? Notre équipe vous accompagne gratuitement dans vos démarches a
 
 L'équipe Partenariats
 ──────────────────────────
-📞 04 76 XX XX XX (9h-18h)
+📞 04 76 33 23 78 (9h-18h)
 💬 Chat disponible sur votre portail
     `
   },
@@ -144,7 +141,7 @@ Nous ne voulons pas vous perdre ! Vous faites partie des transporteurs de confia
 → Continuez à recevoir des missions
 
 📞 BESOIN D'AIDE URGENTE ?
-Appelez-nous directement : 04 76 XX XX XX
+Appelez-nous directement : 04 76 33 23 78
 Notre équipe est mobilisée pour vous aider.
 
 Nous croyons en votre entreprise,
@@ -168,7 +165,7 @@ C'est le moment d'agir. Après demain, votre compte sera temporairement suspendu
 
 Nous comprenons que les démarches administratives peuvent être chronophages. Si vous rencontrez des difficultés pour obtenir votre document à temps, contactez-nous MAINTENANT.
 
-📱 LIGNE DIRECTE : 04 76 XX XX XX
+📱 LIGNE DIRECTE : 04 76 33 23 78
 📧 urgent@symphonia-controltower.com
 
 → RENOUVELER MON DOCUMENT : {portalUrl}
@@ -206,7 +203,7 @@ CE QUI VOUS ATTEND À VOTRE RETOUR :
 
 💬 BESOIN D'ACCOMPAGNEMENT ?
 Notre équipe peut vous guider pas à pas.
-📞 04 76 XX XX XX | 📧 support@symphonia-controltower.com
+📞 04 76 33 23 78 | 📧 support@symphonia-controltower.com
 
 Nous avons hâte de vous retrouver,
 
@@ -216,41 +213,59 @@ P.S. : Saviez-vous que vous pouvez activer les rappels automatiques pour ne plus
     `
   },
   invitation_decouverte: {
-    subject: 'SYMPHONI.A x {invitingCompany} - Votre invitation exclusive + 10 transports offerts',
+    subject: '{invitingCompany} vous invite à déposer vos documents de conformité sur SYMPHONI.A',
     body: `
 Bonjour,
 
-{invitingCompany} vous invite à rejoindre SYMPHONI.A, la plateforme qui connecte les meilleurs transporteurs aux donneurs d'ordres industriels.
+{invitingCompany} a choisi SYMPHONI.A pour gérer son obligation de vigilance envers ses sous-traitants.
 
-🎁 OFFRE EXCLUSIVE DE BIENVENUE
+En tant que partenaire de {invitingCompany}, nous vous invitons à déposer vos documents de conformité sur notre plateforme sécurisée. Cela simplifiera considérablement la gestion administrative pour vous comme pour {invitingCompany}.
 
-En tant que partenaire de {invitingCompany}, vous bénéficiez de :
-• 10 transports AFFRET.IA GRATUITS (valeur ~500€)
-• Accès au portail SYMPHONI.A pendant 90 jours
-• Dépôt sécurisé de vos documents de conformité
-• Scoring transporteur et visibilité réseau
+📋 CE QUE NOUS VOUS DEMANDONS
 
-🚀 POURQUOI REJOINDRE SYMPHONI.A ?
+Connectez-vous et déposez vos documents obligatoires :
+• Attestation URSSAF de vigilance
+• Extrait Kbis (moins de 3 mois)
+• Attestation d'assurance RC Pro
+• Licence de transport (le cas échéant)
 
-✅ +500 offres de fret quotidiennes via notre IA AFFRET.IA
+Notre système vous alertera automatiquement avant chaque expiration pour que vous restiez toujours en conformité.
+
+──────────────────────────
+
+🚀 DÉCOUVREZ SYMPHONI.A - BIEN PLUS QU'UN PORTAIL DOCUMENTS !
+
+SYMPHONI.A est LA plateforme transport nouvelle génération qui connecte transporteurs et donneurs d'ordres industriels.
+
+✅ AFFRET.IA : +500 offres de fret/jour grâce à notre IA
 ✅ +150 donneurs d'ordres industriels (Carrefour, Danone, L'Oréal...)
 ✅ Paiement garanti sous 30 jours
 ✅ Application mobile pour vos chauffeurs
 ✅ eCMR et signature électronique inclus
+✅ Scoring transporteur pour booster votre visibilité
 
-📋 INSCRIPTION EN 3 ÉTAPES
+🎁 OFFRE EXCLUSIVE DE BIENVENUE
+
+Pour vous remercier de votre confiance, {invitingCompany} vous offre :
+• 10 transports AFFRET.IA GRATUITS (valeur ~500€)
+• Accès complet au portail SYMPHONI.A pendant 90 jours
+• Scoring transporteur et visibilité auprès de notre réseau
+
+──────────────────────────
+
+📋 INSCRIPTION EN 3 ÉTAPES (5 minutes)
 
 1. Cliquez sur le lien ci-dessous
-2. Complétez vos informations (5 min)
+2. Complétez vos informations entreprise
 3. Déposez vos documents de conformité
-4. Commencez à recevoir des offres !
+→ C'est prêt ! Vous pouvez recevoir des offres de fret.
 
-👉 ACTIVER MON COMPTE : {invitationUrl}
+👉 CRÉER MON COMPTE : {invitationUrl}
 
-Cette offre est valable 30 jours. Ne manquez pas cette opportunité de développer votre activité !
+Cette offre est valable 30 jours.
 
-Des questions ? Notre équipe est disponible :
-📞 04 76 XX XX XX | 📧 partenariats@symphonia-controltower.com
+Des questions ? Notre équipe est à votre écoute :
+📞 04 76 33 23 78 | 📧 partenariats@symphonia-controltower.com
 
 À très bientôt sur SYMPHONI.A,
 

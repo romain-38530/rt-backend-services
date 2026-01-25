@@ -1,6 +1,6 @@
 {
     "name": "rt-tms-sync-api",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "description": "RT TMS Sync API - Dashdoc, Transporeon integration",
     "main": "index.js",
     "scripts": {
@@ -8,10 +8,11 @@
         "dev": "node --watch index.js"
     },
     "dependencies": {
-        "express": "^4.18.2",
+        "axios": "^1.6.2",
         "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^4.18.2",
         "helmet": "^7.1.0",
-        "mongodb": "^6.3.0",
-        "axios": "^1.6.2"
+        "mongodb": "^6.3.0"
     }
 }

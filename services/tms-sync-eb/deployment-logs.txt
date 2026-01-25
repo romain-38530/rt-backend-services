@@ -1,0 +1,425 @@
+----------------------------------------
+/var/log/web.stdout.log
+----------------------------------------
+Jan 25 17:29:58 ip-172-31-9-151 web[66506]: 2026-01-25T17:29:58.147Z GET /wp-admin/js/index.php
+Jan 25 17:29:58 ip-172-31-9-151 web[66506]: 2026-01-25T17:29:58.400Z GET /wp-ana.php
+Jan 25 17:29:58 ip-172-31-9-151 web[66506]: 2026-01-25T17:29:58.653Z GET /info.php
+Jan 25 17:29:58 ip-172-31-9-151 web[66506]: 2026-01-25T17:29:58.906Z GET /tx1.php
+Jan 25 17:29:59 ip-172-31-9-151 web[66506]: 2026-01-25T17:29:59.161Z GET /lv.php
+Jan 25 17:29:59 ip-172-31-9-151 web[66506]: 2026-01-25T17:29:59.414Z GET /ccou.php
+Jan 25 17:29:59 ip-172-31-9-151 web[66506]: 2026-01-25T17:29:59.667Z GET /wsd.php
+Jan 25 17:29:59 ip-172-31-9-151 web[66506]: 2026-01-25T17:29:59.921Z GET /yvxhx.php
+Jan 25 17:30:00 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:00.180Z GET /wp-good.php
+Jan 25 17:30:00 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:00.435Z GET /qing2.php
+Jan 25 17:30:00 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:00.688Z GET /doo.php
+Jan 25 17:30:00 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:00.942Z GET /moon.php
+Jan 25 17:30:01 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:01.196Z GET /buy.php
+Jan 25 17:30:01 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:01.449Z GET /9v6.php
+Jan 25 17:30:01 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:01.703Z GET /dbc.php
+Jan 25 17:30:01 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:01.956Z GET /log.php
+Jan 25 17:30:02 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:02.209Z GET /1.php
+Jan 25 17:30:02 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:02.463Z GET /ws36.php
+Jan 25 17:30:02 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:02.717Z GET /file.php
+Jan 25 17:30:02 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:02.970Z GET /rh.php
+Jan 25 17:30:03 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:03.223Z GET /ova.php
+Jan 25 17:30:03 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:03.477Z GET /siteheads.php
+Jan 25 17:30:03 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:03.732Z GET /wp-links.php
+Jan 25 17:30:03 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:03.985Z GET /zer.php
+Jan 25 17:30:04 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:04.239Z GET /sid3.php
+Jan 25 17:30:04 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:04.493Z GET /tinyfilemanager.php
+Jan 25 17:30:04 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:04.746Z GET /galex.php
+Jan 25 17:30:04 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:04.999Z GET /abcd.php
+Jan 25 17:30:05 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:05.252Z GET /ant.php
+Jan 25 17:30:05 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:05.506Z GET /O-Simple.php
+Jan 25 17:30:05 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:05.759Z GET /0o0.php
+Jan 25 17:30:06 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:06.015Z GET /gtc.php
+Jan 25 17:30:06 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:06.268Z GET /content.php
+Jan 25 17:30:06 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:06.521Z GET /support.php
+Jan 25 17:30:06 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:06.774Z GET /styles.php
+Jan 25 17:30:07 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:07.027Z GET /403.php
+Jan 25 17:30:07 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:07.281Z GET /wp-content/themes/finley/min.php
+Jan 25 17:30:07 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:07.534Z GET /class.api.php
+Jan 25 17:30:07 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:07.788Z GET /az.php
+Jan 25 17:30:08 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:08.041Z GET /155.php
+Jan 25 17:30:08 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:08.294Z GET /oo.php
+Jan 25 17:30:08 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:08.547Z GET /vx.php
+Jan 25 17:30:08 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:08.802Z GET /geck.php
+Jan 25 17:30:09 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:09.055Z GET /to.php
+Jan 25 17:30:09 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:09.308Z GET /horeg.php
+Jan 25 17:30:09 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:09.561Z GET /wen.php
+Jan 25 17:30:09 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:09.814Z GET /menu.php
+Jan 25 17:30:10 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:10.067Z GET /sfudq.php
+Jan 25 17:30:10 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:10.320Z GET /file2.php
+Jan 25 17:30:10 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:10.577Z GET /wp-22.php
+Jan 25 17:30:10 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:10.831Z GET /asx.php
+Jan 25 17:30:11 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:11.084Z GET /xa.php
+Jan 25 17:30:11 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:11.337Z GET /dox.php
+Jan 25 17:30:11 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:11.590Z GET /size.php
+Jan 25 17:30:11 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:11.844Z GET /ng.php
+Jan 25 17:30:12 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:12.098Z GET /a2.php
+Jan 25 17:30:12 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:12.351Z GET /page.php
+Jan 25 17:30:12 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:12.604Z GET /z60.php
+Jan 25 17:30:12 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:12.858Z GET /sf.php
+Jan 25 17:30:13 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:13.111Z GET /qual.php
+Jan 25 17:30:13 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:13.364Z GET /12.php
+Jan 25 17:30:13 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:13.617Z GET /s.php
+Jan 25 17:30:13 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:13.870Z GET /cong.php
+Jan 25 17:30:14 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:14.123Z GET /simple.php
+Jan 25 17:30:14 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:14.377Z GET /11.php
+Jan 25 17:30:14 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:14.630Z GET /wp-admin/css/colors/about.php
+Jan 25 17:30:14 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:14.883Z GET /wp-includes/Text/about.php
+Jan 25 17:30:15 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:15.136Z GET /upl.php
+Jan 25 17:30:15 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:15.390Z GET /past.php
+Jan 25 17:30:15 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:15.642Z GET /revision.php
+Jan 25 17:30:15 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:15.895Z GET /baxa1.phP8
+Jan 25 17:30:16 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:16.148Z GET /test1.php
+Jan 25 17:30:16 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:16.401Z GET /massby2.php
+Jan 25 17:30:16 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:16.654Z GET /doc.php
+Jan 25 17:30:16 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:16.908Z GET /abc.php
+Jan 25 17:30:17 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:17.161Z GET /m.php
+Jan 25 17:30:17 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:17.414Z GET /wp-admin/images/admin.php
+Jan 25 17:30:17 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:17.668Z GET /error.php
+Jan 25 17:30:17 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:17.921Z GET /ma.php
+Jan 25 17:30:18 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:18.173Z GET /mh.php
+Jan 25 17:30:18 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:18.426Z GET /dropdown.php
+Jan 25 17:30:18 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:18.680Z GET /wp-configs.php
+Jan 25 17:30:18 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:18.940Z GET /item.php
+Jan 25 17:30:19 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:19.193Z GET /ws46.php
+Jan 25 17:30:19 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:19.446Z GET /mini.php
+Jan 25 17:30:19 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:19.699Z GET /gecko.php
+Jan 25 17:30:19 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:19.952Z GET /x.php
+Jan 25 17:30:20 ip-172-31-9-151 web[66506]: 2026-01-25T17:30:20.205Z GET /lala.php
+Jan 25 17:45:12 ip-172-31-9-151 web[66506]: 2026-01-25T17:45:12.407Z GET /
+Jan 25 18:01:01 ip-172-31-9-151 web[66506]: 2026-01-25T18:01:01.870Z GET /.env
+Jan 25 18:01:02 ip-172-31-9-151 web[66506]: 2026-01-25T18:01:02.291Z POST /
+Jan 25 18:07:11 ip-172-31-9-151 web[66506]: 2026-01-25T18:07:11.763Z GET /
+Jan 25 18:08:25 ip-172-31-9-151 web[66506]: 2026-01-25T18:08:25.656Z HEAD /Core/Skin/Login.aspx
+Jan 25 18:09:07 ip-172-31-9-151 web[66506]: 2026-01-25T18:09:07.471Z GET /ReportServer
+Jan 25 18:10:22 ip-172-31-9-151 web[66506]: 2026-01-25T18:10:22.813Z GET /
+Jan 25 18:11:44 ip-172-31-9-151 web[66506]: 2026-01-25T18:11:44.502Z GET /geoserver/wfs
+Jan 25 18:22:14 ip-172-31-9-151 web[66506]: 2026-01-25T18:22:14.212Z GET /portal/redlion
+Jan 25 18:41:14 ip-172-31-9-151 web[66506]: 2026-01-25T18:41:14.812Z GET /
+Jan 25 19:00:46 ip-172-31-9-151 web[66506]: 2026-01-25T19:00:46.449Z GET /bins/
+Jan 25 19:04:24 ip-172-31-9-151 web[66506]: 2026-01-25T19:04:24.645Z GET /geoserver/wfs
+
+
+----------------------------------------
+/var/log/eb-engine.log
+----------------------------------------
+2026/01/25 19:44:13.717107 [INFO] reading event message file
+2026/01/25 19:44:13.717424 [INFO] Engine received EB command cfn-hup-exec
+
+2026/01/25 19:44:13.796588 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBAutoScalingGroup --region eu-central-1
+2026/01/25 19:44:14.094992 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBBeanstalkMetadata --region eu-central-1
+2026/01/25 19:44:14.394141 [INFO] checking whether command config-deploy is applicable to this instance...
+2026/01/25 19:44:14.394158 [INFO] this command is applicable to the instance, thus instance should execute command
+2026/01/25 19:44:14.394164 [INFO] Engine command: (config-deploy)
+
+2026/01/25 19:44:14.394167 [INFO] Using manifest file name from command request
+2026/01/25 19:44:14.394172 [INFO] Unable to get version manifest file.
+2026/01/25 19:44:14.394174 [INFO] Downloading latest manifest available.
+2026/01/25 19:44:14.394177 [INFO] Download latest app version manifest
+2026/01/25 19:44:14.394316 [INFO] resources/environments/e-t6vmjupsn9/_runtime/versions/manifest
+2026/01/25 19:44:14.435205 [INFO] latestManifest key *: resources/environments/e-t6vmjupsn9/_runtime/versions/manifest_1769370233234
+
+2026/01/25 19:44:14.435427 [INFO] Downloading: bucket: elasticbeanstalk-eu-central-1-004843574253, object: resources/environments/e-t6vmjupsn9/_runtime/versions/manifest_1769370233234, expected bucket owner: 004843574253
+2026/01/25 19:44:14.472241 [INFO] Download successful116bytes downloaded
+2026/01/25 19:44:14.472395 [INFO] Trying to read and parse version manifest...
+2026/01/25 19:44:14.472569 [INFO] Executing instruction: stopSqsd
+2026/01/25 19:44:14.472575 [INFO] This is a web server environment instance, skip stop sqsd daemon ...
+2026/01/25 19:44:14.472579 [INFO] Executing instruction: StageApplication
+2026/01/25 19:44:14.472583 [INFO] Recreating /var/app/staging/
+2026/01/25 19:44:14.484834 [INFO] extracting /opt/elasticbeanstalk/deployment/app_source_bundle to /var/app/staging/
+2026/01/25 19:44:14.484855 [INFO] Running command: /usr/bin/unzip -q -o /opt/elasticbeanstalk/deployment/app_source_bundle -d /var/app/staging/
+2026/01/25 19:44:14.564386 [INFO] warning:  /opt/elasticbeanstalk/deployment/app_source_bundle appears to use backslashes as path separators
+
+2026/01/25 19:44:14.564443 [ERROR] An error occurred during execution of command [config-deploy] - [StageApplication]. Stop running the command. Error: Command /usr/bin/unzip -q -o /opt/elasticbeanstalk/deployment/app_source_bundle -d /var/app/staging/ failed with error exit status 1. Stderr:warning:  /opt/elasticbeanstalk/deployment/app_source_bundle appears to use backslashes as path separators
+ 
+
+2026/01/25 19:44:14.564448 [INFO] Executing cleanup logic
+2026/01/25 19:44:14.564529 [INFO] CommandService Response: {"status":"FAILURE","api_version":"1.0","results":[{"status":"FAILURE","msg":"Engine execution has encountered an error.","returncode":1,"events":[{"msg":"Instance deployment: Your source bundle has issues that caused the deployment to fail. For details, see 'eb-engine.log'.","timestamp":1769370254564,"severity":"ERROR"},{"msg":"Instance deployment failed. For details, see 'eb-engine.log'.","timestamp":1769370254564,"severity":"ERROR"}]}]}
+
+2026/01/25 19:44:14.565691 [INFO] Platform Engine finished execution on command: config-deploy
+
+2026/01/25 19:46:27.605319 [INFO] Starting...
+2026/01/25 19:46:27.605378 [INFO] Starting EBPlatform-PlatformEngine
+2026/01/25 19:46:27.605405 [INFO] reading event message file
+2026/01/25 19:46:27.605768 [INFO] Engine received EB command cfn-hup-exec
+
+2026/01/25 19:46:27.679080 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBAutoScalingGroup --region eu-central-1
+2026/01/25 19:46:27.966448 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBBeanstalkMetadata --region eu-central-1
+2026/01/25 19:46:28.262661 [INFO] checking whether command app-deploy is applicable to this instance...
+2026/01/25 19:46:28.262672 [INFO] this command is applicable to the instance, thus instance should execute command
+2026/01/25 19:46:28.262675 [INFO] Engine command: (app-deploy)
+
+2026/01/25 19:46:28.262678 [INFO] Downloading EB Application...
+2026/01/25 19:46:28.262680 [INFO] Region: eu-central-1
+2026/01/25 19:46:28.262682 [INFO] envID: e-t6vmjupsn9
+2026/01/25 19:46:28.262685 [INFO] envBucket: elasticbeanstalk-eu-central-1-004843574253
+2026/01/25 19:46:28.262687 [INFO] accountID: 004843574253
+2026/01/25 19:46:28.262689 [INFO] Using manifest file name from command request
+2026/01/25 19:46:28.262694 [INFO] Manifest name is : manifest_1769370385327
+2026/01/25 19:46:28.262696 [INFO] Download app version manifest
+2026/01/25 19:46:28.262871 [INFO] Downloading: bucket: elasticbeanstalk-eu-central-1-004843574253, object: resources/environments/e-t6vmjupsn9/_runtime/versions/manifest_1769370385327, expected bucket owner: 004843574253
+2026/01/25 19:46:28.297557 [INFO] Download successful106bytes downloaded
+2026/01/25 19:46:28.297710 [INFO] Trying to read and parse version manifest...
+2026/01/25 19:46:28.297894 [INFO] Downloading: bucket: elasticbeanstalk-eu-central-1-004843574253, object: resources/environments/e-t6vmjupsn9/_runtime/_versions/rt-api-tms-sync/v2.1.5-toPlan-filter, expected bucket owner: 004843574253
+2026/01/25 19:46:28.320898 [INFO] Download successful24831bytes downloaded
+2026/01/25 19:46:28.321195 [INFO] Executing instruction: ElectLeader
+2026/01/25 19:46:28.321202 [INFO] Running leader election for instance i-0b2104524871b8802...
+2026/01/25 19:46:28.321208 [INFO] Calling the cfn-elect-cmd-leader to elect the command leader.
+2026/01/25 19:46:28.321223 [INFO] Running command: /opt/aws/bin/cfn-elect-cmd-leader --stack arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f --command-name ElasticBeanstalkCommand-AWSEBAutoScalingGroup --invocation-id 301c42cd-a65a-402b-9636-582ed865d5c6 --listener-id i-0b2104524871b8802 --region eu-central-1
+2026/01/25 19:46:28.656007 [INFO] Instance is Leader.
+2026/01/25 19:46:28.656065 [INFO] Executing instruction: stopSqsd
+2026/01/25 19:46:28.656071 [INFO] This is a web server environment instance, skip stop sqsd daemon ...
+2026/01/25 19:46:28.656074 [INFO] Executing instruction: PreBuildEbExtension
+2026/01/25 19:46:28.656078 [INFO] Starting executing the config set Infra-EmbeddedPreBuild.
+2026/01/25 19:46:28.656092 [INFO] Running command: /opt/aws/bin/cfn-init -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBAutoScalingGroup --region eu-central-1 --configsets Infra-EmbeddedPreBuild
+2026/01/25 19:46:28.985051 [INFO] Finished executing the config set Infra-EmbeddedPreBuild.
+
+2026/01/25 19:46:28.985074 [INFO] Executing instruction: StageApplication
+2026/01/25 19:46:28.985079 [INFO] Recreating /var/app/staging/
+2026/01/25 19:46:28.997295 [INFO] extracting /opt/elasticbeanstalk/deployment/app_source_bundle to /var/app/staging/
+2026/01/25 19:46:28.997343 [INFO] Running command: /usr/bin/unzip -q -o /opt/elasticbeanstalk/deployment/app_source_bundle -d /var/app/staging/
+2026/01/25 19:46:29.001734 [INFO] warning:  /opt/elasticbeanstalk/deployment/app_source_bundle appears to use backslashes as path separators
+
+2026/01/25 19:46:29.001753 [ERROR] An error occurred during execution of command [app-deploy] - [StageApplication]. Stop running the command. Error: Command /usr/bin/unzip -q -o /opt/elasticbeanstalk/deployment/app_source_bundle -d /var/app/staging/ failed with error exit status 1. Stderr:warning:  /opt/elasticbeanstalk/deployment/app_source_bundle appears to use backslashes as path separators
+ 
+
+2026/01/25 19:46:29.001758 [INFO] Executing cleanup logic
+2026/01/25 19:46:29.001828 [INFO] CommandService Response: {"status":"FAILURE","api_version":"1.0","results":[{"status":"FAILURE","msg":"Engine execution has encountered an error.","returncode":1,"events":[{"msg":"Instance deployment: Your source bundle has issues that caused the deployment to fail. For details, see 'eb-engine.log'.","timestamp":1769370389001,"severity":"ERROR"},{"msg":"Instance deployment failed. For details, see 'eb-engine.log'.","timestamp":1769370389001,"severity":"ERROR"}]}]}
+
+2026/01/25 19:46:29.003070 [INFO] Platform Engine finished execution on command: app-deploy
+
+2026/01/25 19:48:46.591886 [INFO] Starting...
+2026/01/25 19:48:46.591944 [INFO] Starting EBPlatform-PlatformEngine
+2026/01/25 19:48:46.591969 [INFO] reading event message file
+2026/01/25 19:48:46.592321 [INFO] Engine received EB command cfn-hup-exec
+
+2026/01/25 19:48:46.665023 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBAutoScalingGroup --region eu-central-1
+2026/01/25 19:48:46.982556 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBBeanstalkMetadata --region eu-central-1
+2026/01/25 19:48:47.280877 [INFO] checking whether command tail-log is applicable to this instance...
+2026/01/25 19:48:47.280889 [INFO] this command is applicable to the instance, thus instance should execute command
+2026/01/25 19:48:47.280892 [INFO] Engine command: (tail-log)
+
+2026/01/25 19:48:47.280933 [INFO] Executing instruction: GetTailLogs
+2026/01/25 19:48:47.280935 [INFO] Tail Logs...
+2026/01/25 19:48:47.281399 [INFO] Running command: tail -n 100 /var/log/web.stdout.log
+2026/01/25 19:48:47.283465 [INFO] Running command: tail -n 100 /var/log/eb-engine.log
+
+
+----------------------------------------
+/var/log/eb-hooks.log
+----------------------------------------
+
+
+----------------------------------------
+/var/log/nginx/access.log
+----------------------------------------
+20.42.209.0 - - [25/Jan/2026:17:30:00 +0000] "GET /wp-good.php HTTP/1.1" 404 150 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:00 +0000] "GET /qing2.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:00 +0000] "GET /doo.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:00 +0000] "GET /moon.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:01 +0000] "GET /buy.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:01 +0000] "GET /9v6.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:01 +0000] "GET /dbc.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:01 +0000] "GET /log.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:02 +0000] "GET /1.php HTTP/1.1" 404 144 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:02 +0000] "GET /ws36.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:02 +0000] "GET /file.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:02 +0000] "GET /rh.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:03 +0000] "GET /ova.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:03 +0000] "GET /siteheads.php HTTP/1.1" 404 152 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:03 +0000] "GET /wp-links.php HTTP/1.1" 404 151 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:03 +0000] "GET /zer.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:04 +0000] "GET /sid3.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:04 +0000] "GET /tinyfilemanager.php HTTP/1.1" 404 158 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:04 +0000] "GET /galex.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:05 +0000] "GET /abcd.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:05 +0000] "GET /ant.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:05 +0000] "GET /O-Simple.php HTTP/1.1" 404 151 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:05 +0000] "GET /0o0.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:06 +0000] "GET /gtc.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:06 +0000] "GET /content.php HTTP/1.1" 404 150 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:06 +0000] "GET /support.php HTTP/1.1" 404 150 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:06 +0000] "GET /styles.php HTTP/1.1" 404 149 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:07 +0000] "GET /403.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:07 +0000] "GET /wp-content/themes/finley/min.php HTTP/1.1" 404 171 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:07 +0000] "GET /class.api.php HTTP/1.1" 404 152 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:07 +0000] "GET /az.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:08 +0000] "GET /155.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:08 +0000] "GET /oo.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:08 +0000] "GET /vx.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:08 +0000] "GET /geck.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:09 +0000] "GET /to.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:09 +0000] "GET /horeg.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:09 +0000] "GET /wen.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:09 +0000] "GET /menu.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:10 +0000] "GET /sfudq.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:10 +0000] "GET /file2.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:10 +0000] "GET /wp-22.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:10 +0000] "GET /asx.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:11 +0000] "GET /xa.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:11 +0000] "GET /dox.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:11 +0000] "GET /size.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:11 +0000] "GET /ng.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:12 +0000] "GET /a2.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:12 +0000] "GET /page.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:12 +0000] "GET /z60.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:12 +0000] "GET /sf.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:13 +0000] "GET /qual.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:13 +0000] "GET /12.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:13 +0000] "GET /s.php HTTP/1.1" 404 144 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:13 +0000] "GET /cong.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:14 +0000] "GET /simple.php HTTP/1.1" 404 149 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:14 +0000] "GET /11.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:14 +0000] "GET /wp-admin/css/colors/about.php HTTP/1.1" 404 168 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:14 +0000] "GET /wp-includes/Text/about.php HTTP/1.1" 404 165 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:15 +0000] "GET /upl.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:15 +0000] "GET /past.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:15 +0000] "GET /revision.php HTTP/1.1" 404 151 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:15 +0000] "GET /baxa1.phP8 HTTP/1.1" 404 149 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:16 +0000] "GET /test1.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:16 +0000] "GET /massby2.php HTTP/1.1" 404 150 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:16 +0000] "GET /doc.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:16 +0000] "GET /abc.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:17 +0000] "GET /m.php HTTP/1.1" 404 144 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:17 +0000] "GET /wp-admin/images/admin.php HTTP/1.1" 404 164 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:17 +0000] "GET /error.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:17 +0000] "GET /ma.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:18 +0000] "GET /mh.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:18 +0000] "GET /dropdown.php HTTP/1.1" 404 151 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:18 +0000] "GET /wp-configs.php HTTP/1.1" 404 153 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:18 +0000] "GET /item.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:19 +0000] "GET /ws46.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:19 +0000] "GET /mini.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:19 +0000] "GET /gecko.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:19 +0000] "GET /x.php HTTP/1.1" 404 144 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:20 +0000] "GET /lala.php HTTP/1.1" 404 147 "-" "-" "-"
+79.124.40.86 - - [25/Jan/2026:17:39:10 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+43.135.135.57 - - [25/Jan/2026:17:45:12 +0000] "GET / HTTP/1.1" 200 505 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1" "-"
+79.124.40.86 - - [25/Jan/2026:17:54:18 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+23.27.236.48 - - [25/Jan/2026:18:01:01 +0000] "GET /.env HTTP/1.1" 404 143 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+23.27.236.48 - - [25/Jan/2026:18:01:02 +0000] "POST / HTTP/1.1" 404 140 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+43.156.202.34 - - [25/Jan/2026:18:07:11 +0000] "GET / HTTP/1.1" 200 505 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1" "-"
+101.32.218.31 - - [25/Jan/2026:18:08:25 +0000] "HEAD /Core/Skin/Login.aspx HTTP/1.1" 404 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36" "-"
+20.163.14.140 - - [25/Jan/2026:18:09:07 +0000] "GET /ReportServer HTTP/1.1" 404 151 "-" "Mozilla/5.0 zgrab/0.x" "-"
+79.124.40.86 - - [25/Jan/2026:18:09:29 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+43.153.9.143 - - [25/Jan/2026:18:10:22 +0000] "GET / HTTP/1.1" 200 505 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1" "-"
+204.76.203.8 - - [25/Jan/2026:18:11:44 +0000] "GET /geoserver/wfs?request=ListStoredQueries&service=wfs&version=2.0.0 HTTP/1.1" 404 152 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "-"
+20.163.14.22 - - [25/Jan/2026:18:22:14 +0000] "GET /portal/redlion HTTP/1.1" 404 153 "-" "Mozilla/5.0 zgrab/0.x" "-"
+79.124.40.86 - - [25/Jan/2026:18:25:23 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+52.210.219.119 - - [25/Jan/2026:18:41:14 +0000] "GET / HTTP/1.1" 200 505 "-" "Go-http-client/1.1" "-"
+79.124.40.86 - - [25/Jan/2026:18:41:46 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+79.124.40.86 - - [25/Jan/2026:18:56:26 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+204.76.203.18 - - [25/Jan/2026:19:00:46 +0000] "GET /bins/ HTTP/1.1" 404 144 "-" "-" "-"
+204.76.203.8 - - [25/Jan/2026:19:04:24 +0000] "GET /geoserver/wfs?request=ListStoredQueries&service=wfs&version=2.0.0 HTTP/1.1" 404 152 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "-"
+79.124.40.86 - - [25/Jan/2026:19:11:55 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+79.124.40.86 - - [25/Jan/2026:19:30:29 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+
+
+----------------------------------------
+/var/log/nginx/error.log
+----------------------------------------
+2026/01/25 01:26:58 [warn] 66553#66553: *2413 using uninitialized "year" variable while logging request, client: 205.210.31.229, server: , request: "    ∆ÕìÑ3n√›íñút†JààI‚ìñÖ‘e†ÿpR‚  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2413 using uninitialized "month" variable while logging request, client: 205.210.31.229, server: , request: "    ∆ÕìÑ3n√›íñút†JààI‚ìñÖ‘e†ÿpR‚  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2413 using uninitialized "day" variable while logging request, client: 205.210.31.229, server: , request: "    ∆ÕìÑ3n√›íñút†JààI‚ìñÖ‘e†ÿpR‚  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2413 using uninitialized "hour" variable while logging request, client: 205.210.31.229, server: , request: "    ∆ÕìÑ3n√›íñút†JààI‚ìñÖ‘e†ÿpR‚  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2412 using uninitialized "year" variable while logging request, client: 205.210.31.229, server: , request: " Ó  Í”Q÷ Ye`£ÁÆ∆îµÄÃ Î˚zK⁄◊.¨ﬁ¿– √∏9¢´ıœMAÄ≈Q“˜1Ô..±˝>t3≠fbª &¿+¿/¿,¿0Ã©Ã®¿	¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2412 using uninitialized "month" variable while logging request, client: 205.210.31.229, server: , request: " Ó  Í”Q÷ Ye`£ÁÆ∆îµÄÃ Î˚zK⁄◊.¨ﬁ¿– √∏9¢´ıœMAÄ≈Q“˜1Ô..±˝>t3≠fbª &¿+¿/¿,¿0Ã©Ã®¿	¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2412 using uninitialized "day" variable while logging request, client: 205.210.31.229, server: , request: " Ó  Í”Q÷ Ye`£ÁÆ∆îµÄÃ Î˚zK⁄◊.¨ﬁ¿– √∏9¢´ıœMAÄ≈Q“˜1Ô..±˝>t3≠fbª &¿+¿/¿,¿0Ã©Ã®¿	¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2412 using uninitialized "hour" variable while logging request, client: 205.210.31.229, server: , request: " Ó  Í”Q÷ Ye`£ÁÆ∆îµÄÃ Î˚zK⁄◊.¨ﬁ¿– √∏9¢´ıœMAÄ≈Q“˜1Ô..±˝>t3≠fbª &¿+¿/¿,¿0Ã©Ã®¿	¿¿"
+2026/01/25 01:38:32 [warn] 66553#66553: *2416 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 01:38:32 [warn] 66553#66553: *2416 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 01:38:32 [warn] 66553#66553: *2416 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 01:38:32 [warn] 66553#66553: *2416 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:17:25 [warn] 66553#66553: *2453 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:17:25 [warn] 66553#66553: *2453 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:17:25 [warn] 66553#66553: *2453 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:17:25 [warn] 66553#66553: *2453 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:32:06 [warn] 66553#66553: *2462 using uninitialized "year" variable while logging request, client: 91.238.181.96, server: , request: "  /*‡     Cookie: mstshash=Administr"
+2026/01/25 04:32:06 [warn] 66553#66553: *2462 using uninitialized "month" variable while logging request, client: 91.238.181.96, server: , request: "  /*‡     Cookie: mstshash=Administr"
+2026/01/25 04:32:06 [warn] 66553#66553: *2462 using uninitialized "day" variable while logging request, client: 91.238.181.96, server: , request: "  /*‡     Cookie: mstshash=Administr"
+2026/01/25 04:32:06 [warn] 66553#66553: *2462 using uninitialized "hour" variable while logging request, client: 91.238.181.96, server: , request: "  /*‡     Cookie: mstshash=Administr"
+2026/01/25 04:46:25 [warn] 66553#66553: *2469 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:25 [warn] 66553#66553: *2469 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:25 [warn] 66553#66553: *2469 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:25 [warn] 66553#66553: *2469 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:35 [warn] 66553#66553: *2470 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:35 [warn] 66553#66553: *2470 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:35 [warn] 66553#66553: *2470 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:35 [warn] 66553#66553: *2470 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:57:44 [warn] 66553#66553: *2473 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:57:44 [warn] 66553#66553: *2473 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:57:44 [warn] 66553#66553: *2473 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:57:44 [warn] 66553#66553: *2473 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:07:33 [warn] 66553#66553: *2508 using uninitialized "year" variable while logging request, client: 93.174.93.12, server: , request: "o kRH≈#˜:Nﬂ‚¥Ç/ˇ	Tüßƒy∞h∆å§="·ò Ñ¥,ÖØn„Yªbhlˇ(=':©ÇŸo»¢◊ìò¥ÔÄÂπê (¿"
+2026/01/25 07:07:33 [warn] 66553#66553: *2508 using uninitialized "month" variable while logging request, client: 93.174.93.12, server: , request: "o kRH≈#˜:Nﬂ‚¥Ç/ˇ	Tüßƒy∞h∆å§="·ò Ñ¥,ÖØn„Yªbhlˇ(=':©ÇŸo»¢◊ìò¥ÔÄÂπê (¿"
+2026/01/25 07:07:33 [warn] 66553#66553: *2508 using uninitialized "day" variable while logging request, client: 93.174.93.12, server: , request: "o kRH≈#˜:Nﬂ‚¥Ç/ˇ	Tüßƒy∞h∆å§="·ò Ñ¥,ÖØn„Yªbhlˇ(=':©ÇŸo»¢◊ìò¥ÔÄÂπê (¿"
+2026/01/25 07:07:33 [warn] 66553#66553: *2508 using uninitialized "hour" variable while logging request, client: 93.174.93.12, server: , request: "o kRH≈#˜:Nﬂ‚¥Ç/ˇ	Tüßƒy∞h∆å§="·ò Ñ¥,ÖØn„Yªbhlˇ(=':©ÇŸo»¢◊ìò¥ÔÄÂπê (¿"
+2026/01/25 07:25:35 [warn] 66553#66553: *2521 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:25:35 [warn] 66553#66553: *2521 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:25:35 [warn] 66553#66553: *2521 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:25:35 [warn] 66553#66553: *2521 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:29:08 [warn] 66553#66553: *2522 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:29:08 [warn] 66553#66553: *2522 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:29:08 [warn] 66553#66553: *2522 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:29:08 [warn] 66553#66553: *2522 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:33:07 [warn] 66553#66553: *2527 using uninitialized "year" variable while logging request, client: 3.143.33.63, server: 
+2026/01/25 07:33:07 [warn] 66553#66553: *2527 using uninitialized "month" variable while logging request, client: 3.143.33.63, server: 
+2026/01/25 07:33:07 [warn] 66553#66553: *2527 using uninitialized "day" variable while logging request, client: 3.143.33.63, server: 
+2026/01/25 07:33:07 [warn] 66553#66553: *2527 using uninitialized "hour" variable while logging request, client: 3.143.33.63, server: 
+2026/01/25 07:36:07 [warn] 66554#66554: *2533 using uninitialized "year" variable while logging request, client: 3.143.33.63, server: , request: " {  w oõûÕ0]¡0>:˛4ò∫‘+Ú◊l’í´Ë∫∞5übã3  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:36:07 [warn] 66554#66554: *2533 using uninitialized "month" variable while logging request, client: 3.143.33.63, server: , request: " {  w oõûÕ0]¡0>:˛4ò∫‘+Ú◊l’í´Ë∫∞5übã3  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:36:07 [warn] 66554#66554: *2533 using uninitialized "day" variable while logging request, client: 3.143.33.63, server: , request: " {  w oõûÕ0]¡0>:˛4ò∫‘+Ú◊l’í´Ë∫∞5übã3  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:36:07 [warn] 66554#66554: *2533 using uninitialized "hour" variable while logging request, client: 3.143.33.63, server: , request: " {  w oõûÕ0]¡0>:˛4ò∫‘+Ú◊l’í´Ë∫∞5übã3  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:37:53 [warn] 66554#66554: *2534 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:37:53 [warn] 66554#66554: *2534 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:37:53 [warn] 66554#66554: *2534 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:37:53 [warn] 66554#66554: *2534 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:38:07 [warn] 66554#66554: *2535 using uninitialized "year" variable while logging request, client: 3.143.33.63, server: , request: "SSH-2.0-Go"
+2026/01/25 07:38:07 [warn] 66554#66554: *2535 using uninitialized "month" variable while logging request, client: 3.143.33.63, server: , request: "SSH-2.0-Go"
+2026/01/25 07:38:07 [warn] 66554#66554: *2535 using uninitialized "day" variable while logging request, client: 3.143.33.63, server: , request: "SSH-2.0-Go"
+2026/01/25 07:38:07 [warn] 66554#66554: *2535 using uninitialized "hour" variable while logging request, client: 3.143.33.63, server: , request: "SSH-2.0-Go"
+2026/01/25 07:40:24 [warn] 66554#66554: *2536 using uninitialized "year" variable while logging request, client: 3.143.33.63, server: , request: " {  wÛU¢µ,5‘+K”¢¨µ5´√Æ≈ã 8˚ÿyQ˘´ı¬æ≈  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:40:24 [warn] 66554#66554: *2536 using uninitialized "month" variable while logging request, client: 3.143.33.63, server: , request: " {  wÛU¢µ,5‘+K”¢¨µ5´√Æ≈ã 8˚ÿyQ˘´ı¬æ≈  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:40:24 [warn] 66554#66554: *2536 using uninitialized "day" variable while logging request, client: 3.143.33.63, server: , request: " {  wÛU¢µ,5‘+K”¢¨µ5´√Æ≈ã 8˚ÿyQ˘´ı¬æ≈  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:40:24 [warn] 66554#66554: *2536 using uninitialized "hour" variable while logging request, client: 3.143.33.63, server: , request: " {  wÛU¢µ,5‘+K”¢¨µ5´√Æ≈ã 8˚ÿyQ˘´ı¬æ≈  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 08:04:17 [warn] 66554#66554: *2541 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 08:04:17 [warn] 66554#66554: *2541 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 08:04:17 [warn] 66554#66554: *2541 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 08:04:17 [warn] 66554#66554: *2541 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 08:48:35 [warn] 66554#66554: *2553 using uninitialized "year" variable while logging request, client: 205.210.31.18, server: , request: "    ∆2 ñ™ƒQ£[h2:y˜™Ó˜FΩÎ>Ä§î÷3≥ﬁ  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 08:48:35 [warn] 66554#66554: *2553 using uninitialized "month" variable while logging request, client: 205.210.31.18, server: , request: "    ∆2 ñ™ƒQ£[h2:y˜™Ó˜FΩÎ>Ä§î÷3≥ﬁ  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 08:48:35 [warn] 66554#66554: *2553 using uninitialized "day" variable while logging request, client: 205.210.31.18, server: , request: "    ∆2 ñ™ƒQ£[h2:y˜™Ó˜FΩÎ>Ä§î÷3≥ﬁ  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 08:48:35 [warn] 66554#66554: *2553 using uninitialized "hour" variable while logging request, client: 205.210.31.18, server: , request: "    ∆2 ñ™ƒQ£[h2:y˜™Ó˜FΩÎ>Ä§î÷3≥ﬁ  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 08:48:35 [warn] 66554#66554: *2552 using uninitialized "year" variable while logging request, client: 205.210.31.18, server: , request: " Ó  ÍﬂfÉ}"
+2026/01/25 08:48:35 [warn] 66554#66554: *2552 using uninitialized "month" variable while logging request, client: 205.210.31.18, server: , request: " Ó  ÍﬂfÉ}"
+2026/01/25 08:48:35 [warn] 66554#66554: *2552 using uninitialized "day" variable while logging request, client: 205.210.31.18, server: , request: " Ó  ÍﬂfÉ}"
+2026/01/25 08:48:35 [warn] 66554#66554: *2552 using uninitialized "hour" variable while logging request, client: 205.210.31.18, server: , request: " Ó  ÍﬂfÉ}"
+2026/01/25 09:20:30 [warn] 66553#66553: *2567 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:20:30 [warn] 66553#66553: *2567 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:20:30 [warn] 66553#66553: *2567 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:20:30 [warn] 66553#66553: *2567 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:23:32 [warn] 66553#66553: *2568 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:23:32 [warn] 66553#66553: *2568 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:23:32 [warn] 66553#66553: *2568 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:23:32 [warn] 66553#66553: *2568 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:28:37 [warn] 66553#66553: *2572 using uninitialized "year" variable while logging request, client: 117.195.105.173, server: , request: "0;sh+/tmp/gpon80&ipv=0"
+2026/01/25 09:28:37 [warn] 66553#66553: *2572 using uninitialized "month" variable while logging request, client: 117.195.105.173, server: , request: "0;sh+/tmp/gpon80&ipv=0"
+2026/01/25 09:28:37 [warn] 66553#66553: *2572 using uninitialized "day" variable while logging request, client: 117.195.105.173, server: , request: "0;sh+/tmp/gpon80&ipv=0"
+2026/01/25 09:28:37 [warn] 66553#66553: *2572 using uninitialized "hour" variable while logging request, client: 117.195.105.173, server: , request: "0;sh+/tmp/gpon80&ipv=0"
+2026/01/25 10:23:55 [warn] 66554#66554: *2584 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:23:55 [warn] 66554#66554: *2584 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:23:55 [warn] 66554#66554: *2584 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:23:55 [warn] 66554#66554: *2584 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:45:09 [warn] 66554#66554: *2593 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:45:09 [warn] 66554#66554: *2593 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:45:09 [warn] 66554#66554: *2593 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:45:09 [warn] 66554#66554: *2593 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 12:19:52 [warn] 66553#66553: *2747 using uninitialized "year" variable while logging request, client: 66.240.205.34, server: , request: "H   tj®û#Dò+ ßªl≈◊ç∂ÌJn¡˘xu[lE-jÏ‘xL…r…u‡%ÜRtgfvÜ]%ÃÄËœÆ µ¿f»çD≈	Ù"
+2026/01/25 12:19:52 [warn] 66553#66553: *2747 using uninitialized "month" variable while logging request, client: 66.240.205.34, server: , request: "H   tj®û#Dò+ ßªl≈◊ç∂ÌJn¡˘xu[lE-jÏ‘xL…r…u‡%ÜRtgfvÜ]%ÃÄËœÆ µ¿f»çD≈	Ù"
+2026/01/25 12:19:52 [warn] 66553#66553: *2747 using uninitialized "day" variable while logging request, client: 66.240.205.34, server: , request: "H   tj®û#Dò+ ßªl≈◊ç∂ÌJn¡˘xu[lE-jÏ‘xL…r…u‡%ÜRtgfvÜ]%ÃÄËœÆ µ¿f»çD≈	Ù"
+2026/01/25 12:19:52 [warn] 66553#66553: *2747 using uninitialized "hour" variable while logging request, client: 66.240.205.34, server: , request: "H   tj®û#Dò+ ßªl≈◊ç∂ÌJn¡˘xu[lE-jÏ‘xL…r…u‡%ÜRtgfvÜ]%ÃÄËœÆ µ¿f»çD≈	Ù"
+
+

@@ -1,0 +1,17 @@
+[
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "MONGODB_URI",
+    "Value": "mongodb+srv://rt-technologie:RT2024Transport@cluster-symphonia.mongodb.net/rt-tms-sync?retryWrites=true&w=majority"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "NODE_ENV",
+    "Value": "production"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "CORS_ORIGIN",
+    "Value": "https://app.symphonia.fr,https://admin.symphonia.fr,https://backoffice.symphonia.fr"
+  }
+]

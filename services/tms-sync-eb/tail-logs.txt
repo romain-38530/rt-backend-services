@@ -1,0 +1,425 @@
+----------------------------------------
+/var/log/web.stdout.log
+----------------------------------------
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]: node:internal/modules/cjs/loader:1210
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:  throw err;
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:  ^
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]: Error: Cannot find module 'dotenv'
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]: Require stack:
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]: - /var/app/current/index.js
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Module._load (node:internal/modules/cjs/loader:1038:27)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Module.require (node:internal/modules/cjs/loader:1289:19)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at require (node:internal/modules/helpers:182:18)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Object.<anonymous> (/var/app/current/index.js:19:1)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Module.load (node:internal/modules/cjs/loader:1266:32)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Module._load (node:internal/modules/cjs/loader:1091:12)
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12) {
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:  code: 'MODULE_NOT_FOUND',
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]:  requireStack: [ '/var/app/current/index.js' ]
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]: }
+Jan 25 20:36:23 ip-172-31-9-151 web[299064]: Node.js v20.19.5
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]: node:internal/modules/cjs/loader:1210
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:  throw err;
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:  ^
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]: Error: Cannot find module 'dotenv'
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]: Require stack:
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]: - /var/app/current/index.js
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Module._load (node:internal/modules/cjs/loader:1038:27)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Module.require (node:internal/modules/cjs/loader:1289:19)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at require (node:internal/modules/helpers:182:18)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Object.<anonymous> (/var/app/current/index.js:19:1)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Module.load (node:internal/modules/cjs/loader:1266:32)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Module._load (node:internal/modules/cjs/loader:1091:12)
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12) {
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:  code: 'MODULE_NOT_FOUND',
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]:  requireStack: [ '/var/app/current/index.js' ]
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]: }
+Jan 25 20:36:24 ip-172-31-9-151 web[299085]: Node.js v20.19.5
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]: node:internal/modules/cjs/loader:1210
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:  throw err;
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:  ^
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]: Error: Cannot find module 'dotenv'
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]: Require stack:
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]: - /var/app/current/index.js
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Module._load (node:internal/modules/cjs/loader:1038:27)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Module.require (node:internal/modules/cjs/loader:1289:19)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at require (node:internal/modules/helpers:182:18)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Object.<anonymous> (/var/app/current/index.js:19:1)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Module.load (node:internal/modules/cjs/loader:1266:32)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Module._load (node:internal/modules/cjs/loader:1091:12)
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12) {
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:  code: 'MODULE_NOT_FOUND',
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]:  requireStack: [ '/var/app/current/index.js' ]
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]: }
+Jan 25 20:36:24 ip-172-31-9-151 web[299096]: Node.js v20.19.5
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]: node:internal/modules/cjs/loader:1210
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:  throw err;
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:  ^
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]: Error: Cannot find module 'dotenv'
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]: Require stack:
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]: - /var/app/current/index.js
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Module._load (node:internal/modules/cjs/loader:1038:27)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Module.require (node:internal/modules/cjs/loader:1289:19)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at require (node:internal/modules/helpers:182:18)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Object.<anonymous> (/var/app/current/index.js:19:1)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Module.load (node:internal/modules/cjs/loader:1266:32)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Module._load (node:internal/modules/cjs/loader:1091:12)
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12) {
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:  code: 'MODULE_NOT_FOUND',
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]:  requireStack: [ '/var/app/current/index.js' ]
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]: }
+Jan 25 20:36:25 ip-172-31-9-151 web[299107]: Node.js v20.19.5
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]: node:internal/modules/cjs/loader:1210
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:  throw err;
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:  ^
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]: Error: Cannot find module 'dotenv'
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]: Require stack:
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]: - /var/app/current/index.js
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Module._load (node:internal/modules/cjs/loader:1038:27)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Module.require (node:internal/modules/cjs/loader:1289:19)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at require (node:internal/modules/helpers:182:18)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Object.<anonymous> (/var/app/current/index.js:19:1)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Module.load (node:internal/modules/cjs/loader:1266:32)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Module._load (node:internal/modules/cjs/loader:1091:12)
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12) {
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:  code: 'MODULE_NOT_FOUND',
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]:  requireStack: [ '/var/app/current/index.js' ]
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]: }
+Jan 25 20:36:25 ip-172-31-9-151 web[299118]: Node.js v20.19.5
+
+
+----------------------------------------
+/var/log/eb-engine.log
+----------------------------------------
+2026/01/25 20:36:20.463089 [WARN] stopProcess Warning: process xray is not registered 
+2026/01/25 20:36:20.463118 [INFO] Running command: systemctl stop xray.service
+2026/01/25 20:36:20.475455 [INFO] Executing instruction: stop proxy
+2026/01/25 20:36:20.475494 [INFO] Running command: systemctl show -p PartOf httpd.service
+2026/01/25 20:36:20.488241 [WARN] deregisterProcess Warning: process httpd is not registered, skipping...
+
+2026/01/25 20:36:20.488271 [INFO] Running command: systemctl show -p PartOf nginx.service
+2026/01/25 20:36:20.500061 [INFO] Running command: systemctl is-active nginx.service
+2026/01/25 20:36:20.508617 [INFO] Running command: systemctl show -p PartOf nginx.service
+2026/01/25 20:36:20.517992 [INFO] Running command: systemctl stop nginx.service
+2026/01/25 20:36:20.734591 [INFO] Running command: systemctl disable nginx.service
+2026/01/25 20:36:20.978346 [INFO] Running command: systemctl daemon-reload
+2026/01/25 20:36:21.215275 [INFO] Running command: systemctl reset-failed
+2026/01/25 20:36:21.223728 [INFO] Executing instruction: FlipApplication
+2026/01/25 20:36:21.223750 [INFO] Fetching environment variables...
+2026/01/25 20:36:21.223764 [INFO] setting default port 8080 to application
+2026/01/25 20:36:21.223936 [INFO] Purge old process...
+2026/01/25 20:36:21.223956 [INFO] Running command: systemctl stop eb-app.target
+2026/01/25 20:36:21.233927 [INFO] Running command: systemctl show -p ConsistsOf eb-app.target | cut -d= -f2
+2026/01/25 20:36:21.322402 [INFO] web.service
+
+2026/01/25 20:36:21.322430 [INFO] deregistering process: web
+2026/01/25 20:36:21.322442 [INFO] Running command: systemctl show -p PartOf web.service
+2026/01/25 20:36:21.333355 [INFO] Running command: systemctl is-active web.service
+2026/01/25 20:36:21.340820 [INFO] Running command: systemctl disable web.service
+2026/01/25 20:36:21.593484 [INFO] Removed "/etc/systemd/system/multi-user.target.wants/web.service".
+
+2026/01/25 20:36:21.593573 [INFO] Running command: systemctl daemon-reload
+2026/01/25 20:36:21.816638 [INFO] Running command: systemctl reset-failed
+2026/01/25 20:36:21.825206 [INFO] Running command: systemctl is-active web.service
+2026/01/25 20:36:21.832752 [INFO] Process web has been fully terminated
+2026/01/25 20:36:21.832776 [INFO] All processes have been fully terminated
+2026/01/25 20:36:21.832780 [INFO] Removing /var/app/current/ if it exists
+2026/01/25 20:36:21.907808 [INFO] Renaming /var/app/staging/ to /var/app/current/
+2026/01/25 20:36:21.907838 [INFO] Register application processes...
+2026/01/25 20:36:21.907842 [INFO] Registering the proc: web
+
+2026/01/25 20:36:21.907852 [INFO] Running command: systemctl show -p PartOf web.service
+2026/01/25 20:36:21.931418 [INFO] Running command: systemctl daemon-reload
+2026/01/25 20:36:22.166511 [INFO] Running command: systemctl reset-failed
+2026/01/25 20:36:22.174933 [INFO] Running command: systemctl is-enabled eb-app.target
+2026/01/25 20:36:22.182618 [INFO] Running command: systemctl enable eb-app.target
+2026/01/25 20:36:22.464312 [INFO] Running command: systemctl start eb-app.target
+2026/01/25 20:36:22.473622 [INFO] Running command: systemctl enable web.service
+2026/01/25 20:36:22.716416 [INFO] Created symlink /etc/systemd/system/multi-user.target.wants/web.service ‚Üí /etc/systemd/system/web.service.
+
+2026/01/25 20:36:22.716452 [INFO] Running command: systemctl show -p PartOf web.service
+2026/01/25 20:36:22.727995 [INFO] Running command: systemctl is-active web.service
+2026/01/25 20:36:22.735541 [INFO] Running command: systemctl start web.service
+2026/01/25 20:36:22.789298 [INFO] Executing instruction: start X-Ray
+2026/01/25 20:36:22.789321 [INFO] X-Ray is not enabled.
+2026/01/25 20:36:22.789326 [INFO] Executing instruction: start proxy with new configuration
+2026/01/25 20:36:22.789355 [INFO] Running command: /usr/sbin/nginx -t -c /var/proxy/staging/nginx/nginx.conf
+2026/01/25 20:36:22.814528 [INFO] nginx: [warn] could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+nginx: the configuration file /var/proxy/staging/nginx/nginx.conf syntax is ok
+nginx: configuration file /var/proxy/staging/nginx/nginx.conf test is successful
+
+2026/01/25 20:36:22.814820 [INFO] Running command: cp -rp /var/proxy/staging/nginx/* /etc/nginx
+2026/01/25 20:36:22.820120 [INFO] Running command: systemctl show -p PartOf nginx.service
+2026/01/25 20:36:22.842776 [INFO] Running command: systemctl daemon-reload
+2026/01/25 20:36:23.130142 [INFO] Running command: systemctl reset-failed
+2026/01/25 20:36:23.210408 [INFO] Running command: systemctl show -p PartOf nginx.service
+2026/01/25 20:36:23.224819 [INFO] Running command: systemctl is-active nginx.service
+2026/01/25 20:36:23.233892 [INFO] Running command: systemctl start nginx.service
+2026/01/25 20:36:23.319187 [INFO] Executing instruction: configureSqsd
+2026/01/25 20:36:23.319212 [INFO] This is a web server environment instance, skip configure sqsd daemon ...
+2026/01/25 20:36:23.319216 [INFO] Executing instruction: startSqsd
+2026/01/25 20:36:23.319220 [INFO] This is a web server environment instance, skip start sqsd daemon ...
+2026/01/25 20:36:23.319224 [INFO] Executing instruction: Track pids in healthd
+2026/01/25 20:36:23.319227 [INFO] This is an enhanced health env...
+2026/01/25 20:36:23.319239 [INFO] Running command: systemctl show -p ConsistsOf aws-eb.target | cut -d= -f2
+2026/01/25 20:36:23.339935 [INFO] cfn-hup.service healthd.service nginx.service
+
+2026/01/25 20:36:23.339971 [INFO] Running command: systemctl show -p ConsistsOf eb-app.target | cut -d= -f2
+2026/01/25 20:36:23.354146 [INFO] web.service
+
+2026/01/25 20:36:23.355038 [INFO] Executing instruction: RunAppDeployPostDeployHooks
+2026/01/25 20:36:23.355061 [INFO] Executing platform hooks in .platform/hooks/postdeploy/
+2026/01/25 20:36:23.355079 [INFO] The dir .platform/hooks/postdeploy/ does not exist
+2026/01/25 20:36:23.355082 [INFO] Finished running scripts in /var/app/current/.platform/hooks/postdeploy
+2026/01/25 20:36:23.355088 [INFO] Executing cleanup logic
+2026/01/25 20:36:23.355183 [INFO] CommandService Response: {"status":"SUCCESS","api_version":"1.0","results":[{"status":"SUCCESS","msg":"Engine execution has succeeded.","returncode":0,"events":[{"msg":"Instance deployment completed successfully.","timestamp":1769373383355,"severity":"INFO"}]}]}
+
+2026/01/25 20:36:23.356433 [INFO] Platform Engine finished execution on command: app-deploy
+
+2026/01/25 20:39:17.355184 [INFO] Starting...
+2026/01/25 20:39:17.355239 [INFO] Starting EBPlatform-PlatformEngine
+2026/01/25 20:39:17.355261 [INFO] reading event message file
+2026/01/25 20:39:17.355725 [INFO] Engine received EB command cfn-hup-exec
+
+2026/01/25 20:39:17.430040 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBAutoScalingGroup --region eu-central-1
+2026/01/25 20:39:17.725660 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:eu-central-1:004843574253:stack/awseb-e-t6vmjupsn9-stack/bbacb960-f53b-11f0-8255-0ac67b4ea18f -r AWSEBBeanstalkMetadata --region eu-central-1
+2026/01/25 20:39:18.011875 [INFO] checking whether command tail-log is applicable to this instance...
+2026/01/25 20:39:18.011889 [INFO] this command is applicable to the instance, thus instance should execute command
+2026/01/25 20:39:18.011892 [INFO] Engine command: (tail-log)
+
+2026/01/25 20:39:18.011934 [INFO] Executing instruction: GetTailLogs
+2026/01/25 20:39:18.011937 [INFO] Tail Logs...
+2026/01/25 20:39:18.012361 [INFO] Running command: tail -n 100 /var/log/web.stdout.log
+2026/01/25 20:39:18.014450 [INFO] Running command: tail -n 100 /var/log/eb-engine.log
+
+
+----------------------------------------
+/var/log/eb-hooks.log
+----------------------------------------
+
+
+----------------------------------------
+/var/log/nginx/access.log
+----------------------------------------
+20.42.209.0 - - [25/Jan/2026:17:30:02 +0000] "GET /ws36.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:02 +0000] "GET /file.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:02 +0000] "GET /rh.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:03 +0000] "GET /ova.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:03 +0000] "GET /siteheads.php HTTP/1.1" 404 152 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:03 +0000] "GET /wp-links.php HTTP/1.1" 404 151 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:03 +0000] "GET /zer.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:04 +0000] "GET /sid3.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:04 +0000] "GET /tinyfilemanager.php HTTP/1.1" 404 158 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:04 +0000] "GET /galex.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:05 +0000] "GET /abcd.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:05 +0000] "GET /ant.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:05 +0000] "GET /O-Simple.php HTTP/1.1" 404 151 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:05 +0000] "GET /0o0.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:06 +0000] "GET /gtc.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:06 +0000] "GET /content.php HTTP/1.1" 404 150 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:06 +0000] "GET /support.php HTTP/1.1" 404 150 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:06 +0000] "GET /styles.php HTTP/1.1" 404 149 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:07 +0000] "GET /403.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:07 +0000] "GET /wp-content/themes/finley/min.php HTTP/1.1" 404 171 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:07 +0000] "GET /class.api.php HTTP/1.1" 404 152 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:07 +0000] "GET /az.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:08 +0000] "GET /155.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:08 +0000] "GET /oo.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:08 +0000] "GET /vx.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:08 +0000] "GET /geck.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:09 +0000] "GET /to.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:09 +0000] "GET /horeg.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:09 +0000] "GET /wen.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:09 +0000] "GET /menu.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:10 +0000] "GET /sfudq.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:10 +0000] "GET /file2.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:10 +0000] "GET /wp-22.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:10 +0000] "GET /asx.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:11 +0000] "GET /xa.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:11 +0000] "GET /dox.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:11 +0000] "GET /size.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:11 +0000] "GET /ng.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:12 +0000] "GET /a2.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:12 +0000] "GET /page.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:12 +0000] "GET /z60.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:12 +0000] "GET /sf.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:13 +0000] "GET /qual.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:13 +0000] "GET /12.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:13 +0000] "GET /s.php HTTP/1.1" 404 144 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:13 +0000] "GET /cong.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:14 +0000] "GET /simple.php HTTP/1.1" 404 149 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:14 +0000] "GET /11.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:14 +0000] "GET /wp-admin/css/colors/about.php HTTP/1.1" 404 168 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:14 +0000] "GET /wp-includes/Text/about.php HTTP/1.1" 404 165 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:15 +0000] "GET /upl.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:15 +0000] "GET /past.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:15 +0000] "GET /revision.php HTTP/1.1" 404 151 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:15 +0000] "GET /baxa1.phP8 HTTP/1.1" 404 149 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:16 +0000] "GET /test1.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:16 +0000] "GET /massby2.php HTTP/1.1" 404 150 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:16 +0000] "GET /doc.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:16 +0000] "GET /abc.php HTTP/1.1" 404 146 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:17 +0000] "GET /m.php HTTP/1.1" 404 144 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:17 +0000] "GET /wp-admin/images/admin.php HTTP/1.1" 404 164 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:17 +0000] "GET /error.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:17 +0000] "GET /ma.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:18 +0000] "GET /mh.php HTTP/1.1" 404 145 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:18 +0000] "GET /dropdown.php HTTP/1.1" 404 151 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:18 +0000] "GET /wp-configs.php HTTP/1.1" 404 153 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:18 +0000] "GET /item.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:19 +0000] "GET /ws46.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:19 +0000] "GET /mini.php HTTP/1.1" 404 147 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:19 +0000] "GET /gecko.php HTTP/1.1" 404 148 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:19 +0000] "GET /x.php HTTP/1.1" 404 144 "-" "-" "-"
+20.42.209.0 - - [25/Jan/2026:17:30:20 +0000] "GET /lala.php HTTP/1.1" 404 147 "-" "-" "-"
+79.124.40.86 - - [25/Jan/2026:17:39:10 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+43.135.135.57 - - [25/Jan/2026:17:45:12 +0000] "GET / HTTP/1.1" 200 505 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1" "-"
+79.124.40.86 - - [25/Jan/2026:17:54:18 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+23.27.236.48 - - [25/Jan/2026:18:01:01 +0000] "GET /.env HTTP/1.1" 404 143 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+23.27.236.48 - - [25/Jan/2026:18:01:02 +0000] "POST / HTTP/1.1" 404 140 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+43.156.202.34 - - [25/Jan/2026:18:07:11 +0000] "GET / HTTP/1.1" 200 505 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1" "-"
+101.32.218.31 - - [25/Jan/2026:18:08:25 +0000] "HEAD /Core/Skin/Login.aspx HTTP/1.1" 404 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36" "-"
+20.163.14.140 - - [25/Jan/2026:18:09:07 +0000] "GET /ReportServer HTTP/1.1" 404 151 "-" "Mozilla/5.0 zgrab/0.x" "-"
+79.124.40.86 - - [25/Jan/2026:18:09:29 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+43.153.9.143 - - [25/Jan/2026:18:10:22 +0000] "GET / HTTP/1.1" 200 505 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1" "-"
+204.76.203.8 - - [25/Jan/2026:18:11:44 +0000] "GET /geoserver/wfs?request=ListStoredQueries&service=wfs&version=2.0.0 HTTP/1.1" 404 152 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "-"
+20.163.14.22 - - [25/Jan/2026:18:22:14 +0000] "GET /portal/redlion HTTP/1.1" 404 153 "-" "Mozilla/5.0 zgrab/0.x" "-"
+79.124.40.86 - - [25/Jan/2026:18:25:23 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+52.210.219.119 - - [25/Jan/2026:18:41:14 +0000] "GET / HTTP/1.1" 200 505 "-" "Go-http-client/1.1" "-"
+79.124.40.86 - - [25/Jan/2026:18:41:46 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+79.124.40.86 - - [25/Jan/2026:18:56:26 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+204.76.203.18 - - [25/Jan/2026:19:00:46 +0000] "GET /bins/ HTTP/1.1" 404 144 "-" "-" "-"
+204.76.203.8 - - [25/Jan/2026:19:04:24 +0000] "GET /geoserver/wfs?request=ListStoredQueries&service=wfs&version=2.0.0 HTTP/1.1" 404 152 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "-"
+79.124.40.86 - - [25/Jan/2026:19:11:55 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+79.124.40.86 - - [25/Jan/2026:19:30:29 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+79.124.40.86 - - [25/Jan/2026:19:51:18 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+34.77.191.38 - - [25/Jan/2026:19:56:27 +0000] "GET / HTTP/1.1" 200 505 "-" "python-requests/2.32.5" "-"
+205.210.31.51 - - [25/Jan/2026:20:09:04 +0000] "GET / HTTP/1.0" 400 0 "-" "Hello from Palo Alto Networks, find out more about our scans in https://docs-cortex.paloaltonetworks.com/r/1/Cortex-Xpanse/Scanning-activity" "-"
+79.124.40.86 - - [25/Jan/2026:20:09:14 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+102.22.20.125 - - [25/Jan/2026:20:17:42 +0000] "GET /admin/config.php HTTP/1.0" 404 155 "-" "xfa1,nvdorz,nvd0rz" "-"
+204.76.203.8 - - [25/Jan/2026:20:21:16 +0000] "GET /geoserver/wfs?request=ListStoredQueries&service=wfs&version=2.0.0 HTTP/1.1" 404 152 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "-"
+82.21.244.52 - - [25/Jan/2026:20:21:48 +0000] "GET /.env HTTP/1.1" 404 143 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+82.21.244.52 - - [25/Jan/2026:20:21:49 +0000] "POST / HTTP/1.1" 404 140 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+79.124.40.86 - - [25/Jan/2026:20:27:30 +0000] "HEAD / HTTP/1.0" 400 0 "-" "-" "-"
+
+
+----------------------------------------
+/var/log/nginx/error.log
+----------------------------------------
+2026/01/25 01:26:58 [warn] 66553#66553: *2413 using uninitialized "hour" variable while logging request, client: 205.210.31.229, server: , request: "    ∆ÕìÑ3n√›íñút†JààI‚ìñÖ‘e†ÿpR‚  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2412 using uninitialized "year" variable while logging request, client: 205.210.31.229, server: , request: " Ó  Í”Q÷ Ye`£ÁÆ∆îµÄÃ Î˚zK⁄◊.¨ﬁ¿– √∏9¢´ıœMAÄ≈Q“˜1Ô..±˝>t3≠fbª &¿+¿/¿,¿0Ã©Ã®¿	¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2412 using uninitialized "month" variable while logging request, client: 205.210.31.229, server: , request: " Ó  Í”Q÷ Ye`£ÁÆ∆îµÄÃ Î˚zK⁄◊.¨ﬁ¿– √∏9¢´ıœMAÄ≈Q“˜1Ô..±˝>t3≠fbª &¿+¿/¿,¿0Ã©Ã®¿	¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2412 using uninitialized "day" variable while logging request, client: 205.210.31.229, server: , request: " Ó  Í”Q÷ Ye`£ÁÆ∆îµÄÃ Î˚zK⁄◊.¨ﬁ¿– √∏9¢´ıœMAÄ≈Q“˜1Ô..±˝>t3≠fbª &¿+¿/¿,¿0Ã©Ã®¿	¿¿"
+2026/01/25 01:26:58 [warn] 66553#66553: *2412 using uninitialized "hour" variable while logging request, client: 205.210.31.229, server: , request: " Ó  Í”Q÷ Ye`£ÁÆ∆îµÄÃ Î˚zK⁄◊.¨ﬁ¿– √∏9¢´ıœMAÄ≈Q“˜1Ô..±˝>t3≠fbª &¿+¿/¿,¿0Ã©Ã®¿	¿¿"
+2026/01/25 01:38:32 [warn] 66553#66553: *2416 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 01:38:32 [warn] 66553#66553: *2416 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 01:38:32 [warn] 66553#66553: *2416 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 01:38:32 [warn] 66553#66553: *2416 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:17:25 [warn] 66553#66553: *2453 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:17:25 [warn] 66553#66553: *2453 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:17:25 [warn] 66553#66553: *2453 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:17:25 [warn] 66553#66553: *2453 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:32:06 [warn] 66553#66553: *2462 using uninitialized "year" variable while logging request, client: 91.238.181.96, server: , request: "  /*‡     Cookie: mstshash=Administr"
+2026/01/25 04:32:06 [warn] 66553#66553: *2462 using uninitialized "month" variable while logging request, client: 91.238.181.96, server: , request: "  /*‡     Cookie: mstshash=Administr"
+2026/01/25 04:32:06 [warn] 66553#66553: *2462 using uninitialized "day" variable while logging request, client: 91.238.181.96, server: , request: "  /*‡     Cookie: mstshash=Administr"
+2026/01/25 04:32:06 [warn] 66553#66553: *2462 using uninitialized "hour" variable while logging request, client: 91.238.181.96, server: , request: "  /*‡     Cookie: mstshash=Administr"
+2026/01/25 04:46:25 [warn] 66553#66553: *2469 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:25 [warn] 66553#66553: *2469 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:25 [warn] 66553#66553: *2469 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:25 [warn] 66553#66553: *2469 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:35 [warn] 66553#66553: *2470 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:35 [warn] 66553#66553: *2470 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:35 [warn] 66553#66553: *2470 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:46:35 [warn] 66553#66553: *2470 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:57:44 [warn] 66553#66553: *2473 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:57:44 [warn] 66553#66553: *2473 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:57:44 [warn] 66553#66553: *2473 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 04:57:44 [warn] 66553#66553: *2473 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:07:33 [warn] 66553#66553: *2508 using uninitialized "year" variable while logging request, client: 93.174.93.12, server: , request: "o kRH≈#˜:Nﬂ‚¥Ç/ˇ	Tüßƒy∞h∆å§="·ò Ñ¥,ÖØn„Yªbhlˇ(=':©ÇŸo»¢◊ìò¥ÔÄÂπê (¿"
+2026/01/25 07:07:33 [warn] 66553#66553: *2508 using uninitialized "month" variable while logging request, client: 93.174.93.12, server: , request: "o kRH≈#˜:Nﬂ‚¥Ç/ˇ	Tüßƒy∞h∆å§="·ò Ñ¥,ÖØn„Yªbhlˇ(=':©ÇŸo»¢◊ìò¥ÔÄÂπê (¿"
+2026/01/25 07:07:33 [warn] 66553#66553: *2508 using uninitialized "day" variable while logging request, client: 93.174.93.12, server: , request: "o kRH≈#˜:Nﬂ‚¥Ç/ˇ	Tüßƒy∞h∆å§="·ò Ñ¥,ÖØn„Yªbhlˇ(=':©ÇŸo»¢◊ìò¥ÔÄÂπê (¿"
+2026/01/25 07:07:33 [warn] 66553#66553: *2508 using uninitialized "hour" variable while logging request, client: 93.174.93.12, server: , request: "o kRH≈#˜:Nﬂ‚¥Ç/ˇ	Tüßƒy∞h∆å§="·ò Ñ¥,ÖØn„Yªbhlˇ(=':©ÇŸo»¢◊ìò¥ÔÄÂπê (¿"
+2026/01/25 07:25:35 [warn] 66553#66553: *2521 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:25:35 [warn] 66553#66553: *2521 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:25:35 [warn] 66553#66553: *2521 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:25:35 [warn] 66553#66553: *2521 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:29:08 [warn] 66553#66553: *2522 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:29:08 [warn] 66553#66553: *2522 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:29:08 [warn] 66553#66553: *2522 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:29:08 [warn] 66553#66553: *2522 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:33:07 [warn] 66553#66553: *2527 using uninitialized "year" variable while logging request, client: 3.143.33.63, server: 
+2026/01/25 07:33:07 [warn] 66553#66553: *2527 using uninitialized "month" variable while logging request, client: 3.143.33.63, server: 
+2026/01/25 07:33:07 [warn] 66553#66553: *2527 using uninitialized "day" variable while logging request, client: 3.143.33.63, server: 
+2026/01/25 07:33:07 [warn] 66553#66553: *2527 using uninitialized "hour" variable while logging request, client: 3.143.33.63, server: 
+2026/01/25 07:36:07 [warn] 66554#66554: *2533 using uninitialized "year" variable while logging request, client: 3.143.33.63, server: , request: " {  w oõûÕ0]¡0>:˛4ò∫‘+Ú◊l’í´Ë∫∞5übã3  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:36:07 [warn] 66554#66554: *2533 using uninitialized "month" variable while logging request, client: 3.143.33.63, server: , request: " {  w oõûÕ0]¡0>:˛4ò∫‘+Ú◊l’í´Ë∫∞5übã3  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:36:07 [warn] 66554#66554: *2533 using uninitialized "day" variable while logging request, client: 3.143.33.63, server: , request: " {  w oõûÕ0]¡0>:˛4ò∫‘+Ú◊l’í´Ë∫∞5übã3  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:36:07 [warn] 66554#66554: *2533 using uninitialized "hour" variable while logging request, client: 3.143.33.63, server: , request: " {  w oõûÕ0]¡0>:˛4ò∫‘+Ú◊l’í´Ë∫∞5übã3  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:37:53 [warn] 66554#66554: *2534 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:37:53 [warn] 66554#66554: *2534 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:37:53 [warn] 66554#66554: *2534 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:37:53 [warn] 66554#66554: *2534 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 07:38:07 [warn] 66554#66554: *2535 using uninitialized "year" variable while logging request, client: 3.143.33.63, server: , request: "SSH-2.0-Go"
+2026/01/25 07:38:07 [warn] 66554#66554: *2535 using uninitialized "month" variable while logging request, client: 3.143.33.63, server: , request: "SSH-2.0-Go"
+2026/01/25 07:38:07 [warn] 66554#66554: *2535 using uninitialized "day" variable while logging request, client: 3.143.33.63, server: , request: "SSH-2.0-Go"
+2026/01/25 07:38:07 [warn] 66554#66554: *2535 using uninitialized "hour" variable while logging request, client: 3.143.33.63, server: , request: "SSH-2.0-Go"
+2026/01/25 07:40:24 [warn] 66554#66554: *2536 using uninitialized "year" variable while logging request, client: 3.143.33.63, server: , request: " {  wÛU¢µ,5‘+K”¢¨µ5´√Æ≈ã 8˚ÿyQ˘´ı¬æ≈  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:40:24 [warn] 66554#66554: *2536 using uninitialized "month" variable while logging request, client: 3.143.33.63, server: , request: " {  wÛU¢µ,5‘+K”¢¨µ5´√Æ≈ã 8˚ÿyQ˘´ı¬æ≈  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:40:24 [warn] 66554#66554: *2536 using uninitialized "day" variable while logging request, client: 3.143.33.63, server: , request: " {  wÛU¢µ,5‘+K”¢¨µ5´√Æ≈ã 8˚ÿyQ˘´ı¬æ≈  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 07:40:24 [warn] 66554#66554: *2536 using uninitialized "hour" variable while logging request, client: 3.143.33.63, server: , request: " {  wÛU¢µ,5‘+K”¢¨µ5´√Æ≈ã 8˚ÿyQ˘´ı¬æ≈  ¿/¿+¿¿¿¿	¿¿"
+2026/01/25 08:04:17 [warn] 66554#66554: *2541 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 08:04:17 [warn] 66554#66554: *2541 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 08:04:17 [warn] 66554#66554: *2541 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 08:04:17 [warn] 66554#66554: *2541 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 08:48:35 [warn] 66554#66554: *2553 using uninitialized "year" variable while logging request, client: 205.210.31.18, server: , request: "    ∆2 ñ™ƒQ£[h2:y˜™Ó˜FΩÎ>Ä§î÷3≥ﬁ  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 08:48:35 [warn] 66554#66554: *2553 using uninitialized "month" variable while logging request, client: 205.210.31.18, server: , request: "    ∆2 ñ™ƒQ£[h2:y˜™Ó˜FΩÎ>Ä§î÷3≥ﬁ  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 08:48:35 [warn] 66554#66554: *2553 using uninitialized "day" variable while logging request, client: 205.210.31.18, server: , request: "    ∆2 ñ™ƒQ£[h2:y˜™Ó˜FΩÎ>Ä§î÷3≥ﬁ  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 08:48:35 [warn] 66554#66554: *2553 using uninitialized "hour" variable while logging request, client: 205.210.31.18, server: , request: "    ∆2 ñ™ƒQ£[h2:y˜™Ó˜FΩÎ>Ä§î÷3≥ﬁ  hÃÃ¿/¿+¿0¿,¿¿¿'¿#¿¿	¿(¿$¿¿"
+2026/01/25 08:48:35 [warn] 66554#66554: *2552 using uninitialized "year" variable while logging request, client: 205.210.31.18, server: , request: " Ó  ÍﬂfÉ}"
+2026/01/25 08:48:35 [warn] 66554#66554: *2552 using uninitialized "month" variable while logging request, client: 205.210.31.18, server: , request: " Ó  ÍﬂfÉ}"
+2026/01/25 08:48:35 [warn] 66554#66554: *2552 using uninitialized "day" variable while logging request, client: 205.210.31.18, server: , request: " Ó  ÍﬂfÉ}"
+2026/01/25 08:48:35 [warn] 66554#66554: *2552 using uninitialized "hour" variable while logging request, client: 205.210.31.18, server: , request: " Ó  ÍﬂfÉ}"
+2026/01/25 09:20:30 [warn] 66553#66553: *2567 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:20:30 [warn] 66553#66553: *2567 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:20:30 [warn] 66553#66553: *2567 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:20:30 [warn] 66553#66553: *2567 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:23:32 [warn] 66553#66553: *2568 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:23:32 [warn] 66553#66553: *2568 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:23:32 [warn] 66553#66553: *2568 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:23:32 [warn] 66553#66553: *2568 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 09:28:37 [warn] 66553#66553: *2572 using uninitialized "year" variable while logging request, client: 117.195.105.173, server: , request: "0;sh+/tmp/gpon80&ipv=0"
+2026/01/25 09:28:37 [warn] 66553#66553: *2572 using uninitialized "month" variable while logging request, client: 117.195.105.173, server: , request: "0;sh+/tmp/gpon80&ipv=0"
+2026/01/25 09:28:37 [warn] 66553#66553: *2572 using uninitialized "day" variable while logging request, client: 117.195.105.173, server: , request: "0;sh+/tmp/gpon80&ipv=0"
+2026/01/25 09:28:37 [warn] 66553#66553: *2572 using uninitialized "hour" variable while logging request, client: 117.195.105.173, server: , request: "0;sh+/tmp/gpon80&ipv=0"
+2026/01/25 10:23:55 [warn] 66554#66554: *2584 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:23:55 [warn] 66554#66554: *2584 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:23:55 [warn] 66554#66554: *2584 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:23:55 [warn] 66554#66554: *2584 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:45:09 [warn] 66554#66554: *2593 using uninitialized "year" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:45:09 [warn] 66554#66554: *2593 using uninitialized "month" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:45:09 [warn] 66554#66554: *2593 using uninitialized "day" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 10:45:09 [warn] 66554#66554: *2593 using uninitialized "hour" variable while logging request, client: 130.12.180.122, server: , request: "CONNECT 82.29.53.106:800 HTTP/1.1"
+2026/01/25 12:19:52 [warn] 66553#66553: *2747 using uninitialized "year" variable while logging request, client: 66.240.205.34, server: , request: "H   tj®û#Dò+ ßªl≈◊ç∂ÌJn¡˘xu[lE-jÏ‘xL…r…u‡%ÜRtgfvÜ]%ÃÄËœÆ µ¿f»çD≈	Ù"
+2026/01/25 12:19:52 [warn] 66553#66553: *2747 using uninitialized "month" variable while logging request, client: 66.240.205.34, server: , request: "H   tj®û#Dò+ ßªl≈◊ç∂ÌJn¡˘xu[lE-jÏ‘xL…r…u‡%ÜRtgfvÜ]%ÃÄËœÆ µ¿f»çD≈	Ù"
+2026/01/25 12:19:52 [warn] 66553#66553: *2747 using uninitialized "day" variable while logging request, client: 66.240.205.34, server: , request: "H   tj®û#Dò+ ßªl≈◊ç∂ÌJn¡˘xu[lE-jÏ‘xL…r…u‡%ÜRtgfvÜ]%ÃÄËœÆ µ¿f»çD≈	Ù"
+2026/01/25 12:19:52 [warn] 66553#66553: *2747 using uninitialized "hour" variable while logging request, client: 66.240.205.34, server: , request: "H   tj®û#Dò+ ßªl≈◊ç∂ÌJn¡˘xu[lE-jÏ‘xL…r…u‡%ÜRtgfvÜ]%ÃÄËœÆ µ¿f»çD≈	Ù"
+2026/01/25 20:36:22 [warn] 299014#299014: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/01/25 20:36:23 [warn] 299055#299055: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/01/25 20:36:23 [warn] 299057#299057: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+
+
