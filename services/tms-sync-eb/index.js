@@ -416,12 +416,12 @@ app.get('/api/v1/tms/connections/:id/stats', requireMongo, async (req, res) => {
  */
 app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
   try {
-    const { tag, status, limit = 100, skip = 0 } = req.query;
+    const { tag = 'Symphonia', status, limit = 100, skip = 0 } = req.query;
 
     const query = { externalSource: 'dashdoc' };
 
-    // Filtre par tag
-    if (tag) {
+    // Filtre par tag (par défaut "Symphonia")
+    if (tag && tag !== 'all') {
       query['externalData.tags'] = { $elemMatch: { name: tag } };
     }
 
@@ -483,6 +483,7 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
     const {
       status,
       toPlan,
+      tag = 'Symphonia',
       city,
       postalCode,
       cargoType,
@@ -502,6 +503,12 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
 
     // Construction du filtre MongoDB
     const query = { externalSource: 'dashdoc' };
+
+    // Filtre par tag (par défaut "Symphonia")
+    if (tag && tag !== 'all') {
+      query['externalData.tags'] = { $elemMatch: { name: tag } };
+      console.log(`[FILTER] Filtering by tag: ${tag}`);
+    }
 
     // Filtre "À planifier" (to plan) - commandes créées ou non assignées
     if (toPlan === 'true') {
@@ -647,6 +654,55 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
 });
 
 /**
+ * Récupérer une commande spécifique par son ID
+ * GET /api/v1/tms/orders/:id?tag=Symphonia
+ */
+app.get('/api/v1/tms/orders/:id', requireMongo, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tag = 'Symphonia' } = req.query;
+
+    // Construction de la query de base
+    const baseQuery = { externalSource: 'dashdoc' };
+
+    // Filtre par tag (par défaut "Symphonia")
+    if (tag && tag !== 'all') {
+      baseQuery['externalData.tags'] = { $elemMatch: { name: tag } };
+    }
+
+    // Essayer de trouver par _id MongoDB
+    let order = await db.collection('orders').findOne({
+      _id: new ObjectId(id),
+      ...baseQuery
+    });
+
+    // Si pas trouvé, essayer par externalId
+    if (!order) {
+      order = await db.collection('orders').findOne({
+        externalId: id,
+        ...baseQuery
+      });
+    }
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    res.json({
+      success: true,
+      order
+    });
+
+  } catch (error) {
+    console.error('[GET Order] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Recuperer les transports Dashdoc en temps reel via API
  * GET /api/v1/tms/dashdoc/transports?tag=Symphonia
  */
@@ -700,6 +756,92 @@ app.get('/api/v1/tms/dashdoc/transports', requireMongo, async (req, res) => {
   } catch (error) {
     console.error('Error fetching Dashdoc transports:', error.message);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== AFFRET.IA INTEGRATION ====================
+
+/**
+ * Envoyer une commande vers Affret.IA
+ * POST /api/v1/tms/orders/:id/send-to-affretia
+ */
+app.post('/api/v1/tms/orders/:id/send-to-affretia', requireMongo, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const axios = require('axios');
+
+    // Récupérer la commande
+    let order = await db.collection('orders').findOne({
+      _id: new ObjectId(id),
+      externalSource: 'dashdoc'
+    });
+
+    if (!order) {
+      order = await db.collection('orders').findOne({
+        externalId: id,
+        externalSource: 'dashdoc'
+      });
+    }
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    // Envoyer vers Affret.IA API
+    const affretiaUrl = process.env.AFFRETIA_API_URL || 'https://rt-affret-ia-api-prod-v4.eba-gpxm3qif.eu-central-1.elasticbeanstalk.com';
+
+    const affretiaOrder = {
+      reference: order.reference || order.externalId,
+      pickupAddress: order.pickup?.address || {},
+      deliveryAddress: order.delivery?.address || {},
+      pickupDate: order.pickup?.date || order.externalData?.created,
+      deliveryDate: order.delivery?.date,
+      weight: order.cargo?.weight,
+      volume: order.cargo?.volume,
+      cargoType: order.cargo?.type,
+      isDangerous: order.cargo?.isDangerous || false,
+      isRefrigerated: order.cargo?.isRefrigerated || false,
+      customerId: order.customerId,
+      externalSource: 'dashdoc',
+      externalId: order.externalId,
+      externalData: order.externalData
+    };
+
+    const response = await axios.post(`${affretiaUrl}/api/v1/orders`, affretiaOrder, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+
+    // Mettre à jour la commande pour indiquer qu'elle a été envoyée à Affret.IA
+    await db.collection('orders').updateOne(
+      { _id: order._id },
+      {
+        $set: {
+          sentToAffretia: true,
+          sentToAffretiaAt: new Date(),
+          affretiaOrderId: response.data?.order?._id || response.data?.orderId
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      message: 'Commande envoyée vers Affret.IA avec succès',
+      affretiaResponse: response.data
+    });
+
+  } catch (error) {
+    console.error('[Send to Affret.IA] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: error.response?.data
+    });
   }
 });
 
