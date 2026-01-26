@@ -896,11 +896,11 @@ app.post('/api/v1/jobs/stop', (req, res) => {
 });
 
 /**
- * Synchroniser un transport specifique par sequential_id
+ * Synchroniser un transport specifique par sequential_id ou UID
  */
-app.post('/api/v1/tms/sync-transport/:sequentialId', requireMongo, async (req, res) => {
+app.post('/api/v1/tms/sync-transport/:identifier', requireMongo, async (req, res) => {
   try {
-    const { sequentialId } = req.params;
+    const { identifier } = req.params;
 
     // Recuperer la connexion Dashdoc active
     const connection = await db.collection('tmsConnections').findOne({
@@ -912,29 +912,57 @@ app.post('/api/v1/tms/sync-transport/:sequentialId', requireMongo, async (req, r
       return res.status(404).json({ error: 'No active Dashdoc connection found' });
     }
 
-    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
-      baseUrl: connection.credentials.apiUrl
+    // Creer client axios pour appeler directement l'API Dashdoc
+    const axios = require('axios');
+    const client = axios.create({
+      baseURL: connection.credentials.apiUrl || 'https://www.dashdoc.eu/api/v4',
+      timeout: 30000,
+      headers: {
+        'Authorization': `Token ${connection.credentials.apiToken}`,
+        'Content-Type': 'application/json'
+      }
     });
 
-    // Rechercher le transport dans Dashdoc
-    console.log(`[SYNC SPECIFIC] Searching for transport ${sequentialId}...`);
-    const result = await dashdoc.getTransports({
-      sequential_id: parseInt(sequentialId),
-      limit: 1
-    });
+    let transport = null;
 
-    if (!result.results || result.results.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: `Transport ${sequentialId} not found in Dashdoc`
-      });
+    // Determiner si c'est un UID ou un sequential_id
+    if (identifier.includes('-')) {
+      // C'est un UID - appeler directement /transports/{uid}/
+      console.log(`[SYNC SPECIFIC] Fetching transport by UID: ${identifier}`);
+      try {
+        const response = await client.get(`/transports/${identifier}/`);
+        transport = response.data;
+      } catch (error) {
+        if (error.response?.status === 404) {
+          return res.status(404).json({
+            success: false,
+            error: `Transport with UID ${identifier} not found in Dashdoc`
+          });
+        }
+        throw error;
+      }
+    } else {
+      // C'est un sequential_id - chercher via query
+      console.log(`[SYNC SPECIFIC] Searching transport by sequential_id: ${identifier}`);
+      const response = await client.get(`/transports/?sequential_id=${identifier}&limit=1`);
+
+      if (!response.data.results || response.data.results.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: `Transport ${identifier} not found in Dashdoc`
+        });
+      }
+
+      transport = response.data.results[0];
     }
 
-    const transport = result.results[0];
     console.log(`[SYNC SPECIFIC] Found transport ${transport.sequential_id}`);
     console.log(`[SYNC SPECIFIC] Tags:`, transport.tags);
 
-    // Mapper le transport
+    // Mapper le transport avec le connector
+    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
+      baseUrl: connection.credentials.apiUrl
+    });
     const mappedOrder = dashdoc.mapTransport(transport);
 
     // Sauvegarder dans MongoDB
@@ -944,11 +972,11 @@ app.post('/api/v1/tms/sync-transport/:sequentialId', requireMongo, async (req, r
       { upsert: true }
     );
 
-    console.log(`[SYNC SPECIFIC] Transport ${sequentialId} synchronized successfully`);
+    console.log(`[SYNC SPECIFIC] Transport ${identifier} synchronized successfully`);
 
     res.json({
       success: true,
-      message: `Transport ${sequentialId} synchronized`,
+      message: `Transport ${identifier} synchronized`,
       transport: mappedOrder
     });
 
