@@ -101,7 +101,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.1.2',
+    version: '2.1.3',
     features: ['dashdoc', 'auto-sync', 'real-time-counters'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -129,7 +129,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.1.2',
+    version: '2.1.3',
     supportedTMS: ['dashdoc'],
     endpoints: [
       'GET /health',
@@ -893,6 +893,69 @@ app.post('/api/v1/jobs/start', (req, res) => {
 app.post('/api/v1/jobs/stop', (req, res) => {
   scheduledJobs.stopAllJobs();
   res.json({ success: true, message: 'Jobs stopped' });
+});
+
+/**
+ * Synchroniser un transport specifique par sequential_id
+ */
+app.post('/api/v1/tms/sync-transport/:sequentialId', requireMongo, async (req, res) => {
+  try {
+    const { sequentialId } = req.params;
+
+    // Recuperer la connexion Dashdoc active
+    const connection = await db.collection('tmsConnections').findOne({
+      tmsType: 'dashdoc',
+      isActive: true
+    });
+
+    if (!connection) {
+      return res.status(404).json({ error: 'No active Dashdoc connection found' });
+    }
+
+    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
+      baseUrl: connection.credentials.apiUrl
+    });
+
+    // Rechercher le transport dans Dashdoc
+    console.log(`[SYNC SPECIFIC] Searching for transport ${sequentialId}...`);
+    const result = await dashdoc.getTransports({
+      sequential_id: parseInt(sequentialId),
+      limit: 1
+    });
+
+    if (!result.results || result.results.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: `Transport ${sequentialId} not found in Dashdoc`
+      });
+    }
+
+    const transport = result.results[0];
+    console.log(`[SYNC SPECIFIC] Found transport ${transport.sequential_id}`);
+    console.log(`[SYNC SPECIFIC] Tags:`, transport.tags);
+
+    // Mapper le transport
+    const mappedOrder = dashdoc.mapTransport(transport);
+
+    // Sauvegarder dans MongoDB
+    await db.collection('orders').updateOne(
+      { externalId: mappedOrder.externalId },
+      { $set: mappedOrder },
+      { upsert: true }
+    );
+
+    console.log(`[SYNC SPECIFIC] Transport ${sequentialId} synchronized successfully`);
+
+    res.json({
+      success: true,
+      message: `Transport ${sequentialId} synchronized`,
+      transport: mappedOrder
+    });
+
+  } catch (error) {
+    console.error('[SYNC SPECIFIC] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 /**
