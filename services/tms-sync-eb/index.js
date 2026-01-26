@@ -101,7 +101,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.1.3',
+    version: '2.1.5',
     features: ['dashdoc', 'auto-sync', 'real-time-counters'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -129,7 +129,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.1.3',
+    version: '2.1.5',
     supportedTMS: ['dashdoc'],
     endpoints: [
       'GET /health',
@@ -443,8 +443,9 @@ app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
     const query = { externalSource: 'dashdoc' };
 
     // Filtre par tag (par défaut "Symphonia")
+    // Les tags sont des objets {pk, name, color}, donc on doit chercher dans tags.name
     if (tag && tag !== 'all') {
-      query.tags = tag;
+      query.tags = { $elemMatch: { name: tag } };
     }
 
     // Filtre par status
@@ -527,8 +528,9 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
     const query = { externalSource: 'dashdoc' };
 
     // Filtre par tag (par défaut "Symphonia")
+    // Les tags sont des objets {pk, name, color}, donc on doit chercher dans tags.name
     if (tag && tag !== 'all') {
-      query.tags = tag;
+      query.tags = { $elemMatch: { name: tag } };
       console.log(`[FILTER] Filtering by tag: ${tag}`);
     }
 
