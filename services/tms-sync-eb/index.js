@@ -101,7 +101,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.1.1',
+    version: '2.1.2',
     features: ['dashdoc', 'auto-sync', 'real-time-counters'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -129,7 +129,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.1.1',
+    version: '2.1.2',
     supportedTMS: ['dashdoc'],
     endpoints: [
       'GET /health',
@@ -444,15 +444,15 @@ app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
 
     // Filtre par tag (par défaut "Symphonia")
     if (tag && tag !== 'all') {
-      query['externalData.tags'] = { $elemMatch: { name: tag } };
+      query.tags = tag;
     }
 
     // Filtre par status
     if (status) {
-      query['externalData.status'] = status;
+      query.status = status;
     } else {
       // Par defaut, exclure les commandes annulees (cancelled, declined)
-      query['externalData.status'] = { $nin: ['cancelled', 'declined'] };
+      query.status = { $nin: ['CANCELLED', 'DECLINED'] };
     }
 
     const [orders, total] = await Promise.all([
@@ -528,7 +528,7 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
 
     // Filtre par tag (par défaut "Symphonia")
     if (tag && tag !== 'all') {
-      query['externalData.tags'] = { $elemMatch: { name: tag } };
+      query.tags = tag;
       console.log(`[FILTER] Filtering by tag: ${tag}`);
     }
 
@@ -918,7 +918,7 @@ async function startServer() {
   await connectMongoDB();
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RT TMS Sync API v2.1.1 listening on port ${PORT}`);
+    console.log(`RT TMS Sync API v2.1.2 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`MongoDB: ${mongoConnected ? 'Connected' : 'Not connected'}`);
 

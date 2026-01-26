@@ -636,6 +636,9 @@ class DashdocConnector {
       // Parent transport (pour sous-traitance)
       parentTransportId: t.parent_transport?.uid,
 
+      // Tags (libelles Dashdoc)
+      tags: t.tags || [],
+
       // Raw data for debugging
       _raw: {
         shape: t.shape,
