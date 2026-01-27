@@ -1008,13 +1008,22 @@ app.get('/api/v1/tms/orders/:orderId/coordinates', requireMongo, async (req, res
   try {
     const { orderId } = req.params;
 
-    // Chercher la commande par externalId ou _id
-    const order = await db.collection('orders').findOne({
-      $or: [
-        { externalId: orderId },
-        { _id: new ObjectId(orderId) }
-      ]
-    });
+    // Construire la requête - chercher par externalId ou _id (si ObjectId valide)
+    let query;
+    if (/^[0-9a-fA-F]{24}$/.test(orderId)) {
+      // Si c'est un ObjectId valide, chercher par externalId OU _id
+      query = {
+        $or: [
+          { externalId: orderId },
+          { _id: new ObjectId(orderId) }
+        ]
+      };
+    } else {
+      // Sinon, chercher uniquement par externalId
+      query = { externalId: orderId };
+    }
+
+    const order = await db.collection('orders').findOne(query);
 
     if (!order) {
       return res.status(404).json({
@@ -1077,7 +1086,7 @@ async function startServer() {
   await connectMongoDB();
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RT TMS Sync API v2.1.8 listening on port ${PORT}`);
+    console.log(`RT TMS Sync API v2.1.9 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`MongoDB: ${mongoConnected ? 'Connected' : 'Not connected'}`);
 

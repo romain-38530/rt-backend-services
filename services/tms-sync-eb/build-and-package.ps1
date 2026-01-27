@@ -1,9 +1,9 @@
 # Script pour créer un package ZIP compatible UNIX pour AWS Elastic Beanstalk
-Write-Host "Creating UNIX-compatible deployment package v2.1.8..." -ForegroundColor Cyan
+Write-Host "Creating UNIX-compatible deployment package v2.1.9..." -ForegroundColor Cyan
 
 $sourceDir = "c:\Users\rtard\dossier symphonia\rt-backend-services\services\tms-sync-eb"
-$tempDir = "C:\temp\tms-sync-v2.1.8-unix"
-$zipPath = "$sourceDir\deploy-v2.1.8-unix.zip"
+$tempDir = "C:\temp\tms-sync-v2.1.9-unix"
+$zipPath = "$sourceDir\deploy-v2.1.9-unix.zip"
 
 # Nettoyer
 if (Test-Path $tempDir) {

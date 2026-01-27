@@ -30,20 +30,20 @@ def create_unix_zip(source_dir, zip_path):
 
     # Verify the archive
     zip_size = os.path.getsize(zip_path)
-    print(f"\n✅ ZIP created successfully!")
+    print(f"\n[OK] ZIP created successfully!")
     print(f"  Path: {zip_path}")
     print(f"  Size: {zip_size / (1024*1024):.2f} MB")
 
     # Verify paths are Unix-style
-    print(f"\n🔍 Verifying paths...")
+    print(f"\n[CHECK] Verifying paths...")
     with zipfile.ZipFile(zip_path, 'r') as zipf:
         for name in zipf.namelist()[:5]:  # Show first 5 files
             print(f"  {name}")
             if '\\' in name:
-                print(f"  ⚠️  WARNING: Backslash found in {name}")
+                print(f"  [WARNING] Backslash found in {name}")
                 return False
 
-    print(f"✅ All paths use forward slashes")
+    print(f"[OK] All paths use forward slashes")
     return True
 
 if __name__ == '__main__':
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     zip_path = sys.argv[2]
 
     if not os.path.exists(source_dir):
-        print(f"❌ Error: Source directory not found: {source_dir}")
+        print(f"[ERROR] Source directory not found: {source_dir}")
         sys.exit(1)
 
     success = create_unix_zip(source_dir, zip_path)
