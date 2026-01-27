@@ -9,6 +9,7 @@
  */
 const INTERVALS = {
   AUTO_SYNC: 30 * 1000,           // 30 secondes - Sync haute frequence
+  SYMPHONIA_SYNC: 5 * 60 * 1000,  // 5 minutes - Sync transports avec tag Symphonia
   HEALTH_CHECK: 5 * 60 * 1000,    // 5 minutes - Verification connexions
   CLEANUP_LOGS: 24 * 60 * 60 * 1000 // 24 heures - Nettoyage logs anciens
 };
@@ -128,6 +129,80 @@ async function runHealthCheck() {
 }
 
 /**
+ * Synchronisation automatique des transports avec tag Symphonia
+ * Execute toutes les 5 minutes
+ */
+async function runSymphoniaSync() {
+  if (!db) return;
+
+  try {
+    console.log('🔄 [CRON] Running Symphonia sync...');
+
+    // Recuperer la connexion Dashdoc active
+    const connection = await db.collection('tmsConnections').findOne({
+      tmsType: 'dashdoc',
+      isActive: true
+    });
+
+    if (!connection) {
+      console.warn('⚠️  [CRON] No active Dashdoc connection found');
+      return;
+    }
+
+    // Creer client axios pour appeler Dashdoc API
+    const axios = require('axios');
+    const client = axios.create({
+      baseURL: connection.credentials.apiUrl || 'https://www.dashdoc.eu/api/v4',
+      timeout: 30000,
+      headers: {
+        'Authorization': `Token ${connection.credentials.apiToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Recuperer tous les transports avec tag Symphonia (PK: 126835)
+    console.log('[CRON SYMPHONIA] Fetching transports with Symphonia tag...');
+    const response = await client.get('/transports/?tags__in=126835&limit=100');
+    const transports = response.data.results || [];
+
+    if (transports.length === 0) {
+      console.log('✅ [CRON SYMPHONIA] No transports with Symphonia tag found');
+      return;
+    }
+
+    console.log(`[CRON SYMPHONIA] Found ${transports.length} transports with Symphonia tag`);
+
+    // Mapper et sauvegarder chaque transport
+    const DashdocConnector = require('./connectors/dashdoc.connector');
+    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
+      baseUrl: connection.credentials.apiUrl
+    });
+
+    let synced = 0;
+    for (const transport of transports) {
+      try {
+        const mappedOrder = dashdoc.mapTransport(transport);
+
+        await db.collection('orders').updateOne(
+          { externalId: mappedOrder.externalId },
+          { $set: mappedOrder },
+          { upsert: true }
+        );
+
+        synced++;
+      } catch (error) {
+        console.error(`[CRON SYMPHONIA] Error syncing transport ${transport.sequential_id}:`, error.message);
+      }
+    }
+
+    console.log(`✅ [CRON SYMPHONIA] ${synced}/${transports.length} transports synchronized`);
+
+  } catch (error) {
+    console.error('❌ [CRON SYMPHONIA] Error:', error.message);
+  }
+}
+
+/**
  * Nettoyage des logs de sync anciens (> 30 jours)
  * Execute toutes les 24 heures
  */
@@ -168,10 +243,12 @@ function startAllJobs(database, tmsServiceInstance) {
 
   // Demarrer les jobs avec leurs intervalles respectifs
   jobIntervals.autoSync = setInterval(runAutoSync, INTERVALS.AUTO_SYNC);
+  jobIntervals.symphoniaSync = setInterval(runSymphoniaSync, INTERVALS.SYMPHONIA_SYNC);
   jobIntervals.healthCheck = setInterval(runHealthCheck, INTERVALS.HEALTH_CHECK);
   jobIntervals.cleanupLogs = setInterval(runCleanupLogs, INTERVALS.CLEANUP_LOGS);
 
   console.log('✅ [CRON] autoSync: every 30 seconds (HIGH FREQUENCY)');
+  console.log('✅ [CRON] symphoniaSync: every 5 minutes (TAG SYMPHONIA)');
   console.log('✅ [CRON] healthCheck: every 5 minutes');
   console.log('✅ [CRON] cleanupLogs: every 24 hours');
   console.log('============================================================================');
@@ -179,6 +256,7 @@ function startAllJobs(database, tmsServiceInstance) {
   // Executer immediatement une premiere fois (apres 10s)
   setTimeout(() => {
     runAutoSync();
+    runSymphoniaSync();
   }, 10000);
 }
 
@@ -221,6 +299,12 @@ function getJobsStatus() {
         active: !!jobIntervals.autoSync,
         description: 'High-frequency Dashdoc synchronization'
       },
+      symphoniaSync: {
+        interval: '5 minutes',
+        intervalMs: INTERVALS.SYMPHONIA_SYNC,
+        active: !!jobIntervals.symphoniaSync,
+        description: 'Sync transports with Symphonia tag'
+      },
       healthCheck: {
         interval: '5 minutes',
         intervalMs: INTERVALS.HEALTH_CHECK,
@@ -243,6 +327,7 @@ function getJobsStatus() {
 async function runJobManually(jobName) {
   const jobs = {
     autoSync: runAutoSync,
+    symphoniaSync: runSymphoniaSync,
     healthCheck: runHealthCheck,
     cleanupLogs: runCleanupLogs
   };
@@ -277,6 +362,7 @@ module.exports = {
   getJobsStatus,
   runJobManually,
   runAutoSync,
+  runSymphoniaSync,
   runHealthCheck,
   runCleanupLogs
 };

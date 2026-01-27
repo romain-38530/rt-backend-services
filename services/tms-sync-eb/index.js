@@ -101,7 +101,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.1.5',
+    version: '2.1.6',
     features: ['dashdoc', 'auto-sync', 'real-time-counters'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -129,7 +129,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.1.5',
+    version: '2.1.6',
     supportedTMS: ['dashdoc'],
     endpoints: [
       'GET /health',
