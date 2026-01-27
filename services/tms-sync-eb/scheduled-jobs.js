@@ -9,7 +9,7 @@
  */
 const INTERVALS = {
   AUTO_SYNC: 30 * 1000,           // 30 secondes - Sync haute frequence
-  SYMPHONIA_SYNC: 5 * 60 * 1000,  // 5 minutes - Sync transports avec tag Symphonia
+  SYMPHONIA_SYNC: 60 * 1000,      // 1 minute - Sync transports avec tag Symphonia
   HEALTH_CHECK: 5 * 60 * 1000,    // 5 minutes - Verification connexions
   CLEANUP_LOGS: 24 * 60 * 60 * 1000 // 24 heures - Nettoyage logs anciens
 };
@@ -248,7 +248,7 @@ function startAllJobs(database, tmsServiceInstance) {
   jobIntervals.cleanupLogs = setInterval(runCleanupLogs, INTERVALS.CLEANUP_LOGS);
 
   console.log('✅ [CRON] autoSync: every 30 seconds (HIGH FREQUENCY)');
-  console.log('✅ [CRON] symphoniaSync: every 5 minutes (TAG SYMPHONIA)');
+  console.log('✅ [CRON] symphoniaSync: every 1 minute (TAG SYMPHONIA)');
   console.log('✅ [CRON] healthCheck: every 5 minutes');
   console.log('✅ [CRON] cleanupLogs: every 24 hours');
   console.log('============================================================================');
@@ -300,7 +300,7 @@ function getJobsStatus() {
         description: 'High-frequency Dashdoc synchronization'
       },
       symphoniaSync: {
-        interval: '5 minutes',
+        interval: '1 minute',
         intervalMs: INTERVALS.SYMPHONIA_SYNC,
         active: !!jobIntervals.symphoniaSync,
         description: 'Sync transports with Symphonia tag'
