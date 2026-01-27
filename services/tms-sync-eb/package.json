@@ -1,6 +1,6 @@
 {
     "name": "rt-tms-sync-api",
-    "version": "2.1.7",
+    "version": "2.1.8",
     "description": "RT TMS Sync API - Dashdoc, Transporeon integration",
     "main": "index.js",
     "scripts": {

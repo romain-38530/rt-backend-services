@@ -1000,6 +1000,72 @@ app.post('/api/v1/jobs/:jobName/run', async (req, res) => {
   }
 });
 
+/**
+ * Debug: Verifier les coordonnees GPS d'une commande specifique
+ * GET /api/v1/tms/orders/:orderId/coordinates
+ */
+app.get('/api/v1/tms/orders/:orderId/coordinates', requireMongo, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Chercher la commande par externalId ou _id
+    const order = await db.collection('orders').findOne({
+      $or: [
+        { externalId: orderId },
+        { _id: new ObjectId(orderId) }
+      ]
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commande non trouvée'
+      });
+    }
+
+    // Extraire et formatter les coordonnées
+    const pickupCoords = order.pickup?.address?.location;
+    const deliveryCoords = order.delivery?.address?.location;
+
+    res.json({
+      success: true,
+      orderId: order.externalId,
+      sequentialId: order.sequentialId,
+      status: order.status,
+      coordinates: {
+        pickup: {
+          city: order.pickup?.address?.city,
+          postalCode: order.pickup?.address?.postalCode,
+          location: pickupCoords,
+          hasCoordinates: !!(pickupCoords?.coordinates),
+          latitude: pickupCoords?.coordinates?.[1],
+          longitude: pickupCoords?.coordinates?.[0]
+        },
+        delivery: {
+          city: order.delivery?.address?.city,
+          postalCode: order.delivery?.address?.postalCode,
+          location: deliveryCoords,
+          hasCoordinates: !!(deliveryCoords?.coordinates),
+          latitude: deliveryCoords?.coordinates?.[1],
+          longitude: deliveryCoords?.coordinates?.[0]
+        }
+      },
+      tags: order.tags?.map(t => t.name) || [],
+      carrier: {
+        name: order.carrier?.name,
+        assigned: !!order.carrier
+      }
+    });
+
+  } catch (error) {
+    console.error('[COORDINATES DEBUG] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -1011,7 +1077,7 @@ async function startServer() {
   await connectMongoDB();
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RT TMS Sync API v2.1.2 listening on port ${PORT}`);
+    console.log(`RT TMS Sync API v2.1.8 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`MongoDB: ${mongoConnected ? 'Connected' : 'Not connected'}`);
 
