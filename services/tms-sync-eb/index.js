@@ -815,7 +815,7 @@ app.post('/api/v1/tms/orders/:id/send-to-affretia', requireMongo, async (req, re
     }
 
     // Envoyer vers Affret.IA API
-    const affretiaUrl = process.env.AFFRETIA_API_URL || 'https://rt-affret-ia-api-prod-v4.eba-gpxm3qif.eu-central-1.elasticbeanstalk.com';
+    const affretiaUrl = process.env.AFFRETIA_API_URL || 'https://rt-affret-ia-api-prod-v4.eba-quc9udpr.eu-central-1.elasticbeanstalk.com';
 
     const affretiaOrder = {
       reference: order.reference || order.externalId,
