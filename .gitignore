@@ -62,3 +62,14 @@ NUL
 # Test files
 test-*.json
 test-*.ps1
+
+# Scripts ad-hoc avec credentials (SECURITE)
+# Ne JAMAIS commit ces fichiers de debug/test
+**/test-*.js
+**/fix-*.js
+**/check-*.js
+**/clean-*.js
+**/seed-*.js
+!**/seeds/**
+!**/tests/**
+!**/__tests__/**
