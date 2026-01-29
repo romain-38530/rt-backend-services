@@ -814,32 +814,29 @@ app.post('/api/v1/tms/orders/:id/send-to-affretia', requireMongo, async (req, re
       });
     }
 
-    // Envoyer vers Affret.IA API (via CloudFront pour sécurité)
+    // Déclencher une session Affret.IA (via CloudFront pour sécurité)
     const affretiaUrl = process.env.AFFRETIA_API_URL || 'https://d393yiia4ig3bw.cloudfront.net';
 
-    const affretiaOrder = {
-      reference: order.reference || order.externalId,
-      pickupAddress: order.pickup?.address || {},
-      deliveryAddress: order.delivery?.address || {},
-      pickupDate: order.pickup?.date || order.externalData?.created,
-      deliveryDate: order.delivery?.date,
-      weight: order.cargo?.weight,
-      volume: order.cargo?.volume,
-      cargoType: order.cargo?.type,
-      isDangerous: order.cargo?.isDangerous || false,
-      isRefrigerated: order.cargo?.isRefrigerated || false,
-      customerId: order.customerId,
-      externalSource: 'dashdoc',
-      externalId: order.externalId,
-      externalData: order.externalData
+    // Préparer le payload pour déclencher la session Affret.IA
+    const triggerPayload = {
+      orderId: order._id.toString(),
+      organizationId: order.organizationId || order.customerId || 'default-org',
+      triggerType: 'manual',
+      reason: 'Envoi manuel depuis TMS Sync - Dashdoc',
+      userId: 'tms-sync-service'
     };
 
-    const response = await axios.post(`${affretiaUrl}/api/v1/orders`, affretiaOrder, {
+    // Déclencher la session Affret.IA (endpoint correct)
+    const response = await axios.post(`${affretiaUrl}/api/v1/affretia/trigger`, triggerPayload, {
       headers: {
         'Content-Type': 'application/json'
       },
       timeout: 10000
     });
+
+    // Récupérer le sessionId de la réponse
+    const sessionId = response.data?.data?.sessionId || response.data?.sessionId;
+    const sessionStatus = response.data?.data?.status || response.data?.status || 'analyzing';
 
     // Mettre à jour la commande pour indiquer qu'elle a été envoyée à Affret.IA
     await db.collection('orders').updateOne(
@@ -848,15 +845,20 @@ app.post('/api/v1/tms/orders/:id/send-to-affretia', requireMongo, async (req, re
         $set: {
           sentToAffretia: true,
           sentToAffretiaAt: new Date(),
-          affretiaOrderId: response.data?.order?._id || response.data?.orderId
+          affretiaSessionId: sessionId,
+          affretiaStatus: sessionStatus
         }
       }
     );
 
     res.json({
       success: true,
-      message: 'Commande envoyée vers Affret.IA avec succès',
-      affretiaResponse: response.data
+      message: 'Session Affret.IA démarrée avec succès',
+      data: {
+        sessionId: sessionId,
+        status: sessionStatus,
+        orderId: order._id.toString()
+      }
     });
 
   } catch (error) {
