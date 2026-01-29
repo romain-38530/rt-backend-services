@@ -19,12 +19,14 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { MongoClient, ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
 const TMSConnectionService = require('./services/tms-connection.service');
 const DashdocConnector = require('./connectors/dashdoc.connector');
 const scheduledJobs = require('./scheduled-jobs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 
 // MongoDB connection
 let db = null;
@@ -101,7 +103,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.1.7',
+    version: '2.2.0',
     features: ['dashdoc', 'auto-sync', 'real-time-counters'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -129,7 +131,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.1.7',
+    version: '2.2.0',
     supportedTMS: ['dashdoc'],
     endpoints: [
       'GET /health',
@@ -147,6 +149,40 @@ app.get('/', (req, res) => {
     ]
   });
 });
+
+// JWT Authentication middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Access token required',
+      code: 'UNAUTHORIZED'
+    });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          error: 'Token expired',
+          code: 'TOKEN_EXPIRED'
+        });
+      }
+      return res.status(403).json({
+        success: false,
+        error: 'Invalid token',
+        code: 'INVALID_TOKEN'
+      });
+    }
+
+    req.user = user;
+    next();
+  });
+}
 
 // Middleware to check MongoDB connection
 const requireMongo = (req, res, next) => {
@@ -188,7 +224,7 @@ app.post('/api/v1/tms/test-token', async (req, res) => {
 /**
  * Creer une nouvelle connexion TMS
  */
-app.post('/api/v1/tms/connections', requireMongo, async (req, res) => {
+app.post('/api/v1/tms/connections', authenticateToken, requireMongo, async (req, res) => {
   try {
     const connection = await tmsService.createConnection(req.body);
     res.status(201).json({ success: true, connection });
@@ -200,7 +236,7 @@ app.post('/api/v1/tms/connections', requireMongo, async (req, res) => {
 /**
  * Liste des connexions (optionnel: par organisation)
  */
-app.get('/api/v1/tms/connections', requireMongo, async (req, res) => {
+app.get('/api/v1/tms/connections', authenticateToken, requireMongo, async (req, res) => {
   try {
     let connections;
     if (req.query.organizationId) {
@@ -227,7 +263,7 @@ app.get('/api/v1/tms/connections', requireMongo, async (req, res) => {
 /**
  * Details d'une connexion
  */
-app.get('/api/v1/tms/connections/:id', requireMongo, async (req, res) => {
+app.get('/api/v1/tms/connections/:id', authenticateToken, requireMongo, async (req, res) => {
   try {
     const connection = await tmsService.getConnection(req.params.id);
     if (!connection) {
@@ -249,7 +285,7 @@ app.get('/api/v1/tms/connections/:id', requireMongo, async (req, res) => {
 /**
  * Modifier une connexion
  */
-app.put('/api/v1/tms/connections/:id', requireMongo, async (req, res) => {
+app.put('/api/v1/tms/connections/:id', authenticateToken, requireMongo, async (req, res) => {
   try {
     const updates = { ...req.body };
 
@@ -273,7 +309,7 @@ app.put('/api/v1/tms/connections/:id', requireMongo, async (req, res) => {
 /**
  * Supprimer une connexion
  */
-app.delete('/api/v1/tms/connections/:id', requireMongo, async (req, res) => {
+app.delete('/api/v1/tms/connections/:id', authenticateToken, requireMongo, async (req, res) => {
   try {
     const result = await tmsService.deleteConnection(req.params.id);
     if (result.deletedCount === 0) {
@@ -298,7 +334,7 @@ app.post('/api/v1/tms/connections/:id/test', requireMongo, async (req, res) => {
 });
 
 /**
- * Lancer une synchronisation
+ * Lancer une synchronisation (PROTECTED)
  * POST /api/v1/tms/connections/:id/sync
  *
  * Body params:
@@ -311,7 +347,7 @@ app.post('/api/v1/tms/connections/:id/test', requireMongo, async (req, res) => {
  * - contactLimit: number (default: 500)
  * - invoiceLimit: number (default: 100)
  */
-app.post('/api/v1/tms/connections/:id/sync', requireMongo, async (req, res) => {
+app.post('/api/v1/tms/connections/:id/sync', authenticateToken, requireMongo, async (req, res) => {
   try {
     const result = await tmsService.executeSync(req.params.id, req.body);
     res.json({ success: true, ...result });
@@ -1088,7 +1124,7 @@ async function startServer() {
   await connectMongoDB();
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RT TMS Sync API v2.1.9 listening on port ${PORT}`);
+    console.log(`RT TMS Sync API v2.2.0 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`MongoDB: ${mongoConnected ? 'Connected' : 'Not connected'}`);
 
