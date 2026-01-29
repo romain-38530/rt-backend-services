@@ -2,8 +2,8 @@
  * Routes AFFRET.IA API v2
  * Toutes les routes pour le module d'affretement intelligent
  *
- * Endpoints (38 total):
- * - Session Management: /trigger, /session/:id, /sessions
+ * Endpoints (39 total):
+ * - Session Management: /trigger, /session/:id, /sessions, /sessions/industrial/:industrialId
  * - Analyse IA: /analyze
  * - Diffusion: /broadcast, /bourse
  * - Propositions: /response, /proposals, /proposals/:id/history
@@ -32,6 +32,12 @@ router.post('/trigger', affretiaController.triggerAffretIA);
  * Obtenir les details d'une session
  */
 router.get('/session/:id', affretiaController.getSession);
+
+/**
+ * GET /api/v1/affretia/sessions/industrial/:industrialId
+ * Liste des sessions AFFRET.IA pour un industriel specifique
+ */
+router.get('/sessions/industrial/:industrialId', affretiaController.getIndustrialSessions);
 
 /**
  * GET /api/v1/affretia/sessions

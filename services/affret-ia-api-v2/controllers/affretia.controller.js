@@ -146,6 +146,47 @@ exports.getSessions = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/v1/affretia/sessions/industrial/:industrialId
+ * Liste des sessions AFFRET.IA pour un industriel specifique
+ */
+exports.getIndustrialSessions = async (req, res) => {
+  try {
+    const { industrialId } = req.params;
+    const { status, dateFrom, dateTo, limit = 50 } = req.query;
+
+    if (!industrialId) {
+      return res.status(400).json({
+        success: false,
+        error: 'industrialId is required'
+      });
+    }
+
+    const filters = { organizationId: industrialId };
+    if (status) filters.status = status;
+
+    if (dateFrom || dateTo) {
+      filters.createdAt = {};
+      if (dateFrom) filters.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) filters.createdAt.$lte = new Date(dateTo);
+    }
+
+    const sessions = await AffretSession.find(filters)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    res.json({
+      success: true,
+      sessions: sessions,
+      count: sessions.length
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting industrial sessions:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // ==================== ANALYSE IA ====================
 
 /**

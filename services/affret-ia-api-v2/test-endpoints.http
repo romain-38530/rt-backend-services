@@ -31,6 +31,12 @@ GET {{baseUrl}}/api/v1/affretia/sessions?limit=10
 ### 4. Liste des sessions par organisation
 GET {{baseUrl}}/api/v1/affretia/sessions?organizationId=ORG001&status=analyzing
 
+### 4b. Liste des sessions pour un industriel specifique
+GET {{baseUrl}}/api/v1/affretia/sessions/industrial/ORG001
+
+### 4c. Liste des sessions pour un industriel avec filtres
+GET {{baseUrl}}/api/v1/affretia/sessions/industrial/ORG001?status=assigned&limit=10
+
 ### ==================== ANALYSE IA ====================
 
 ### 5. Lancer l'analyse IA (requires valid orderId in Orders API)

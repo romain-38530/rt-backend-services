@@ -4,12 +4,14 @@ const cors = require('cors');
 const helmet = require('helmet');
 const { MongoClient, ObjectId } = require('mongodb');
 const https = require('https');
+const jwt = require('jsonwebtoken');
 
 // Email notifications module
 const emailOrders = require('./email-orders');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-secret-key-2024-change-in-production';
 
 // Helper: Geocode an address using OpenStreetMap Nominatim (free, no API key)
 async function geocodeAddress(address) {
@@ -261,6 +263,40 @@ async function connectMongoDB() {
   }
 }
 
+// Authentication Middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Access token required',
+      code: 'UNAUTHORIZED'
+    });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          error: 'Token expired',
+          code: 'TOKEN_EXPIRED'
+        });
+      }
+      return res.status(403).json({
+        success: false,
+        error: 'Invalid token',
+        code: 'INVALID_TOKEN'
+      });
+    }
+
+    req.user = user;
+    next();
+  });
+}
+
 // Middleware
 app.use(helmet());
 app.use(cors({
@@ -361,7 +397,7 @@ app.get('/debug/routes', (req, res) => {
 // ==================== ORDERS CRUD ====================
 
 // Get all orders (enriched with names, with filtering and pagination)
-app.get('/api/v1/orders', async (req, res) => {
+app.get('/api/v1/orders', authenticateToken, async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
@@ -371,13 +407,46 @@ app.get('/api/v1/orders', async (req, res) => {
 
     // IMPORTANT: Filter by user (customerId for industriels, carrierId for transporteurs)
     // This ensures users only see their own orders, not demo data from other companies
+    // Authorization: Ensure users can only query their own data
+    const userType = req.user.type || req.user.role || req.user.userType;
+    const userId = req.user.id || req.user.userId || req.user._id;
+
     if (req.query.customerId) {
       // Mode Industriel: filter by customerId (user is the client/donneur d'ordre)
+      // Authorization check: verify user is authorized to view this customer's orders
+      if (userType === 'industrial' || userType === 'industrie' || userType === 'customer') {
+        if (req.query.customerId !== userId) {
+          return res.status(403).json({
+            success: false,
+            error: 'Not authorized to view orders for this customer',
+            code: 'FORBIDDEN'
+          });
+        }
+      }
       query.customerId = req.query.customerId;
     }
     if (req.query.carrierId) {
       // Mode Transporteur: filter by carrierId (user is the assigned carrier)
+      // Authorization check: verify user is authorized to view this carrier's orders
+      if (userType === 'carrier' || userType === 'transporteur' || userType === 'transporter') {
+        if (req.query.carrierId !== userId && req.query.carrierId !== (req.user.carrierId || req.user.companyId)) {
+          return res.status(403).json({
+            success: false,
+            error: 'Not authorized to view orders for this carrier',
+            code: 'FORBIDDEN'
+          });
+        }
+      }
       query.carrierId = req.query.carrierId;
+    }
+
+    // If no filter provided, default to user's own data based on type
+    if (!req.query.customerId && !req.query.carrierId) {
+      if (userType === 'carrier' || userType === 'transporteur' || userType === 'transporter') {
+        query.carrierId = req.user.carrierId || req.user.companyId || userId;
+      } else if (userType === 'industrial' || userType === 'industrie' || userType === 'customer') {
+        query.customerId = userId;
+      }
     }
 
     // Search filter (search in reference, carrierName, industrialName)
@@ -458,7 +527,7 @@ app.get('/api/v1/orders', async (req, res) => {
 });
 
 // Get single order (enriched with names and distance)
-app.get('/api/v1/orders/:id', async (req, res) => {
+app.get('/api/v1/orders/:id', authenticateToken, async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
@@ -474,6 +543,28 @@ app.get('/api/v1/orders/:id', async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Authorization check: verify user has access to this order
+    const userType = req.user.type || req.user.role || req.user.userType;
+    const userId = req.user.id || req.user.userId || req.user._id;
+    const userCarrierId = req.user.carrierId || req.user.companyId;
+
+    const isCarrier = (userType === 'carrier' || userType === 'transporteur' || userType === 'transporter');
+    const isIndustrial = (userType === 'industrial' || userType === 'industrie' || userType === 'customer');
+
+    const hasAccess = (
+      (isCarrier && (order.carrierId === userId || order.carrierId === userCarrierId)) ||
+      (isIndustrial && order.customerId === userId) ||
+      (isIndustrial && order.industrialId === userId)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to view this order',
+        code: 'FORBIDDEN'
+      });
     }
 
     // Enrich with additional data
@@ -591,7 +682,7 @@ app.put('/api/v1/orders/:id/pallets', async (req, res) => {
 });
 
 // Create order
-app.post('/api/v1/orders', async (req, res) => {
+app.post('/api/v1/orders', authenticateToken, async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
@@ -618,7 +709,7 @@ app.post('/api/v1/orders', async (req, res) => {
 });
 
 // Update order
-app.put('/api/v1/orders/:id', async (req, res) => {
+app.put('/api/v1/orders/:id', authenticateToken, async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
@@ -654,7 +745,7 @@ app.put('/api/v1/orders/:id', async (req, res) => {
 });
 
 // Delete order
-app.delete('/api/v1/orders/:id', async (req, res) => {
+app.delete('/api/v1/orders/:id', authenticateToken, async (req, res) => {
   if (!mongoConnected || !db) {
     return res.status(503).json({ error: 'Database not connected' });
   }
