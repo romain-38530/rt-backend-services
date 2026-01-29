@@ -26,7 +26,7 @@ const PORT = process.env.PORT || 3000;
 
 // Configuration
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://music:music@music-data.t0qhq.mongodb.net/symphonia?retryWrites=true&w=majority';
-const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-secret-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 const TVA_RATE = 0.20;
 
 // Email configuration

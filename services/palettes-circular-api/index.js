@@ -36,7 +36,7 @@ app.use(express.json({ limit: '50mb' }));
 // ===========================================
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/palettes-circular';
-const JWT_SECRET = process.env.JWT_SECRET || 'rt-palettes-secret-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 const DEFAULT_SEARCH_RADIUS_KM = 30;
 const SUBSCRIPTION_PRICE = 199; // EUR/mois
 

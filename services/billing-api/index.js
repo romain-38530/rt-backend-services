@@ -56,7 +56,7 @@ const upload = multer({
 // ===========================================
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/billing';
-const JWT_SECRET = process.env.JWT_SECRET || 'rt-billing-secret-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 const VALIDATION_TIMEOUT_DAYS = 7;
 const ARCHIVE_RETENTION_YEARS = 10;
 

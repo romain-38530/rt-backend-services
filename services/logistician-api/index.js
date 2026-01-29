@@ -41,7 +41,7 @@ const PORT = process.env.PORT || 3010;
 // CONFIGURATION
 // ===========================================
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://rt_admin:RtAdmin2024@stagingrt.v2jnoh2.mongodb.net/rt-technologie?retryWrites=true&w=majority';
-const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-logistician-secret-2025';
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
 // ===========================================

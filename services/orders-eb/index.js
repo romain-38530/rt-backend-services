@@ -11,7 +11,7 @@ const emailOrders = require('./email-orders');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-secret-key-2024-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 
 // Helper: Geocode an address using OpenStreetMap Nominatim (free, no API key)
 async function geocodeAddress(address) {

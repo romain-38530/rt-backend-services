@@ -9,9 +9,11 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
 const io = require('socket.io-client');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3017;
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 
 app.use(cors());
 app.use(express.json());
@@ -88,6 +90,41 @@ const Assignment = mongoose.model('Assignment', assignmentSchema);
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('[MONGODB] Connected'))
   .catch(err => console.error('[MONGODB] Error:', err));
+
+// ==================== JWT AUTHENTICATION ====================
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Access token required',
+      code: 'UNAUTHORIZED'
+    });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          error: 'Token expired',
+          code: 'TOKEN_EXPIRED'
+        });
+      }
+      return res.status(403).json({
+        success: false,
+        error: 'Invalid token',
+        code: 'INVALID_TOKEN'
+      });
+    }
+
+    req.user = user;
+    next();
+  });
+}
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -296,7 +333,7 @@ const affretiaRoutes = require('./routes/affretia.routes');
 app.use('/api/v1/affretia', affretiaRoutes);
 
 // POST /api/v1/affret-ia/search - Rechercher des transporteurs disponibles
-app.post('/api/v1/affret-ia/search', async (req, res) => {
+app.post('/api/v1/affret-ia/search', authenticateToken, async (req, res) => {
   try {
     const { orderId, pickupPostalCode, deliveryPostalCode, pickupDate, vehicleType, cargoType, services } = req.body;
 
@@ -390,7 +427,7 @@ app.post('/api/v1/affret-ia/search', async (req, res) => {
 });
 
 // GET /api/v1/affret-ia/carriers-available - Liste des transporteurs disponibles (simplifié)
-app.get('/api/v1/affret-ia/carriers-available', async (req, res) => {
+app.get('/api/v1/affret-ia/carriers-available', authenticateToken, async (req, res) => {
   try {
     const { postalCode, date, vehicleType } = req.query;
 
@@ -412,7 +449,7 @@ app.get('/api/v1/affret-ia/carriers-available', async (req, res) => {
 });
 
 // POST /api/v1/affret-ia/assign - Assigner automatiquement un transporteur
-app.post('/api/v1/affret-ia/assign', async (req, res) => {
+app.post('/api/v1/affret-ia/assign', authenticateToken, async (req, res) => {
   try {
     const { assignmentId, carrierId, algorithm = 'balanced' } = req.body;
 
@@ -494,7 +531,7 @@ app.post('/api/v1/affret-ia/assign', async (req, res) => {
 });
 
 // GET /api/v1/affret-ia/pricing - Obtenir un tarif estimatif
-app.get('/api/v1/affret-ia/pricing', async (req, res) => {
+app.get('/api/v1/affret-ia/pricing', authenticateToken, async (req, res) => {
   try {
     const { orderId, carrierId } = req.query;
 
@@ -524,7 +561,7 @@ app.get('/api/v1/affret-ia/pricing', async (req, res) => {
 });
 
 // GET /api/v1/affret-ia/assignments - Historique des affectations
-app.get('/api/v1/affret-ia/assignments', async (req, res) => {
+app.get('/api/v1/affret-ia/assignments', authenticateToken, async (req, res) => {
   try {
     const { orderId, status, limit = 50 } = req.query;
 
@@ -547,7 +584,7 @@ app.get('/api/v1/affret-ia/assignments', async (req, res) => {
 });
 
 // GET /api/v1/affret-ia/assignments/:id - Détails d'une affectation
-app.get('/api/v1/affret-ia/assignments/:id', async (req, res) => {
+app.get('/api/v1/affret-ia/assignments/:id', authenticateToken, async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id);
 

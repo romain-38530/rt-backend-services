@@ -11,7 +11,7 @@ const { sendClientOnboardingConfirmationEmail } = require('./email');
 const { setupSubUsersRoutes } = require('./subusers');
 const cron = require('node-cron');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'symphonia-secret-key-2024-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

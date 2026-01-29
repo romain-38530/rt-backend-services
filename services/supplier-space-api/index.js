@@ -65,7 +65,7 @@ app.use(morgan('combined'));
 app.use(express.json());
 
 // JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'rt-super-secret-jwt-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 
 // ============================================
 // SCHEMAS MONGOOSE
