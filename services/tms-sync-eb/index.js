@@ -814,8 +814,8 @@ app.post('/api/v1/tms/orders/:id/send-to-affretia', requireMongo, async (req, re
       });
     }
 
-    // Envoyer vers Affret.IA API
-    const affretiaUrl = process.env.AFFRETIA_API_URL || 'https://rt-affret-ia-api-prod-v4.eba-quc9udpr.eu-central-1.elasticbeanstalk.com';
+    // Envoyer vers Affret.IA API (via CloudFront pour sécurité)
+    const affretiaUrl = process.env.AFFRETIA_API_URL || 'https://d393yiia4ig3bw.cloudfront.net';
 
     const affretiaOrder = {
       reference: order.reference || order.externalId,
