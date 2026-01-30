@@ -1,0 +1,26 @@
+{
+  "name": "@symphonia/monitoring",
+  "version": "1.0.0",
+  "description": "Module de monitoring CloudWatch pour SYMPHONI.A",
+  "main": "cloudwatch-metrics.js",
+  "types": "cloudwatch-metrics.d.ts",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [
+    "cloudwatch",
+    "metrics",
+    "monitoring",
+    "aws",
+    "symphonia"
+  ],
+  "author": "SYMPHONI.A Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0"
+  }
+}

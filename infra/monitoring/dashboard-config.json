@@ -1,0 +1,451 @@
+{
+  "widgets": [
+    {
+      "type": "text",
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 1,
+      "properties": {
+        "markdown": "\n# SYMPHONI.A - Dashboard de Monitoring Production\nDernière mise à jour: 2026-01-29\n"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 1,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ElasticBeanstalk", "EnvironmentHealth", "EnvironmentName", "rt-tms-sync-api-v2", { "stat": "Average", "label": "TMS Sync" } ],
+          [ "AWS/ElasticBeanstalk", "EnvironmentHealth", "EnvironmentName", "rt-affret-ia-api-prod", { "stat": "Average", "label": "Affret.IA" } ],
+          [ "AWS/ElasticBeanstalk", "EnvironmentHealth", "EnvironmentName", "rt-orders-api-prod-v2", { "stat": "Average", "label": "Orders" } ],
+          [ "AWS/ElasticBeanstalk", "EnvironmentHealth", "EnvironmentName", "rt-subscriptions-api-prod-v5", { "stat": "Average", "label": "Subscriptions" } ],
+          [ "AWS/ElasticBeanstalk", "EnvironmentHealth", "EnvironmentName", "rt-authz-api-prod", { "stat": "Average", "label": "Auth" } ],
+          [ "AWS/ElasticBeanstalk", "EnvironmentHealth", "EnvironmentName", "rt-billing-api-prod", { "stat": "Average", "label": "Billing" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Santé des Environnements",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 25
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Degraded",
+              "value": 15
+            },
+            {
+              "label": "Severe",
+              "value": 20
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 1,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ElasticBeanstalk", "CPUUtilization", "EnvironmentName", "rt-tms-sync-api-v2", { "stat": "Average", "label": "TMS Sync" } ],
+          [ "AWS/ElasticBeanstalk", "CPUUtilization", "EnvironmentName", "rt-affret-ia-api-prod", { "stat": "Average", "label": "Affret.IA" } ],
+          [ "AWS/ElasticBeanstalk", "CPUUtilization", "EnvironmentName", "rt-orders-api-prod-v2", { "stat": "Average", "label": "Orders" } ],
+          [ "AWS/ElasticBeanstalk", "CPUUtilization", "EnvironmentName", "rt-subscriptions-api-prod-v5", { "stat": "Average", "label": "Subscriptions" } ],
+          [ "AWS/ElasticBeanstalk", "CPUUtilization", "EnvironmentName", "rt-authz-api-prod", { "stat": "Average", "label": "Auth" } ],
+          [ "AWS/ElasticBeanstalk", "CPUUtilization", "EnvironmentName", "rt-billing-api-prod", { "stat": "Average", "label": "Billing" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Utilisation CPU (%)",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 100
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Warning",
+              "value": 80
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 7,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "CWAgent", "MemoryUtilization", "EnvironmentName", "rt-tms-sync-api-v2", { "stat": "Average", "label": "TMS Sync" } ],
+          [ "CWAgent", "MemoryUtilization", "EnvironmentName", "rt-affret-ia-api-prod", { "stat": "Average", "label": "Affret.IA" } ],
+          [ "CWAgent", "MemoryUtilization", "EnvironmentName", "rt-orders-api-prod-v2", { "stat": "Average", "label": "Orders" } ],
+          [ "CWAgent", "MemoryUtilization", "EnvironmentName", "rt-subscriptions-api-prod-v5", { "stat": "Average", "label": "Subscriptions" } ],
+          [ "CWAgent", "MemoryUtilization", "EnvironmentName", "rt-authz-api-prod", { "stat": "Average", "label": "Auth" } ],
+          [ "CWAgent", "MemoryUtilization", "EnvironmentName", "rt-billing-api-prod", { "stat": "Average", "label": "Billing" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Utilisation Mémoire (%)",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 100
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Warning",
+              "value": 85
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 7,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests5xx", "EnvironmentName", "rt-tms-sync-api-v2", { "stat": "Sum", "label": "TMS Sync" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests5xx", "EnvironmentName", "rt-affret-ia-api-prod", { "stat": "Sum", "label": "Affret.IA" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests5xx", "EnvironmentName", "rt-orders-api-prod-v2", { "stat": "Sum", "label": "Orders" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests5xx", "EnvironmentName", "rt-subscriptions-api-prod-v5", { "stat": "Sum", "label": "Subscriptions" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests5xx", "EnvironmentName", "rt-authz-api-prod", { "stat": "Sum", "label": "Auth" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests5xx", "EnvironmentName", "rt-billing-api-prod", { "stat": "Sum", "label": "Billing" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Erreurs HTTP 5xx (par minute)",
+        "period": 60,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Critical",
+              "value": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 13,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests4xx", "EnvironmentName", "rt-tms-sync-api-v2", { "stat": "Sum", "label": "TMS Sync" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests4xx", "EnvironmentName", "rt-affret-ia-api-prod", { "stat": "Sum", "label": "Affret.IA" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests4xx", "EnvironmentName", "rt-orders-api-prod-v2", { "stat": "Sum", "label": "Orders" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests4xx", "EnvironmentName", "rt-subscriptions-api-prod-v5", { "stat": "Sum", "label": "Subscriptions" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests4xx", "EnvironmentName", "rt-authz-api-prod", { "stat": "Sum", "label": "Auth" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequests4xx", "EnvironmentName", "rt-billing-api-prod", { "stat": "Sum", "label": "Billing" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Erreurs HTTP 4xx (par minute)",
+        "period": 60,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Warning",
+              "value": 50
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 13,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ElasticBeanstalk", "ApplicationLatencyP99", "EnvironmentName", "rt-tms-sync-api-v2", { "stat": "Average", "label": "TMS Sync" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationLatencyP99", "EnvironmentName", "rt-affret-ia-api-prod", { "stat": "Average", "label": "Affret.IA" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationLatencyP99", "EnvironmentName", "rt-orders-api-prod-v2", { "stat": "Average", "label": "Orders" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationLatencyP99", "EnvironmentName", "rt-subscriptions-api-prod-v5", { "stat": "Average", "label": "Subscriptions" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationLatencyP99", "EnvironmentName", "rt-authz-api-prod", { "stat": "Average", "label": "Auth" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationLatencyP99", "EnvironmentName", "rt-billing-api-prod", { "stat": "Average", "label": "Billing" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Latence P99 (secondes)",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Warning",
+              "value": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 19,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ElasticBeanstalk", "ApplicationRequestsTotal", "EnvironmentName", "rt-tms-sync-api-v2", { "stat": "Sum", "label": "TMS Sync" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequestsTotal", "EnvironmentName", "rt-affret-ia-api-prod", { "stat": "Sum", "label": "Affret.IA" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequestsTotal", "EnvironmentName", "rt-orders-api-prod-v2", { "stat": "Sum", "label": "Orders" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequestsTotal", "EnvironmentName", "rt-subscriptions-api-prod-v5", { "stat": "Sum", "label": "Subscriptions" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequestsTotal", "EnvironmentName", "rt-authz-api-prod", { "stat": "Sum", "label": "Auth" } ],
+          [ "AWS/ElasticBeanstalk", "ApplicationRequestsTotal", "EnvironmentName", "rt-billing-api-prod", { "stat": "Sum", "label": "Billing" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Nombre de Requêtes (par minute)",
+        "period": 60,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 19,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/SES", "Send", { "stat": "Sum", "label": "Emails Envoyés" } ],
+          [ "AWS/SES", "Bounce", { "stat": "Sum", "label": "Bounces" } ],
+          [ "AWS/SES", "Complaint", { "stat": "Sum", "label": "Complaints" } ],
+          [ "AWS/SES", "Delivery", { "stat": "Sum", "label": "Délivrés" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "AWS SES - Métriques Email",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 25,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/SES", "Reputation.BounceRate", { "stat": "Average", "label": "Bounce Rate" } ],
+          [ "AWS/SES", "Reputation.ComplaintRate", { "stat": "Average", "label": "Complaint Rate" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "AWS SES - Taux de Réputation",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 0.1
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "label": "Bounce Rate Critical",
+              "value": 0.05
+            },
+            {
+              "label": "Complaint Rate Critical",
+              "value": 0.001
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 25,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/AmplifyHosting", "Requests", "App", "d1tb834u144p4r", { "stat": "Sum" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Frontend Amplify - Requêtes",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 31,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/AmplifyHosting", "BytesDownloaded", "App", "d1tb834u144p4r", { "stat": "Sum" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Frontend Amplify - Bande Passante (bytes)",
+        "period": 3600,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 31,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SYMPHONIA", "TMS-Sync-Success", { "stat": "Sum", "label": "Sync Réussis" } ],
+          [ "SYMPHONIA", "TMS-Sync-Failure", { "stat": "Sum", "label": "Sync Échoués" } ],
+          [ "SYMPHONIA", "TMS-Sync-Duration", { "stat": "Average", "label": "Durée Moyenne (ms)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "TMS Sync - Métriques Personnalisées",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 37,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SYMPHONIA", "Affret-IA-Requests", { "stat": "Sum", "label": "Requêtes IA" } ],
+          [ "SYMPHONIA", "Affret-IA-Success", { "stat": "Sum", "label": "Succès" } ],
+          [ "SYMPHONIA", "Affret-IA-Errors", { "stat": "Sum", "label": "Erreurs" } ],
+          [ "SYMPHONIA", "Affret-IA-Processing-Time", { "stat": "Average", "label": "Temps de Traitement (ms)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "eu-central-1",
+        "title": "Affret.IA - Métriques Personnalisées",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "log",
+      "x": 12,
+      "y": 37,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/elasticbeanstalk/rt-tms-sync-api-v2/var/log/nodejs/nodejs.log'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
+        "region": "eu-central-1",
+        "title": "TMS Sync - Dernières Erreurs",
+        "stacked": false
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 43,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/elasticbeanstalk/rt-affret-ia-api-prod/var/log/nodejs/nodejs.log'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
+        "region": "eu-central-1",
+        "title": "Affret.IA - Dernières Erreurs",
+        "stacked": false
+      }
+    },
+    {
+      "type": "log",
+      "x": 12,
+      "y": 43,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/elasticbeanstalk/rt-orders-api-prod-v2/var/log/nodejs/nodejs.log'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
+        "region": "eu-central-1",
+        "title": "Orders API - Dernières Erreurs",
+        "stacked": false
+      }
+    }
+  ]
+}
