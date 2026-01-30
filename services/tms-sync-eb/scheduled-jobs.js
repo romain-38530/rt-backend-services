@@ -10,6 +10,8 @@
 const INTERVALS = {
   AUTO_SYNC: 30 * 1000,           // 30 secondes - Sync haute frequence
   SYMPHONIA_SYNC: 60 * 1000,      // 1 minute - Sync transports avec tag Symphonia
+  CARRIERS_SYNC: 5 * 60 * 1000,   // 5 minutes - Sync carriers
+  VIGILANCE_UPDATE: 60 * 60 * 1000, // 1 heure - Mise à jour vigilance
   HEALTH_CHECK: 5 * 60 * 1000,    // 5 minutes - Verification connexions
   CLEANUP_LOGS: 24 * 60 * 60 * 1000 // 24 heures - Nettoyage logs anciens
 };
@@ -129,8 +131,83 @@ async function runHealthCheck() {
 }
 
 /**
- * Synchronisation automatique des transports avec tag Symphonia
+ * Synchronisation des carriers depuis Dashdoc
  * Execute toutes les 5 minutes
+ */
+async function runCarriersSync() {
+  if (!db || !tmsService) return;
+
+  try {
+    console.log('🔄 [CRON] Running carriers sync...');
+
+    const connection = await db.collection('tmsConnections').findOne({
+      tmsType: 'dashdoc',
+      isActive: true
+    });
+
+    if (!connection) {
+      console.warn('⚠️  [CRON] No active Dashdoc connection');
+      return;
+    }
+
+    const DashdocConnector = require('./connectors/dashdoc.connector');
+    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
+      baseUrl: connection.credentials.apiUrl
+    });
+
+    // Récupérer carriers avec stats
+    console.log('[CRON CARRIERS] Fetching carriers with stats...');
+    const result = await dashdoc.syncCarriersWithStats({ limit: 500 });
+
+    let synced = 0;
+    for (const carrier of result.results) {
+      await db.collection('carriers').updateOne(
+        { externalId: carrier.externalId },
+        {
+          $set: {
+            ...carrier,
+            lastSyncAt: new Date(),
+            tmsConnectionId: connection._id.toString()
+          }
+        },
+        { upsert: true }
+      );
+      synced++;
+    }
+
+    console.log(`✅ [CRON CARRIERS] ${synced} carriers synchronized`);
+  } catch (error) {
+    console.error('❌ [CRON CARRIERS] Error:', error.message);
+  }
+}
+
+/**
+ * Mise à jour des scores de vigilance
+ * Execute toutes les heures
+ */
+async function runVigilanceUpdate() {
+  if (!db) return;
+
+  try {
+    console.log('🔄 [CRON] Running vigilance update...');
+
+    const VigilanceService = require('./services/vigilance.service');
+    const vigilanceService = new VigilanceService(db);
+
+    const result = await vigilanceService.updateAllVigilanceScores();
+    console.log(`✅ [CRON VIGILANCE] ${result.updated}/${result.total} carriers updated`);
+
+    if (result.failed > 0) {
+      console.warn(`⚠️  [CRON VIGILANCE] ${result.failed} failures`);
+    }
+  } catch (error) {
+    console.error('❌ [CRON VIGILANCE] Error:', error.message);
+  }
+}
+
+/**
+ * Synchronisation automatique des transports avec tag Symphonia
+ * Execute toutes les 1 minute
  */
 async function runSymphoniaSync() {
   if (!db) return;
@@ -244,11 +321,15 @@ function startAllJobs(database, tmsServiceInstance) {
   // Demarrer les jobs avec leurs intervalles respectifs
   jobIntervals.autoSync = setInterval(runAutoSync, INTERVALS.AUTO_SYNC);
   jobIntervals.symphoniaSync = setInterval(runSymphoniaSync, INTERVALS.SYMPHONIA_SYNC);
+  jobIntervals.carriersSync = setInterval(runCarriersSync, INTERVALS.CARRIERS_SYNC);
+  jobIntervals.vigilanceUpdate = setInterval(runVigilanceUpdate, INTERVALS.VIGILANCE_UPDATE);
   jobIntervals.healthCheck = setInterval(runHealthCheck, INTERVALS.HEALTH_CHECK);
   jobIntervals.cleanupLogs = setInterval(runCleanupLogs, INTERVALS.CLEANUP_LOGS);
 
   console.log('✅ [CRON] autoSync: every 30 seconds (HIGH FREQUENCY)');
   console.log('✅ [CRON] symphoniaSync: every 1 minute (TAG SYMPHONIA)');
+  console.log('✅ [CRON] carriersSync: every 5 minutes (CARRIERS)');
+  console.log('✅ [CRON] vigilanceUpdate: every 1 hour (VIGILANCE SCORES)');
   console.log('✅ [CRON] healthCheck: every 5 minutes');
   console.log('✅ [CRON] cleanupLogs: every 24 hours');
   console.log('============================================================================');
@@ -305,6 +386,18 @@ function getJobsStatus() {
         active: !!jobIntervals.symphoniaSync,
         description: 'Sync transports with Symphonia tag'
       },
+      carriersSync: {
+        interval: '5 minutes',
+        intervalMs: INTERVALS.CARRIERS_SYNC,
+        active: !!jobIntervals.carriersSync,
+        description: 'Sync carriers from Dashdoc'
+      },
+      vigilanceUpdate: {
+        interval: '1 hour',
+        intervalMs: INTERVALS.VIGILANCE_UPDATE,
+        active: !!jobIntervals.vigilanceUpdate,
+        description: 'Update vigilance scores for all carriers'
+      },
       healthCheck: {
         interval: '5 minutes',
         intervalMs: INTERVALS.HEALTH_CHECK,
@@ -328,6 +421,8 @@ async function runJobManually(jobName) {
   const jobs = {
     autoSync: runAutoSync,
     symphoniaSync: runSymphoniaSync,
+    carriersSync: runCarriersSync,
+    vigilanceUpdate: runVigilanceUpdate,
     healthCheck: runHealthCheck,
     cleanupLogs: runCleanupLogs
   };
@@ -363,6 +458,8 @@ module.exports = {
   runJobManually,
   runAutoSync,
   runSymphoniaSync,
+  runCarriersSync,
+  runVigilanceUpdate,
   runHealthCheck,
   runCleanupLogs
 };

@@ -21,6 +21,7 @@ const helmet = require('helmet');
 const { MongoClient, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 const TMSConnectionService = require('./services/tms-connection.service');
+const VigilanceService = require('./services/vigilance.service');
 const DashdocConnector = require('./connectors/dashdoc.connector');
 const scheduledJobs = require('./scheduled-jobs');
 
@@ -33,6 +34,7 @@ let db = null;
 let mongoClient = null;
 let mongoConnected = false;
 let tmsService = null;
+let vigilanceService = null;
 
 async function connectMongoDB() {
   if (!process.env.MONGODB_URI) {
@@ -49,6 +51,9 @@ async function connectMongoDB() {
     // Initialiser le service TMS
     tmsService = new TMSConnectionService(db);
     await tmsService.init();
+
+    // Initialiser le service de vigilance
+    vigilanceService = new VigilanceService(db);
 
     console.log('Connected to MongoDB');
     return true;
@@ -103,8 +108,8 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.2.0',
-    features: ['dashdoc', 'auto-sync', 'real-time-counters'],
+    version: '2.3.0',
+    features: ['dashdoc', 'auto-sync', 'real-time-counters', 'carriers', 'vigilance'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected
@@ -131,8 +136,9 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.2.0',
+    version: '2.3.0',
     supportedTMS: ['dashdoc'],
+    features: ['carriers', 'vigilance', 'orders', 'real-time-sync'],
     endpoints: [
       'GET /health',
       'POST /api/v1/tms/connections',
@@ -145,7 +151,13 @@ app.get('/', (req, res) => {
       'GET /api/v1/tms/connections/:id/logs',
       'GET /api/v1/tms/connections/:id/counters',
       'GET /api/v1/tms/connections/:id/data/:type',
-      'POST /api/v1/tms/test-token'
+      'POST /api/v1/tms/test-token',
+      'GET /api/v1/tms/carriers',
+      'GET /api/v1/tms/carriers/:id',
+      'GET /api/v1/tms/carriers/:id/vigilance',
+      'POST /api/v1/tms/carriers/:id/vigilance/update',
+      'POST /api/v1/tms/carriers/vigilance/update-all',
+      'GET /api/v1/tms/carriers/vigilance/stats'
     ]
   });
 });
@@ -713,6 +725,162 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
   }
 });
 
+// ==================== CARRIERS ROUTES ====================
+
+/**
+ * GET /api/v1/tms/carriers
+ * Récupérer tous les transporteurs synchronisés
+ */
+app.get('/api/v1/tms/carriers', requireMongo, async (req, res) => {
+  try {
+    const { limit = 50, skip = 0, search, status, level } = req.query;
+
+    const query = { externalSource: 'dashdoc' };
+
+    // Recherche par nom ou SIRET
+    if (search) {
+      query.$or = [
+        { companyName: { $regex: search, $options: 'i' } },
+        { legalName: { $regex: search, $options: 'i' } },
+        { siret: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Filtre par statut
+    if (status) {
+      query.status = status;
+    }
+
+    // Filtre par niveau de vigilance
+    if (level) {
+      query.vigilanceLevel = level;
+    }
+
+    const [carriers, total] = await Promise.all([
+      db.collection('carriers')
+        .find(query)
+        .sort({ companyName: 1 })
+        .skip(parseInt(skip))
+        .limit(parseInt(limit))
+        .toArray(),
+      db.collection('carriers').countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      total,
+      limit: parseInt(limit),
+      skip: parseInt(skip),
+      carriers
+    });
+  } catch (error) {
+    console.error('[GET Carriers] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/carriers/:id
+ * Récupérer un transporteur par ID
+ */
+app.get('/api/v1/tms/carriers/:id', requireMongo, async (req, res) => {
+  try {
+    const carrier = await db.collection('carriers').findOne({
+      _id: new ObjectId(req.params.id)
+    });
+
+    if (!carrier) {
+      return res.status(404).json({ error: 'Carrier not found' });
+    }
+
+    res.json({ success: true, carrier });
+  } catch (error) {
+    console.error('[GET Carrier] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/carriers/:id/vigilance
+ * Calculer et récupérer le score de vigilance d'un carrier
+ */
+app.get('/api/v1/tms/carriers/:id/vigilance', requireMongo, async (req, res) => {
+  try {
+    if (!vigilanceService) {
+      return res.status(503).json({ error: 'Vigilance service not available' });
+    }
+
+    const vigilance = await vigilanceService.calculateVigilanceScore(req.params.id);
+    res.json({ success: true, vigilance });
+  } catch (error) {
+    console.error('[GET Vigilance] Error:', error.message);
+    if (error.message === 'Carrier not found') {
+      res.status(404).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
+});
+
+/**
+ * POST /api/v1/tms/carriers/:id/vigilance/update
+ * Mettre à jour le score de vigilance d'un carrier
+ */
+app.post('/api/v1/tms/carriers/:id/vigilance/update', requireMongo, async (req, res) => {
+  try {
+    if (!vigilanceService) {
+      return res.status(503).json({ error: 'Vigilance service not available' });
+    }
+
+    const result = await vigilanceService.updateCarrierVigilance(req.params.id);
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+
+    res.json({ success: true, vigilance: result.vigilance });
+  } catch (error) {
+    console.error('[Update Vigilance] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/tms/carriers/vigilance/update-all
+ * Recalculer les scores de vigilance de tous les carriers
+ */
+app.post('/api/v1/tms/carriers/vigilance/update-all', requireMongo, async (req, res) => {
+  try {
+    if (!vigilanceService) {
+      return res.status(503).json({ error: 'Vigilance service not available' });
+    }
+
+    const result = await vigilanceService.updateAllVigilanceScores();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[Update All Vigilance] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/carriers/vigilance/stats
+ * Statistiques globales de vigilance
+ */
+app.get('/api/v1/tms/carriers/vigilance/stats', requireMongo, async (req, res) => {
+  try {
+    if (!vigilanceService) {
+      return res.status(503).json({ error: 'Vigilance service not available' });
+    }
+
+    const stats = await vigilanceService.getVigilanceStats();
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('[Vigilance Stats] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * Récupérer une commande spécifique par son ID
  * GET /api/v1/tms/orders/:id?tag=Symphonia
@@ -1124,7 +1292,7 @@ async function startServer() {
   await connectMongoDB();
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RT TMS Sync API v2.2.0 listening on port ${PORT}`);
+    console.log(`RT TMS Sync API v2.3.0 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`MongoDB: ${mongoConnected ? 'Connected' : 'Not connected'}`);
 
