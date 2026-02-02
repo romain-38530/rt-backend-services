@@ -1648,6 +1648,387 @@ app.post('/api/checkout/create-session', async (req, res) => {
 
 // ==================== END STRIPE PAYMENT ROUTES ====================
 
+// ==================== TEAM MEMBERS (SUBUSERS) ROUTES ====================
+
+// Subscription limits for team members
+const TEAM_LIMITS = {
+  free: 1,
+  starter: 3,
+  pro: 10,
+  business: 25,
+  premium: 100,
+  transporteur_premium: 100,
+  enterprise: -1  // unlimited
+};
+
+// GET /api/subusers - List team members (users with same carrierId)
+app.get('/api/subusers', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const currentUser = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, error: 'User not found' });
+    }
+
+    // Get team members: users with same carrierId
+    let teamMembers = [];
+
+    if (currentUser.carrierId) {
+      teamMembers = await db.collection('users').find({
+        carrierId: currentUser.carrierId,
+        _id: { $ne: currentUser._id } // Exclude current user
+      }).sort({ createdAt: -1 }).toArray();
+    }
+
+    // Also get invited subusers (not yet registered)
+    const invitedSubUsers = await db.collection('subusers').find({
+      parentUserId: currentUser._id,
+      status: 'pending'
+    }).toArray();
+
+    // Combine team members and invited users
+    const allMembers = [
+      ...teamMembers.map(u => ({
+        id: u._id.toString(),
+        email: u.email,
+        firstName: u.firstName || u.name?.split(' ')[0] || '',
+        lastName: u.lastName || u.name?.split(' ').slice(1).join(' ') || '',
+        accessLevel: u.role === 'admin' ? 'admin' : (u.accessLevel || 'editor'),
+        status: 'active',
+        invitedAt: u.createdAt?.toISOString() || new Date().toISOString()
+      })),
+      ...invitedSubUsers.map(u => ({
+        id: u._id.toString(),
+        email: u.email,
+        firstName: u.firstName || '',
+        lastName: u.lastName || '',
+        accessLevel: u.accessLevel || 'reader',
+        status: 'pending',
+        invitedAt: u.createdAt?.toISOString() || new Date().toISOString()
+      }))
+    ];
+
+    // Calculate limits based on subscription
+    const plan = currentUser.subscription?.plan || currentUser.subscription?.tier || 'free';
+    const maxMembers = TEAM_LIMITS[plan] ?? TEAM_LIMITS.free;
+    const currentCount = allMembers.length;
+
+    res.json({
+      success: true,
+      data: {
+        subUsers: allMembers,
+        limit: {
+          current: currentCount,
+          max: maxMembers,
+          remaining: maxMembers === -1 ? 999 : Math.max(0, maxMembers - currentCount),
+          plan: plan,
+          canAdd: maxMembers === -1 || currentCount < maxMembers
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/subusers - Invite a new team member
+app.post('/api/subusers', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const currentUser = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, error: 'User not found' });
+    }
+
+    const { email, firstName, lastName, accessLevel } = req.body;
+
+    if (!email || !firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email, firstName et lastName sont requis'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await db.collection('users').findOne({
+      email: email.toLowerCase()
+    });
+
+    if (existingUser) {
+      // If same carrier, they're already a team member
+      if (existingUser.carrierId === currentUser.carrierId) {
+        return res.status(409).json({
+          success: false,
+          error: 'Cet utilisateur fait deja partie de votre equipe'
+        });
+      }
+      return res.status(409).json({
+        success: false,
+        error: 'Un compte existe deja avec cet email'
+      });
+    }
+
+    // Check for pending invitation
+    const existingInvite = await db.collection('subusers').findOne({
+      email: email.toLowerCase(),
+      parentUserId: currentUser._id
+    });
+
+    if (existingInvite) {
+      return res.status(409).json({
+        success: false,
+        error: 'Une invitation est deja en attente pour cet email'
+      });
+    }
+
+    // Create invitation
+    const crypto = require('crypto');
+    const inviteToken = crypto.randomBytes(32).toString('hex');
+
+    const newInvite = {
+      parentUserId: currentUser._id,
+      carrierId: currentUser.carrierId,
+      carrierName: currentUser.carrierName || currentUser.companyName,
+      email: email.toLowerCase().trim(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      accessLevel: accessLevel || 'reader',
+      status: 'pending',
+      inviteToken,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('subusers').insertOne(newInvite);
+
+    console.log(`[TEAM] New member invited: ${email} to ${currentUser.carrierName} by ${currentUser.email}`);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: result.insertedId.toString(),
+        email: newInvite.email,
+        firstName: newInvite.firstName,
+        lastName: newInvite.lastName,
+        accessLevel: newInvite.accessLevel,
+        status: 'pending'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error inviting team member:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/subusers/:id - Update a team member
+app.put('/api/subusers/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const currentUser = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, error: 'User not found' });
+    }
+
+    const { id } = req.params;
+    const { firstName, lastName, accessLevel } = req.body;
+
+    // Try to find in subusers first (pending invitations)
+    let subUser = await db.collection('subusers').findOne({
+      _id: new ObjectId(id),
+      parentUserId: currentUser._id
+    });
+
+    if (subUser) {
+      // Update subuser
+      const updateData = { updatedAt: new Date() };
+      if (firstName) updateData.firstName = firstName.trim();
+      if (lastName) updateData.lastName = lastName.trim();
+      if (accessLevel) updateData.accessLevel = accessLevel;
+
+      await db.collection('subusers').updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updateData }
+      );
+
+      return res.json({ success: true, data: { id, ...updateData } });
+    }
+
+    // Try to find in users (active team members)
+    const teamMember = await db.collection('users').findOne({
+      _id: new ObjectId(id),
+      carrierId: currentUser.carrierId
+    });
+
+    if (!teamMember) {
+      return res.status(404).json({ success: false, error: 'Membre non trouve' });
+    }
+
+    // Update user
+    const updateData = { updatedAt: new Date() };
+    if (firstName) updateData.firstName = firstName.trim();
+    if (lastName) updateData.lastName = lastName.trim();
+    if (accessLevel) updateData.accessLevel = accessLevel;
+
+    await db.collection('users').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    console.log(`[TEAM] Member updated: ${teamMember.email} by ${currentUser.email}`);
+
+    res.json({ success: true, data: { id, ...updateData } });
+
+  } catch (error) {
+    console.error('Error updating team member:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/subusers/:id - Remove a team member
+app.delete('/api/subusers/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const currentUser = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, error: 'User not found' });
+    }
+
+    const { id } = req.params;
+
+    // Try to delete from subusers first (pending invitations)
+    const subUserResult = await db.collection('subusers').deleteOne({
+      _id: new ObjectId(id),
+      parentUserId: currentUser._id
+    });
+
+    if (subUserResult.deletedCount > 0) {
+      console.log(`[TEAM] Invitation deleted: ${id} by ${currentUser.email}`);
+      return res.json({ success: true });
+    }
+
+    // For active team members, just remove their carrierId (don't delete account)
+    const teamMember = await db.collection('users').findOne({
+      _id: new ObjectId(id),
+      carrierId: currentUser.carrierId
+    });
+
+    if (!teamMember) {
+      return res.status(404).json({ success: false, error: 'Membre non trouve' });
+    }
+
+    // Remove from team by clearing carrierId
+    await db.collection('users').updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $unset: { carrierId: '', carrierName: '' },
+        $set: { updatedAt: new Date() }
+      }
+    );
+
+    console.log(`[TEAM] Member removed from team: ${teamMember.email} by ${currentUser.email}`);
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Error removing team member:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/subusers/:id/resend-invite - Resend invitation
+app.post('/api/subusers/:id/resend-invite', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const currentUser = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, error: 'User not found' });
+    }
+
+    const { id } = req.params;
+
+    const subUser = await db.collection('subusers').findOne({
+      _id: new ObjectId(id),
+      parentUserId: currentUser._id
+    });
+
+    if (!subUser) {
+      return res.status(404).json({ success: false, error: 'Invitation non trouvee' });
+    }
+
+    // Generate new token
+    const crypto = require('crypto');
+    const newToken = crypto.randomBytes(32).toString('hex');
+
+    await db.collection('subusers').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { inviteToken: newToken, updatedAt: new Date() } }
+    );
+
+    console.log(`[TEAM] Invitation resent: ${subUser.email} by ${currentUser.email}`);
+
+    res.json({ success: true, message: 'Invitation renvoyee' });
+
+  } catch (error) {
+    console.error('Error resending invitation:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== END TEAM MEMBERS ROUTES ====================
+
 // Start server
 async function startServer() {
   await connectMongoDB();
