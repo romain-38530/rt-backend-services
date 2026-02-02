@@ -73,3 +73,6 @@ test-*.ps1
 !**/seeds/**
 !**/tests/**
 !**/__tests__/**
+.env.deploy.local
+deploy/*.log
+deploy/deploy_*.log
