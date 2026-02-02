@@ -1496,11 +1496,16 @@ app.use((err, req, res, next) => {
 
 // Start server
 async function startServer() {
-  await connectMongoDB();
-
+  // Start server FIRST, then try MongoDB
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`RT TMS Sync API v2.3.0 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`MongoDB: Connecting...`);
+  });
+
+  // Try MongoDB connection (non-blocking)
+  try {
+    await connectMongoDB();
     console.log(`MongoDB: ${mongoConnected ? 'Connected' : 'Not connected'}`);
 
     // Demarrer les jobs scheduled si MongoDB connecte
@@ -1510,7 +1515,13 @@ async function startServer() {
     } else {
       console.warn('⚠️  Scheduled jobs NOT started - MongoDB not connected');
     }
-  });
+  } catch (error) {
+    console.error('MongoDB connection failed:', error.message);
+    console.warn('⚠️  Server running without MongoDB');
+  }
 }
 
-startServer();
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

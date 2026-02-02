@@ -98,6 +98,52 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
+// Reset password (admin only - secured by secret)
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { email, newPassword, adminSecret } = req.body;
+
+    // Vérifier le secret admin
+    const expectedSecret = process.env.ADMIN_RESET_SECRET || 'symphonia-admin-reset-2026';
+    if (adminSecret !== expectedSecret) {
+      return res.status(403).json({ message: 'Invalid admin secret' });
+    }
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ message: 'Email and newPassword are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update password (pre-save hook will hash it)
+    user.password = newPassword;
+    await user.save();
+
+    console.log(`[Auth] Password reset for user: ${email}`);
+
+    res.status(200).json({
+      message: 'Password reset successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        portal: user.portal,
+      },
+    });
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: error.message || 'Internal server error' });
+  }
+});
+
 // Get current user
 router.get('/me', async (req: Request, res: Response) => {
   try {

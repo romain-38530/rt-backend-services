@@ -1,0 +1,30 @@
+{
+  "startTime": "2026-02-02T13:31:37.058Z",
+  "phases": [
+    {
+      "name": "Inscription Industriel",
+      "success": true,
+      "duration": 277,
+      "data": {
+        "industrielId": "6980a73a74eb3b94fb97f8c2",
+        "email": "acme-1770039097059-fhqji@symphonia-test.com",
+        "name": "AcmeCorp Test E2E"
+      }
+    },
+    {
+      "name": "Invitation Transporteurs",
+      "success": false,
+      "duration": 81,
+      "error": "Assertion failed: Réponse invitation valide"
+    }
+  ],
+  "success": false,
+  "errors": [
+    {
+      "phase": "Invitation Transporteurs",
+      "error": "Assertion failed: Réponse invitation valide",
+      "stack": "Error: Assertion failed: Réponse invitation valide\n    at assert (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\utils\\test-helpers.js:12:11)\n    at testPhase2_InvitationTransporteurs (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-e2e-grandeur-nature.cjs:175:7)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async runE2ETest (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-e2e-grandeur-nature.cjs:729:5)"
+    }
+  ],
+  "stats": {}
+}

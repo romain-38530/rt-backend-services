@@ -1,0 +1,367 @@
+/**
+ * Routes AFFRET.IA API v2
+ * Toutes les routes pour le module d'affretement intelligent
+ *
+ * Endpoints (39 total):
+ * - Session Management: /trigger, /session/:id, /sessions, /sessions/industrial/:industrialId
+ * - Analyse IA: /analyze
+ * - Diffusion: /broadcast, /bourse
+ * - Propositions: /response, /proposals, /proposals/:id/history
+ * - Selection: /select, /ranking, /decision
+ * - Assignation: /assign
+ * - Vigilance: /vigilance
+ * - Tracking IA: /tracking (3 niveaux: Basic/Intermediate/Premium)
+ * - Blacklist: /blacklist
+ * - Stats & Reporting: /stats, /campaigns/:id
+ */
+
+const express = require('express');
+const router = express.Router();
+const affretiaController = require('../controllers/affretia.controller');
+
+// ==================== SESSION MANAGEMENT ====================
+
+/**
+ * POST /api/v1/affretia/trigger
+ * Declencher AFFRET.IA pour une commande
+ */
+router.post('/trigger', affretiaController.triggerAffretIA);
+
+/**
+ * GET /api/v1/affretia/session/:id
+ * Obtenir les details d'une session
+ */
+router.get('/session/:id', affretiaController.getSession);
+
+/**
+ * GET /api/v1/affretia/sessions/industrial/:industrialId
+ * Liste des sessions AFFRET.IA pour un industriel specifique
+ */
+router.get('/sessions/industrial/:industrialId', affretiaController.getIndustrialSessions);
+
+/**
+ * GET /api/v1/affretia/sessions
+ * Liste des sessions AFFRET.IA
+ */
+router.get('/sessions', affretiaController.getSessions);
+
+// ==================== ANALYSE IA ====================
+
+/**
+ * POST /api/v1/affretia/analyze
+ * Lancer l'analyse IA d'une commande
+ */
+router.post('/analyze', affretiaController.analyzeOrder);
+
+// ==================== DIFFUSION ====================
+
+/**
+ * POST /api/v1/affretia/broadcast
+ * Lancer la diffusion multi-canal
+ */
+router.post('/broadcast', affretiaController.broadcastToCarriers);
+
+// ==================== BOURSE PUBLIQUE ====================
+
+/**
+ * GET /api/v1/affretia/bourse
+ * Consulter les offres disponibles (endpoint public)
+ */
+router.get('/bourse', affretiaController.getBourseOffers);
+
+/**
+ * POST /api/v1/affretia/bourse/submit
+ * Soumettre une proposition via la bourse
+ */
+router.post('/bourse/submit', affretiaController.submitBourseProposal);
+
+// ==================== PROPOSITIONS ====================
+
+/**
+ * POST /api/v1/affretia/response
+ * Enregistrer une reponse de transporteur
+ */
+router.post('/response', affretiaController.recordCarrierResponse);
+
+/**
+ * GET /api/v1/affretia/proposals/:sessionId
+ * Liste des propositions pour une session
+ */
+router.get('/proposals/:sessionId', affretiaController.getProposals);
+
+/**
+ * PUT /api/v1/affretia/proposals/:proposalId/accept
+ * Accepter une proposition manuellement
+ */
+router.put('/proposals/:proposalId/accept', affretiaController.acceptProposal);
+
+/**
+ * PUT /api/v1/affretia/proposals/:proposalId/reject
+ * Rejeter une proposition manuellement
+ */
+router.put('/proposals/:proposalId/reject', affretiaController.rejectProposal);
+
+/**
+ * POST /api/v1/affretia/proposals/:proposalId/negotiate
+ * Lancer une negociation sur une proposition
+ */
+router.post('/proposals/:proposalId/negotiate', affretiaController.negotiateProposal);
+
+/**
+ * GET /api/v1/affretia/proposals/:proposalId/history
+ * Obtenir l'historique de negociation d'une proposition
+ */
+router.get('/proposals/:proposalId/history', affretiaController.getProposalHistory);
+
+// ==================== SELECTION ====================
+
+/**
+ * POST /api/v1/affretia/select
+ * Selectionner automatiquement le meilleur transporteur
+ */
+router.post('/select', affretiaController.selectBestCarrier);
+
+/**
+ * GET /api/v1/affretia/ranking/:sessionId
+ * Classement des propositions
+ */
+router.get('/ranking/:sessionId', affretiaController.getRanking);
+
+/**
+ * GET /api/v1/affretia/decision/:sessionId
+ * Obtenir la decision/recommandation IA pour une session
+ */
+router.get('/decision/:sessionId', affretiaController.getDecision);
+
+// ==================== ASSIGNATION ====================
+
+/**
+ * POST /api/v1/affretia/assign
+ * Assigner la mission au transporteur selectionne
+ */
+router.post('/assign', affretiaController.assignCarrier);
+
+// ==================== VIGILANCE ====================
+
+/**
+ * POST /api/v1/affretia/vigilance/check
+ * Verifier la conformite d'un transporteur
+ */
+router.post('/vigilance/check', affretiaController.checkVigilance);
+
+/**
+ * GET /api/v1/affretia/vigilance/:carrierId
+ * Obtenir le statut de vigilance d'un transporteur
+ */
+router.get('/vigilance/:carrierId', affretiaController.getVigilanceStatus);
+
+// ==================== STATS & REPORTING ====================
+
+/**
+ * GET /api/v1/affretia/stats
+ * Statistiques globales AFFRET.IA
+ */
+router.get('/stats', affretiaController.getStats);
+
+/**
+ * GET /api/v1/affretia/stats/:organizationId
+ * Statistiques par organisation
+ */
+router.get('/stats/:organizationId', affretiaController.getOrganizationStats);
+
+/**
+ * GET /api/v1/affretia/campaigns/:campaignId
+ * Obtenir les details d'une campagne de diffusion
+ */
+router.get('/campaigns/:campaignId', affretiaController.getCampaign);
+
+// ==================== TRACKING IA ====================
+// IMPORTANT: Routes specifiques AVANT routes avec parametres
+
+/**
+ * GET /api/v1/affretia/tracking/levels
+ * Obtenir les niveaux de tracking disponibles
+ */
+router.get('/tracking/levels', affretiaController.getTrackingLevels);
+
+/**
+ * POST /api/v1/affretia/tracking/configure
+ * Configurer le tracking pour une commande (Basic/Intermediate/Premium)
+ */
+router.post('/tracking/configure', affretiaController.configureTracking);
+
+/**
+ * GET /api/v1/affretia/tracking/eta/:orderId
+ * Obtenir l'ETA predictif d'une commande
+ */
+router.get('/tracking/eta/:orderId', affretiaController.getETA);
+
+/**
+ * PUT /api/v1/affretia/tracking/alerts/:alertId/acknowledge
+ * Reconnaitre une alerte
+ */
+router.put('/tracking/alerts/:alertId/acknowledge', affretiaController.acknowledgeAlert);
+
+/**
+ * PUT /api/v1/affretia/tracking/alerts/:alertId/resolve
+ * Resoudre une alerte
+ */
+router.put('/tracking/alerts/:alertId/resolve', affretiaController.resolveAlert);
+
+/**
+ * GET /api/v1/affretia/tracking/:orderId
+ * Obtenir les infos de tracking d'une commande
+ */
+router.get('/tracking/:orderId', affretiaController.getTracking);
+
+/**
+ * POST /api/v1/affretia/tracking/:trackingId/position
+ * Mettre a jour la position GPS
+ */
+router.post('/tracking/:trackingId/position', affretiaController.updateTrackingPosition);
+
+/**
+ * PUT /api/v1/affretia/tracking/:trackingId/status
+ * Mettre a jour le statut manuellement (niveau Basic)
+ */
+router.put('/tracking/:trackingId/status', affretiaController.updateTrackingStatus);
+
+/**
+ * GET /api/v1/affretia/tracking/:trackingId/alerts
+ * Obtenir les alertes actives d'un tracking
+ */
+router.get('/tracking/:trackingId/alerts', affretiaController.getTrackingAlerts);
+
+// ==================== BLACKLIST ====================
+
+/**
+ * GET /api/v1/affretia/blacklist
+ * Liste des transporteurs blacklistes
+ */
+router.get('/blacklist', affretiaController.getBlacklist);
+
+/**
+ * POST /api/v1/affretia/blacklist
+ * Ajouter un transporteur a la blacklist
+ */
+router.post('/blacklist', affretiaController.addToBlacklist);
+
+/**
+ * DELETE /api/v1/affretia/blacklist/:carrierId
+ * Retirer un transporteur de la blacklist
+ */
+router.delete('/blacklist/:carrierId', affretiaController.removeFromBlacklist);
+
+/**
+ * GET /api/v1/affretia/blacklist/:carrierId
+ * Verifier si un transporteur est blackliste
+ */
+router.get('/blacklist/:carrierId', affretiaController.checkBlacklist);
+
+// ==================== PROSPECTION COMMERCIALE ====================
+
+/**
+ * POST /api/v1/affretia/prospection/sync
+ * Synchroniser les transporteurs depuis B2PWeb
+ */
+router.post('/prospection/sync', affretiaController.syncProspects);
+
+/**
+ * GET /api/v1/affretia/prospection/prospects
+ * Liste des prospects avec filtres
+ */
+router.get('/prospection/prospects', affretiaController.getProspects);
+
+/**
+ * GET /api/v1/affretia/prospection/prospects/:id
+ * Details d'un prospect
+ */
+router.get('/prospection/prospects/:id', affretiaController.getProspect);
+
+/**
+ * POST /api/v1/affretia/prospection/find-matches
+ * Trouver des prospects pour un transport non pris
+ */
+router.post('/prospection/find-matches', affretiaController.findProspectMatches);
+
+/**
+ * POST /api/v1/affretia/prospection/campaign
+ * Lancer une campagne de prospection pour un transport
+ */
+router.post('/prospection/campaign', affretiaController.launchProspectionCampaign);
+
+/**
+ * POST /api/v1/affretia/prospection/email/:prospectId
+ * Envoyer un email de prospection a un prospect
+ */
+router.post('/prospection/email/:prospectId', affretiaController.sendProspectionEmail);
+
+/**
+ * POST /api/v1/affretia/prospection/trial/:prospectId/activate
+ * Activer l'essai gratuit pour un prospect
+ */
+router.post('/prospection/trial/:prospectId/activate', affretiaController.activateTrial);
+
+/**
+ * POST /api/v1/affretia/prospection/trial/:prospectId/use
+ * Utiliser un transport gratuit
+ */
+router.post('/prospection/trial/:prospectId/use', affretiaController.useTrialTransport);
+
+/**
+ * POST /api/v1/affretia/prospection/convert/:prospectId
+ * Convertir un prospect en Premium
+ */
+router.post('/prospection/convert/:prospectId', affretiaController.convertToPremium);
+
+/**
+ * POST /api/v1/affretia/prospection/conversion-email/:prospectId
+ * Envoyer email de relance conversion
+ */
+router.post('/prospection/conversion-email/:prospectId', affretiaController.sendConversionEmail);
+
+/**
+ * GET /api/v1/affretia/prospection/stats
+ * Statistiques de prospection
+ */
+router.get('/prospection/stats', affretiaController.getProspectionStats);
+
+// ==================== PRICING & MARKET INTELLIGENCE ====================
+
+/**
+ * POST /api/v1/affretia/price-history
+ * Récupérer l'historique des prix pour une ligne
+ */
+router.post('/price-history', affretiaController.getPriceHistory);
+
+/**
+ * GET /api/v1/affretia/preferred-subcontractors
+ * Récupérer les sous-traitants préférés avec leurs prix moyens
+ */
+router.get('/preferred-subcontractors', affretiaController.getPreferredSubcontractors);
+
+/**
+ * POST /api/v1/affretia/search-carriers
+ * Rechercher des transporteurs disponibles avec scraping
+ */
+router.post('/search-carriers', affretiaController.searchCarriers);
+
+/**
+ * POST /api/v1/affretia/record-price
+ * Enregistrer un prix négocié dans l'historique
+ */
+router.post('/record-price', affretiaController.recordPrice);
+
+/**
+ * POST /api/v1/affretia/import/dashdoc
+ * Importer l'historique des prix depuis Dashdoc
+ */
+router.post('/import/dashdoc', affretiaController.importDashdocPrices);
+
+/**
+ * POST /api/v1/affretia/calculate-target-price
+ * Calculer le prix cible de négociation basé sur le marché
+ */
+router.post('/calculate-target-price', affretiaController.calculateTargetPrice);
+
+module.exports = router;

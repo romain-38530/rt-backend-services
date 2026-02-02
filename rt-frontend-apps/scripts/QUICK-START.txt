@@ -1,0 +1,195 @@
+================================================================================
+  GUIDE DE DÉMARRAGE RAPIDE - INVALIDATION CLOUDFRONT
+================================================================================
+
+PROBLÈME:
+  Le site transporteur.symphonia-controltower.com sert l'ancien bundle
+  JavaScript (787220852185cf1e.js) malgré les déploiements.
+
+SOLUTION:
+  Invalider le cache CloudFront avec ces scripts.
+
+================================================================================
+  MÉTHODE 1: SCRIPT RAPIDE (Recommandé)
+================================================================================
+
+  1. Ouvrir PowerShell dans ce dossier
+
+  2. Exécuter:
+     .\quick-invalidate.ps1
+
+  3. Attendre 5-15 minutes
+
+  4. Tester le site
+
+================================================================================
+  MÉTHODE 2: SCRIPT COMPLET
+================================================================================
+
+  1. Tester la configuration (première fois uniquement):
+     .\test-cloudfront-setup.ps1
+
+  2. Invalider avec suivi:
+     .\invalidate-cloudfront.ps1 -Wait
+
+  3. Vérifier la mise à jour:
+     .\verify-bundle-update.ps1
+
+================================================================================
+  MÉTHODE 3: CONSOLE AWS (Sans script)
+================================================================================
+
+  1. Ouvrir: https://console.aws.amazon.com/cloudfront/
+
+  2. Trouver la distribution: d3fy85w9zy25oo.cloudfront.net
+
+  3. Onglet "Invalidations" → "Create invalidation"
+
+  4. Entrer les chemins:
+     /*
+     /_next/static/*
+     /_next/static/chunks/*
+
+  5. "Create invalidation"
+
+  6. Attendre status "Completed"
+
+================================================================================
+  VÉRIFICATION APRÈS INVALIDATION
+================================================================================
+
+  1. Attendre 5-15 minutes
+
+  2. Ouvrir le navigateur en mode privé
+
+  3. Aller sur: https://transporteur.symphonia-controltower.com
+
+  4. F12 → Network → Vérifier les fichiers .js chargés
+
+  5. L'ancien bundle (787220852185cf1e.js) ne devrait plus apparaître
+
+================================================================================
+  COMMANDES AWS CLI UTILES
+================================================================================
+
+  # Trouver le Distribution ID:
+  aws cloudfront list-distributions --query "DistributionList.Items[?DomainName=='d3fy85w9zy25oo.cloudfront.net'].Id" --output text
+
+  # Créer une invalidation:
+  aws cloudfront create-invalidation --distribution-id E123... --paths "/*" "/_next/static/*"
+
+  # Vérifier le statut:
+  aws cloudfront get-invalidation --distribution-id E123... --id I123...
+
+================================================================================
+  DÉPANNAGE RAPIDE
+================================================================================
+
+  PROBLÈME: Script PowerShell bloqué
+  SOLUTION: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+  PROBLÈME: AWS CLI non trouvé
+  SOLUTION: Installer depuis https://aws.amazon.com/cli/
+
+  PROBLÈME: Credentials invalides
+  SOLUTION: aws configure
+
+  PROBLÈME: L'invalidation ne fonctionne pas
+  SOLUTION:
+    1. Attendre 15 minutes minimum
+    2. Vider complètement le cache du navigateur
+    3. Tester en mode navigation privée
+    4. Créer une nouvelle invalidation
+
+================================================================================
+  FICHIERS DISPONIBLES
+================================================================================
+
+  Scripts Principaux:
+    invalidate-cloudfront.ps1          → Script complet (Windows)
+    invalidate-cloudfront.sh           → Script complet (Linux/Mac)
+    quick-invalidate.ps1               → Script rapide
+
+  Scripts Utilitaires:
+    test-cloudfront-setup.ps1          → Tester la configuration
+    verify-bundle-update.ps1           → Vérifier la mise à jour
+    invalidate-cloudfront-alternative.ps1 → Solutions alternatives
+
+  Documentation:
+    README-CLOUDFRONT-INVALIDATION.md  → Documentation complète
+    INDEX.md                           → Index des scripts
+    QUICK-START.txt                    → Ce fichier
+
+================================================================================
+  PRÉREQUIS
+================================================================================
+
+  REQUIS:
+    ✓ AWS CLI installé
+    ✓ Credentials AWS configurées (aws configure)
+    ✓ Permissions CloudFront (ListDistributions, CreateInvalidation)
+
+  OPTIONNEL:
+    ○ jq (pour script Bash)
+    ○ PowerShell 5.1+ (Windows)
+
+================================================================================
+  WORKFLOW COMPLET
+================================================================================
+
+  PREMIÈRE UTILISATION:
+    1. test-cloudfront-setup.ps1
+    2. invalidate-cloudfront.ps1 -Wait
+    3. verify-bundle-update.ps1
+
+  UTILISATION RÉGULIÈRE:
+    1. quick-invalidate.ps1
+    2. Attendre 10 minutes
+    3. Tester le site
+
+  EN CAS DE PROBLÈME:
+    1. invalidate-cloudfront-alternative.ps1 -ListDistributions
+    2. test-cloudfront-setup.ps1
+    3. Lire README-CLOUDFRONT-INVALIDATION.md (section Dépannage)
+
+================================================================================
+  COÛTS
+================================================================================
+
+  • 1000 premiers chemins/mois: GRATUIT
+  • Au-delà: $0.005 par chemin
+  • Wildcard (/*): Compte comme 1 chemin
+
+  Exemple:
+    Invalidation complète (/* + /_next/static/* + /_next/static/chunks/*)
+    = 3 chemins = GRATUIT
+
+================================================================================
+  LIENS UTILES
+================================================================================
+
+  Console CloudFront:
+    https://console.aws.amazon.com/cloudfront/
+
+  Documentation:
+    https://docs.aws.amazon.com/cloudfront/
+
+  AWS CLI:
+    https://aws.amazon.com/cli/
+
+================================================================================
+  CONTACT ET SUPPORT
+================================================================================
+
+  Pour plus d'aide:
+    • Consultez README-CLOUDFRONT-INVALIDATION.md
+    • Exécutez: .\invalidate-cloudfront-alternative.ps1 -Manual
+    • Documentation AWS: https://docs.aws.amazon.com/cloudfront/
+
+================================================================================
+
+Auteur: Équipe Symphonia
+Date: 2025-01-27
+Version: 1.0.0
+
+================================================================================

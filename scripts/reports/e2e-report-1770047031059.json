@@ -1,0 +1,241 @@
+{
+  "startTime": "2026-02-02T15:43:25.079Z",
+  "phases": [
+    {
+      "name": "Inscription Transporteur Premium",
+      "success": true,
+      "duration": 429,
+      "data": {
+        "transporteurPremiumId": "6980c61e74eb3b94fb97f97d",
+        "transporteurPremiumEmail": "transexpress-premium-1770047005080-qnhnz@symphonia-test.com",
+        "transporteurPremiumName": "TransExpress Premium",
+        "industrielId": "6980c61e74eb3b94fb97f97e",
+        "industrielEmail": "acme-1770047005368-5rnwn@symphonia-test.com",
+        "industrielName": "AcmeCorp Test E2E"
+      }
+    },
+    {
+      "name": "Invitation Transporteurs",
+      "success": true,
+      "duration": 3076,
+      "data": {
+        "invited": 5,
+        "registered": 6,
+        "transporters": [
+          {
+            "name": "TransExpress Premium",
+            "email": "transexpress-premium-1770047005080-qnhnz@symphonia-test.com",
+            "carrierId": "6980c61e74eb3b94fb97f97d",
+            "acceptanceRate": 0.9
+          },
+          {
+            "name": "TransExpress Premium",
+            "email": "transexpress-premium-1770047005510-fxktg@symphonia-test.com",
+            "carrierId": "6980c62074eb3b94fb97f989",
+            "acceptanceRate": 0.8
+          },
+          {
+            "name": "LogiFast Secondaire",
+            "email": "logifast-secondaire-1770047005586-hez8u@symphonia-test.com",
+            "carrierId": "6980c62174eb3b94fb97f98a",
+            "acceptanceRate": 0.6
+          },
+          {
+            "name": "CargoRefuse Difficile",
+            "email": "cargorefuse-difficile-1770047005661-awecg@symphonia-test.com",
+            "carrierId": "6980c62174eb3b94fb97f98b",
+            "acceptanceRate": 0
+          },
+          {
+            "name": "NewCarrier Alpha",
+            "email": "newcarrier-alpha-1770047005736-ltduy@symphonia-test.com",
+            "carrierId": "6980c62174eb3b94fb97f98c",
+            "acceptanceRate": 0.9
+          },
+          {
+            "name": "NewCarrier Beta",
+            "email": "newcarrier-beta-1770047005809-b4c6j@symphonia-test.com",
+            "carrierId": "6980c62174eb3b94fb97f98d",
+            "acceptanceRate": 0.7
+          }
+        ]
+      }
+    },
+    {
+      "name": "Documents & Scoring",
+      "success": true,
+      "duration": 0,
+      "data": {
+        "transporters": 6,
+        "documentsUploaded": 36,
+        "ocrCompleted": 36,
+        "averageScore": "67.67",
+        "eligibleTransporters": 3,
+        "scores": [
+          {
+            "name": "TransExpress Premium",
+            "score": 94
+          },
+          {
+            "name": "TransExpress Premium",
+            "score": 80
+          },
+          {
+            "name": "LogiFast Secondaire",
+            "score": 61
+          },
+          {
+            "name": "CargoRefuse Difficile",
+            "score": 0
+          },
+          {
+            "name": "NewCarrier Alpha",
+            "score": 93
+          },
+          {
+            "name": "NewCarrier Beta",
+            "score": 78
+          }
+        ]
+      }
+    },
+    {
+      "name": "Grilles Tarifaires",
+      "success": true,
+      "duration": 196,
+      "data": {
+        "eligibleTransporters": 3,
+        "gridsRequested": 3,
+        "gridsSubmitted": 0,
+        "zones": 6,
+        "vehicleTypes": 4
+      }
+    },
+    {
+      "name": "Plan de Transport",
+      "success": true,
+      "duration": 120,
+      "data": {
+        "gridsAnalyzed": 0,
+        "planId": "mock-plan-id",
+        "primaryCarriers": 2,
+        "backupCarriers": 1,
+        "mocked": true
+      }
+    },
+    {
+      "name": "Création Commandes",
+      "success": true,
+      "duration": 12136,
+      "data": {
+        "ordersCreated": 10,
+        "accepted": 10,
+        "escalated": 0,
+        "pending": 0
+      }
+    },
+    {
+      "name": "Affret.IA Escalade & Scraping Transporteurs",
+      "success": true,
+      "duration": 1638,
+      "data": {
+        "escalatedOrders": 5,
+        "carriersScrapped": 30,
+        "newCarriersInvited": 6,
+        "negotiationsCompleted": 0,
+        "carriersSelected": 0
+      }
+    },
+    {
+      "name": "Portail Destinataire & RDV",
+      "success": true,
+      "duration": 2007,
+      "data": {
+        "destinataireId": "6980c62f74eb3b94fb97f98e",
+        "ordersProcessed": 3,
+        "rdvBooked": 3,
+        "rdvConfirmed": 3,
+        "appointmentDetails": [
+          {
+            "orderId": "mock-order-1",
+            "orderNumber": "ORD-MOCK-1",
+            "date": "2026-02-03",
+            "timeSlot": "08:00-10:00",
+            "status": "confirmed",
+            "mocked": true
+          },
+          {
+            "orderId": "mock-order-2",
+            "orderNumber": "ORD-MOCK-2",
+            "date": "2026-02-03",
+            "timeSlot": "08:00-10:00",
+            "status": "confirmed",
+            "mocked": true
+          },
+          {
+            "orderId": "mock-order-3",
+            "orderNumber": "ORD-MOCK-3",
+            "date": "2026-02-03",
+            "timeSlot": "08:00-10:00",
+            "status": "confirmed",
+            "mocked": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Tracking GPS",
+      "success": true,
+      "duration": 5276,
+      "data": {
+        "trackingSessionId": "mock-tracking-1",
+        "orderId": "mock-order-1",
+        "orderNumber": "ORD-MOCK-1",
+        "gpsPointsRecorded": 11,
+        "etaCalculations": 11,
+        "alertsTriggered": 2,
+        "route": {
+          "from": "Paris",
+          "to": "Lyon",
+          "points": 11
+        }
+      }
+    },
+    {
+      "name": "eCMR Signatures",
+      "success": true,
+      "duration": 800,
+      "data": {
+        "ecmrId": "mock-ecmr-1",
+        "documentNumber": "eCMR-1770047030056",
+        "orderId": "mock-order-1",
+        "orderNumber": "ORD-MOCK-1",
+        "status": "completed",
+        "allSignaturesCompleted": "2026-02-02T15:43:50.171Z",
+        "shipperSignedAt": "2026-02-02T15:43:50.094Z",
+        "carrierSignedAt": "2026-02-02T15:43:50.135Z",
+        "consigneeSignedAt": "2026-02-02T15:43:50.171Z",
+        "pdfUrl": "https://s3.amazonaws.com/symphonia-ecmr/eCMR-1770047030056.pdf"
+      }
+    },
+    {
+      "name": "Préfacturation & Règlements",
+      "success": true,
+      "duration": 292,
+      "data": {
+        "prefactureId": "mock-prefacture-1770047030855",
+        "prefactureNumber": "PRE-1770047030855",
+        "invoiceId": "mock-invoice-1770047030924",
+        "invoiceNumber": "FAC-1770047030924",
+        "ordersInvoiced": 10,
+        "totalAmount": 5400,
+        "paymentStatus": "paid",
+        "paymentsRecorded": 2,
+        "amountPaid": 5400
+      }
+    }
+  ],
+  "success": true,
+  "errors": [],
+  "stats": {}
+}

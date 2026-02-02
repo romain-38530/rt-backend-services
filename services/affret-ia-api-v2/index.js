@@ -670,8 +670,9 @@ mongoose.connection.once('open', () => {
   console.log('[ROUTES] Analytics routes initialized');
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`[AFFRET.IA API v2] Running on port ${PORT}`);
+  console.log(`[SERVER] Listening on 0.0.0.0:${PORT}`);
 });
 
 module.exports = app;

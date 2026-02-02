@@ -1,0 +1,139 @@
+{
+  "startTime": "2026-02-02T13:42:17.774Z",
+  "phases": [
+    {
+      "name": "Inscription Industriel",
+      "success": true,
+      "duration": 264,
+      "data": {
+        "industrielId": "6980a9ba74eb3b94fb97f905",
+        "email": "acme-1770039737775-nltyv@symphonia-test.com",
+        "name": "AcmeCorp Test E2E"
+      }
+    },
+    {
+      "name": "Invitation Transporteurs",
+      "success": true,
+      "duration": 3122,
+      "data": {
+        "invited": 5,
+        "registered": 5,
+        "transporters": [
+          {
+            "name": "TransExpress Premium",
+            "email": "transexpress-premium-1770039738039-cx3ky@symphonia-test.com",
+            "carrierId": "6980a9bd74eb3b94fb97f910",
+            "acceptanceRate": 0.8
+          },
+          {
+            "name": "LogiFast Secondaire",
+            "email": "logifast-secondaire-1770039738120-mxwsa@symphonia-test.com",
+            "carrierId": "6980a9bd74eb3b94fb97f911",
+            "acceptanceRate": 0.6
+          },
+          {
+            "name": "CargoRefuse Difficile",
+            "email": "cargorefuse-difficile-1770039738198-mlrxh@symphonia-test.com",
+            "carrierId": "6980a9bd74eb3b94fb97f912",
+            "acceptanceRate": 0
+          },
+          {
+            "name": "NewCarrier Alpha",
+            "email": "newcarrier-alpha-1770039738278-7zkf8@symphonia-test.com",
+            "carrierId": "6980a9bd74eb3b94fb97f913",
+            "acceptanceRate": 0.9
+          },
+          {
+            "name": "NewCarrier Beta",
+            "email": "newcarrier-beta-1770039738357-4o0xc@symphonia-test.com",
+            "carrierId": "6980a9bd74eb3b94fb97f914",
+            "acceptanceRate": 0.7
+          }
+        ]
+      }
+    },
+    {
+      "name": "Documents & Scoring",
+      "success": true,
+      "duration": 0,
+      "data": {
+        "transporters": 5,
+        "documentsUploaded": 30,
+        "ocrCompleted": 30,
+        "averageScore": "64.20",
+        "eligibleTransporters": 2,
+        "scores": [
+          {
+            "name": "TransExpress Premium",
+            "score": 83
+          },
+          {
+            "name": "LogiFast Secondaire",
+            "score": 66
+          },
+          {
+            "name": "CargoRefuse Difficile",
+            "score": 7
+          },
+          {
+            "name": "NewCarrier Alpha",
+            "score": 90
+          },
+          {
+            "name": "NewCarrier Beta",
+            "score": 75
+          }
+        ]
+      }
+    },
+    {
+      "name": "Grilles Tarifaires",
+      "success": true,
+      "duration": 141,
+      "data": {
+        "eligibleTransporters": 2,
+        "gridsRequested": 2,
+        "gridsSubmitted": 0,
+        "zones": 6,
+        "vehicleTypes": 4
+      }
+    },
+    {
+      "name": "Plan de Transport",
+      "success": true,
+      "duration": 118,
+      "data": {
+        "gridsAnalyzed": 0,
+        "planId": "mock-plan-id",
+        "primaryCarriers": 2,
+        "backupCarriers": 0,
+        "mocked": true
+      }
+    },
+    {
+      "name": "Création Commandes",
+      "success": true,
+      "duration": 12162,
+      "data": {
+        "ordersCreated": 10,
+        "accepted": 10,
+        "escalated": 0,
+        "pending": 0
+      }
+    },
+    {
+      "name": "Affret.IA Escalade & Négociation",
+      "success": true,
+      "duration": 946,
+      "data": {
+        "escalatedOrders": 5,
+        "newCarriersInvited": 6,
+        "negotiationsCompleted": 0,
+        "carriersSelected": 0
+      }
+    }
+  ],
+  "success": true,
+  "errors": [],
+  "stats": {}
+}

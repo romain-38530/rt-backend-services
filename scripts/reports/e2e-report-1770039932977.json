@@ -1,0 +1,194 @@
+{
+  "startTime": "2026-02-02T13:45:08.840Z",
+  "phases": [
+    {
+      "name": "Inscription Industriel",
+      "success": true,
+      "duration": 273,
+      "data": {
+        "industrielId": "6980aa6574eb3b94fb97f926",
+        "email": "acme-1770039908841-nwvlh@symphonia-test.com",
+        "name": "AcmeCorp Test E2E"
+      }
+    },
+    {
+      "name": "Invitation Transporteurs",
+      "success": true,
+      "duration": 3122,
+      "data": {
+        "invited": 5,
+        "registered": 5,
+        "transporters": [
+          {
+            "name": "TransExpress Premium",
+            "email": "transexpress-premium-1770039909114-heuhe@symphonia-test.com",
+            "carrierId": "6980aa6874eb3b94fb97f931",
+            "acceptanceRate": 0.8
+          },
+          {
+            "name": "LogiFast Secondaire",
+            "email": "logifast-secondaire-1770039909192-9j0by@symphonia-test.com",
+            "carrierId": "6980aa6874eb3b94fb97f932",
+            "acceptanceRate": 0.6
+          },
+          {
+            "name": "CargoRefuse Difficile",
+            "email": "cargorefuse-difficile-1770039909271-ufyt0@symphonia-test.com",
+            "carrierId": "6980aa6874eb3b94fb97f933",
+            "acceptanceRate": 0
+          },
+          {
+            "name": "NewCarrier Alpha",
+            "email": "newcarrier-alpha-1770039909350-iauox@symphonia-test.com",
+            "carrierId": "6980aa6874eb3b94fb97f934",
+            "acceptanceRate": 0.9
+          },
+          {
+            "name": "NewCarrier Beta",
+            "email": "newcarrier-beta-1770039909429-4xobx@symphonia-test.com",
+            "carrierId": "6980aa6974eb3b94fb97f935",
+            "acceptanceRate": 0.7
+          }
+        ]
+      }
+    },
+    {
+      "name": "Documents & Scoring",
+      "success": true,
+      "duration": 0,
+      "data": {
+        "transporters": 5,
+        "documentsUploaded": 30,
+        "ocrCompleted": 30,
+        "averageScore": "65.40",
+        "eligibleTransporters": 2,
+        "scores": [
+          {
+            "name": "TransExpress Premium",
+            "score": 88
+          },
+          {
+            "name": "LogiFast Secondaire",
+            "score": 69
+          },
+          {
+            "name": "CargoRefuse Difficile",
+            "score": 4
+          },
+          {
+            "name": "NewCarrier Alpha",
+            "score": 95
+          },
+          {
+            "name": "NewCarrier Beta",
+            "score": 71
+          }
+        ]
+      }
+    },
+    {
+      "name": "Grilles Tarifaires",
+      "success": true,
+      "duration": 137,
+      "data": {
+        "eligibleTransporters": 2,
+        "gridsRequested": 2,
+        "gridsSubmitted": 0,
+        "zones": 6,
+        "vehicleTypes": 4
+      }
+    },
+    {
+      "name": "Plan de Transport",
+      "success": true,
+      "duration": 120,
+      "data": {
+        "gridsAnalyzed": 0,
+        "planId": "mock-plan-id",
+        "primaryCarriers": 2,
+        "backupCarriers": 0,
+        "mocked": true
+      }
+    },
+    {
+      "name": "Création Commandes",
+      "success": true,
+      "duration": 12136,
+      "data": {
+        "ordersCreated": 10,
+        "accepted": 9,
+        "escalated": 0,
+        "pending": 1
+      }
+    },
+    {
+      "name": "Affret.IA Escalade & Négociation",
+      "success": true,
+      "duration": 919,
+      "data": {
+        "escalatedOrders": 5,
+        "newCarriersInvited": 6,
+        "negotiationsCompleted": 0,
+        "carriersSelected": 0
+      }
+    },
+    {
+      "name": "Portail Destinataire & RDV",
+      "success": true,
+      "duration": 2029,
+      "data": {
+        "destinataireId": "6980aa7674eb3b94fb97f936",
+        "ordersProcessed": 3,
+        "rdvBooked": 3,
+        "rdvConfirmed": 3,
+        "appointmentDetails": [
+          {
+            "orderId": "mock-order-2",
+            "orderNumber": "ORD-MOCK-2",
+            "date": "2026-02-03",
+            "timeSlot": "08:00-10:00",
+            "status": "confirmed",
+            "mocked": true
+          },
+          {
+            "orderId": "mock-order-3",
+            "orderNumber": "ORD-MOCK-3",
+            "date": "2026-02-03",
+            "timeSlot": "08:00-10:00",
+            "status": "confirmed",
+            "mocked": true
+          },
+          {
+            "orderId": "mock-order-4",
+            "orderNumber": "ORD-MOCK-4",
+            "date": "2026-02-03",
+            "timeSlot": "08:00-10:00",
+            "status": "confirmed",
+            "mocked": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Tracking GPS",
+      "success": true,
+      "duration": 5398,
+      "data": {
+        "trackingSessionId": "mock-tracking-2",
+        "orderId": "mock-order-2",
+        "orderNumber": "ORD-MOCK-2",
+        "gpsPointsRecorded": 11,
+        "etaCalculations": 11,
+        "alertsTriggered": 2,
+        "route": {
+          "from": "Paris",
+          "to": "Marseille",
+          "points": 11
+        }
+      }
+    }
+  ],
+  "success": true,
+  "errors": [],
+  "stats": {}
+}

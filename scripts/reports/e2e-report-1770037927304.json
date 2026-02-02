@@ -1,0 +1,20 @@
+{
+  "startTime": "2026-02-02T13:11:45.930Z",
+  "phases": [
+    {
+      "name": "Inscription Industriel",
+      "success": false,
+      "duration": 21349,
+      "error": ""
+    }
+  ],
+  "success": false,
+  "errors": [
+    {
+      "phase": "Inscription Industriel",
+      "error": "",
+      "stack": "AggregateError\n    at AxiosError.from (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:842:28)\n    at RedirectableRequest.handleRequestError (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:3498:27)\n    at RedirectableRequest.emit (node:events:508:28)\n    at eventHandlers.<computed> (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\follow-redirects\\index.js:49:24)\n    at ClientRequest.emit (node:events:508:28)\n    at emitErrorEvent (node:_http_client:108:11)\n    at TLSSocket.socketErrorListener (node:_http_client:575:5)\n    at TLSSocket.emit (node:events:508:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at Axios.request (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:4713:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async AgentIndustriel.register (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\classes\\AgentIndustriel.js:27:24)\n    at async testPhase1_InscriptionIndustriel (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-e2e-grandeur-nature.cjs:99:5)\n    at async runE2ETest (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-e2e-grandeur-nature.cjs:724:5)"
+    }
+  ],
+  "stats": {}
+}

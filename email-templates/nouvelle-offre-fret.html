@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f0f4f8; font-family: Arial, Helvetica, sans-serif;">
+
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f0f4f8;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #0f172a; padding: 48px 40px; text-align: center;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: center;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                      <tr>
+                        <td style="background-color: #1e293b; border-radius: 12px; padding: 14px 28px;">
+                          <span style="font-size: 28px; font-weight: bold; color: #ffffff;">SYMPHONI</span><span style="font-size: 28px; font-weight: bold; color: #818cf8;">.A</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="text-align: center; padding-top: 16px;">
+                    <p style="margin: 0; color: #94a3b8; font-size: 13px; letter-spacing: 1px; text-transform: uppercase;">Control Tower du Transport</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px 48px;">
+
+              <!-- Badge AFFRET.IA -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 28px;">
+                <tr>
+                  <td>
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td style="background-color: #faf5ff; color: #7c3aed; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: bold;">
+                          &#128666; AFFRET.IA - Nouvelle offre
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <h1 style="margin: 0 0 24px 0; font-size: 24px; font-weight: bold; color: #0f172a; line-height: 1.3;">
+                Une offre de fret correspond a vos criteres !
+              </h1>
+
+              <p style="margin: 0 0 28px 0; font-size: 15px; color: #475569; line-height: 1.7;">
+                Bonjour <strong>{{contactName}}</strong>,<br>
+                Notre IA a identifie une offre de transport qui correspond a vos preferences.
+              </p>
+
+              <!-- Transport details -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 32px;">
+                <tr>
+                  <td style="background-color: #f8fafc; border-radius: 12px; padding: 24px; border: 1px solid #e2e8f0;">
+
+                    <!-- Route -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 20px;">
+                      <tr>
+                        <td width="45%" style="vertical-align: top;">
+                          <p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b; text-transform: uppercase;">Depart</p>
+                          <p style="margin: 0; font-size: 16px; font-weight: bold; color: #0f172a;">{{departCity}}</p>
+                          <p style="margin: 2px 0 0 0; font-size: 13px; color: #64748b;">{{departPostalCode}}</p>
+                        </td>
+                        <td width="10%" style="text-align: center; vertical-align: middle;">
+                          <span style="font-size: 20px; color: #6366f1;">&#8594;</span>
+                        </td>
+                        <td width="45%" style="vertical-align: top; text-align: right;">
+                          <p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b; text-transform: uppercase;">Arrivee</p>
+                          <p style="margin: 0; font-size: 16px; font-weight: bold; color: #0f172a;">{{arrivalCity}}</p>
+                          <p style="margin: 2px 0 0 0; font-size: 13px; color: #64748b;">{{arrivalPostalCode}}</p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Separator -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      <tr>
+                        <td style="height: 1px; background-color: #e2e8f0;"></td>
+                      </tr>
+                    </table>
+
+                    <!-- Details -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 20px;">
+                      <tr>
+                        <td width="33%" style="vertical-align: top;">
+                          <p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b; text-transform: uppercase;">Date</p>
+                          <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f172a;">{{loadingDate}}</p>
+                        </td>
+                        <td width="33%" style="vertical-align: top; text-align: center;">
+                          <p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b; text-transform: uppercase;">Vehicule</p>
+                          <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f172a;">{{vehicleType}}</p>
+                        </td>
+                        <td width="33%" style="vertical-align: top; text-align: right;">
+                          <p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b; text-transform: uppercase;">Poids</p>
+                          <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f172a;">{{weight}}</p>
+                        </td>
+                      </tr>
+                    </table>
+
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Price -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 32px;">
+                <tr>
+                  <td style="background-color: #ecfdf5; border-radius: 12px; padding: 20px; text-align: center; border: 2px solid #a7f3d0;">
+                    <p style="margin: 0 0 4px 0; font-size: 12px; color: #059669; text-transform: uppercase;">Prix propose</p>
+                    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #065f46;">{{price}} &#8364;</p>
+                    <p style="margin: 4px 0 0 0; font-size: 13px; color: #047857;">HT - Paiement sous 30 jours</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Shipper info -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 32px;">
+                <tr>
+                  <td style="background-color: #f8fafc; border-radius: 12px; padding: 16px 20px;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      <tr>
+                        <td width="40" valign="top">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td style="width: 36px; height: 36px; background-color: #6366f1; border-radius: 8px; text-align: center; line-height: 36px; color: white; font-size: 14px; font-weight: bold;">{{shipperInitials}}</td>
+                            </tr>
+                          </table>
+                        </td>
+                        <td style="padding-left: 14px;">
+                          <p style="margin: 0; font-size: 14px; font-weight: bold; color: #1e293b;">{{shipperName}}</p>
+                          <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">Donneur d'ordre verifie</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA Button -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 36px 0 24px 0;">
+                <tr>
+                  <td style="text-align: center;">
+                    <a href="https://transporteur.symphonia-controltower.com/affret-ia/offre/{{offerId}}" style="display: inline-block; background-color: #6366f1; color: #ffffff; text-decoration: none; padding: 18px 48px; border-radius: 12px; font-size: 16px; font-weight: bold;">
+                      Voir l'offre et postuler &#8594;
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="text-align: center; padding-top: 12px;">
+                    <p style="margin: 0; font-size: 13px; color: #94a3b8;">Cette offre peut expirer rapidement</p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding: 0 48px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="height: 1px; background-color: #e2e8f0;"></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 32px 48px 40px 48px; background-color: #f8fafc;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: center;">
+                    <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #475569;">SYMPHONI.A</p>
+                    <p style="margin: 0 0 16px 0; font-size: 13px; color: #94a3b8;">La plateforme de conformite et de fret pour le transport</p>
+                    <p style="margin: 0 0 4px 0; font-size: 12px; color: #94a3b8;">
+                      &#128222; 04 76 33 23 78 &nbsp;|&nbsp; &#9993; contact@symphonia-controltower.com
+                    </p>
+                    <p style="margin: 16px 0 0 0; font-size: 11px; color: #cbd5e1;">
+                      &#169; 2026 RT Groupe - Tous droits reserves | 38500 Voiron, France
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

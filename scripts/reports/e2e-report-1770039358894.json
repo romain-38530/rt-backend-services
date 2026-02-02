@@ -1,0 +1,117 @@
+{
+  "startTime": "2026-02-02T13:35:43.884Z",
+  "phases": [
+    {
+      "name": "Inscription Industriel",
+      "success": true,
+      "duration": 279,
+      "data": {
+        "industrielId": "6980a83074eb3b94fb97f8d5",
+        "email": "acme-1770039343885-08bmj@symphonia-test.com",
+        "name": "AcmeCorp Test E2E"
+      }
+    },
+    {
+      "name": "Invitation Transporteurs",
+      "success": true,
+      "duration": 3101,
+      "data": {
+        "invited": 5,
+        "registered": 5,
+        "transporters": [
+          {
+            "name": "TransExpress Premium",
+            "email": "transexpress-premium-1770039344165-np4yz@symphonia-test.com",
+            "carrierId": "6980a83374eb3b94fb97f8e0",
+            "acceptanceRate": 0.8
+          },
+          {
+            "name": "LogiFast Secondaire",
+            "email": "logifast-secondaire-1770039344247-aeemc@symphonia-test.com",
+            "carrierId": "6980a83374eb3b94fb97f8e1",
+            "acceptanceRate": 0.6
+          },
+          {
+            "name": "CargoRefuse Difficile",
+            "email": "cargorefuse-difficile-1770039344328-9wbon@symphonia-test.com",
+            "carrierId": "6980a83374eb3b94fb97f8e2",
+            "acceptanceRate": 0
+          },
+          {
+            "name": "NewCarrier Alpha",
+            "email": "newcarrier-alpha-1770039344403-b0wyt@symphonia-test.com",
+            "carrierId": "6980a83374eb3b94fb97f8e3",
+            "acceptanceRate": 0.9
+          },
+          {
+            "name": "NewCarrier Beta",
+            "email": "newcarrier-beta-1770039344481-wlysv@symphonia-test.com",
+            "carrierId": "6980a83474eb3b94fb97f8e4",
+            "acceptanceRate": 0.7
+          }
+        ]
+      }
+    },
+    {
+      "name": "Documents & Scoring",
+      "success": true,
+      "duration": 11575,
+      "data": {
+        "transporters": 5,
+        "documentsUploaded": 0,
+        "ocrCompleted": 0,
+        "averageScore": "0.00",
+        "eligibleTransporters": 0,
+        "scores": [
+          {
+            "name": "TransExpress Premium",
+            "score": 0
+          },
+          {
+            "name": "LogiFast Secondaire",
+            "score": 0
+          },
+          {
+            "name": "CargoRefuse Difficile",
+            "score": 0
+          },
+          {
+            "name": "NewCarrier Alpha",
+            "score": 0
+          },
+          {
+            "name": "NewCarrier Beta",
+            "score": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "Grilles Tarifaires",
+      "success": true,
+      "duration": 0,
+      "data": {
+        "eligibleTransporters": 0,
+        "gridsRequested": 0,
+        "gridsSubmitted": 0,
+        "zones": 6,
+        "vehicleTypes": 4
+      }
+    },
+    {
+      "name": "Plan de Transport",
+      "success": false,
+      "duration": 34,
+      "error": "Request failed with status code 404"
+    }
+  ],
+  "success": false,
+  "errors": [
+    {
+      "phase": "Plan de Transport",
+      "error": "Request failed with status code 404",
+      "stack": "AxiosError: Request failed with status code 404\n    at settle (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:2086:12)\n    at IncomingMessage.handleStreamEnd (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:3476:11)\n    at IncomingMessage.emit (node:events:520:35)\n    at endReadableNT (node:internal/streams/readable:1701:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)\n    at Axios.request (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:4713:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async AgentIndustriel.getPricingGrids (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\classes\\AgentIndustriel.js:213:24)\n    at async testPhase5_PlanTransport (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-e2e-grandeur-nature.cjs:451:19)\n    at async runE2ETest (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-e2e-grandeur-nature.cjs:735:5)"
+    }
+  ],
+  "stats": {}
+}

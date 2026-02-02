@@ -1,0 +1,14 @@
+{
+  "Comment": "Invalidation complète pour résoudre le problème du bundle JavaScript obsolète",
+  "Paths": {
+    "Quantity": 5,
+    "Items": [
+      "/*",
+      "/transporteur",
+      "/transporteur/*",
+      "/_next/static/*",
+      "/_next/static/chunks/*"
+    ]
+  },
+  "CallerReference": "manual-invalidation-2025-01-27"
+}

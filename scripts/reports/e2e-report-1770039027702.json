@@ -1,0 +1,30 @@
+{
+  "startTime": "2026-02-02T13:30:27.372Z",
+  "phases": [
+    {
+      "name": "Inscription Industriel",
+      "success": true,
+      "duration": 278,
+      "data": {
+        "industrielId": "6980a6f474eb3b94fb97f8be",
+        "email": "acme-1770039027372-qgmov@symphonia-test.com",
+        "name": "AcmeCorp Test E2E"
+      }
+    },
+    {
+      "name": "Invitation Transporteurs",
+      "success": false,
+      "duration": 36,
+      "error": "Request failed with status code 400"
+    }
+  ],
+  "success": false,
+  "errors": [
+    {
+      "phase": "Invitation Transporteurs",
+      "error": "Request failed with status code 400",
+      "stack": "AxiosError: Request failed with status code 400\n    at settle (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:2086:12)\n    at IncomingMessage.handleStreamEnd (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:3476:11)\n    at IncomingMessage.emit (node:events:520:35)\n    at endReadableNT (node:internal/streams/readable:1701:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)\n    at Axios.request (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\node_modules\\axios\\dist\\node\\axios.cjs:4713:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async AgentIndustriel.inviteTransporter (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\classes\\AgentIndustriel.js:94:24)\n    at async testPhase2_InvitationTransporteurs (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-e2e-grandeur-nature.cjs:169:26)\n    at async runE2ETest (C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-e2e-grandeur-nature.cjs:727:5)"
+    }
+  ],
+  "stats": {}
+}

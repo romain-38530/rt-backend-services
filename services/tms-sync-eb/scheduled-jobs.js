@@ -4,7 +4,7 @@
  * Pattern base sur subscriptions-contracts-eb/scheduled-jobs.js
  */
 
-const { TMSSyncMetrics } = require('../../infra/monitoring/cloudwatch-metrics');
+const { TMSSyncMetrics } = require('./cloudwatch-stub');
 
 /**
  * Configuration des intervalles (en millisecondes)
