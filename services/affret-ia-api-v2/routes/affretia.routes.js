@@ -326,4 +326,42 @@ router.post('/prospection/conversion-email/:prospectId', affretiaController.send
  */
 router.get('/prospection/stats', affretiaController.getProspectionStats);
 
+// ==================== PRICING & MARKET INTELLIGENCE ====================
+
+/**
+ * POST /api/v1/affretia/price-history
+ * Recuperer l'historique des prix pour une ligne
+ */
+router.post('/price-history', affretiaController.getPriceHistory);
+
+/**
+ * GET /api/v1/affretia/preferred-subcontractors
+ * Recuperer les sous-traitants preferes avec leurs performances
+ */
+router.get('/preferred-subcontractors', affretiaController.getPreferredSubcontractors);
+
+/**
+ * POST /api/v1/affretia/search-carriers
+ * Rechercher des transporteurs disponibles pour une ligne
+ */
+router.post('/search-carriers', affretiaController.searchCarriers);
+
+/**
+ * POST /api/v1/affretia/record-price
+ * Enregistrer un prix negocie dans l'historique
+ */
+router.post('/record-price', affretiaController.recordPrice);
+
+/**
+ * POST /api/v1/affretia/import/dashdoc
+ * Importer les prix historiques depuis Dashdoc
+ */
+router.post('/import/dashdoc', affretiaController.importDashdocPrices);
+
+/**
+ * POST /api/v1/affretia/calculate-target-price
+ * Calculer le prix cible pour une ligne base sur l'historique
+ */
+router.post('/calculate-target-price', affretiaController.calculateTargetPrice);
+
 module.exports = router;

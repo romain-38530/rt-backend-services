@@ -15,6 +15,7 @@ const broadcastService = require('../services/broadcast.service');
 const negotiationService = require('../services/negotiation.service');
 const trackingService = require('../services/tracking.service');
 const prospectionService = require('../services/prospection.service');
+const pricingService = require('../services/pricing.service');
 
 const scoringEngine = new AIScoringEngine();
 
@@ -2328,6 +2329,176 @@ exports.getProspectionStats = async (req, res) => {
 
   } catch (error) {
     console.error('[AFFRETIA CONTROLLER] Error getting prospection stats:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ==================== PRICING & MARKET INTELLIGENCE ====================
+
+/**
+ * POST /api/v1/affretia/price-history
+ * Récupérer l'historique des prix pour une ligne
+ */
+exports.getPriceHistory = async (req, res) => {
+  try {
+    const { route, period, vehicleType, organizationId } = req.body;
+
+    if (!route || !route.from || !route.to) {
+      return res.status(400).json({
+        success: false,
+        error: 'route.from and route.to are required'
+      });
+    }
+
+    const history = await pricingService.getPriceHistory(
+      route.from,
+      route.to,
+      { period, vehicleType, organizationId }
+    );
+
+    res.json(history);
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting price history:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/v1/affretia/preferred-subcontractors
+ * Récupérer les sous-traitants préférés avec leurs performances
+ */
+exports.getPreferredSubcontractors = async (req, res) => {
+  try {
+    const { organizationId, fromPostalCode, toPostalCode, minTransports } = req.query;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'organizationId is required'
+      });
+    }
+
+    const subcontractors = await pricingService.getPreferredSubcontractors(
+      organizationId,
+      { fromPostalCode, toPostalCode, minTransports: parseInt(minTransports) || 3 }
+    );
+
+    res.json(subcontractors);
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error getting preferred subcontractors:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/search-carriers
+ * Rechercher des transporteurs disponibles pour une ligne
+ */
+exports.searchCarriers = async (req, res) => {
+  try {
+    const { route, requirements } = req.body;
+
+    if (!route || !route.from || !route.to) {
+      return res.status(400).json({
+        success: false,
+        error: 'route.from and route.to are required'
+      });
+    }
+
+    const carriers = await pricingService.searchAvailableCarriers(route, requirements || {});
+
+    res.json({
+      success: true,
+      data: carriers
+    });
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error searching carriers:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/record-price
+ * Enregistrer un prix négocié dans l'historique
+ */
+exports.recordPrice = async (req, res) => {
+  try {
+    const data = req.body;
+
+    if (!data.orderId || !data.carrierId || !data.route || !data.price) {
+      return res.status(400).json({
+        success: false,
+        error: 'orderId, carrierId, route, and price are required'
+      });
+    }
+
+    const result = await pricingService.recordPrice(data);
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error recording price:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/import/dashdoc
+ * Importer les prix historiques depuis Dashdoc
+ */
+exports.importDashdocPrices = async (req, res) => {
+  try {
+    const { organizationId, months, dryRun } = req.body;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'organizationId is required'
+      });
+    }
+
+    const result = await pricingService.importFromDashdoc({
+      organizationId,
+      months: parseInt(months) || 6,
+      dryRun: dryRun === true
+    });
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error importing from Dashdoc:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/v1/affretia/calculate-target-price
+ * Calculer le prix cible pour une ligne basé sur l'historique
+ */
+exports.calculateTargetPrice = async (req, res) => {
+  try {
+    const { route, vehicleType, organizationId } = req.body;
+
+    if (!route || !route.from || !route.to) {
+      return res.status(400).json({
+        success: false,
+        error: 'route.from and route.to are required'
+      });
+    }
+
+    const targetPrice = await pricingService.calculateTargetPrice(
+      route.from,
+      route.to,
+      { vehicleType, organizationId }
+    );
+
+    res.json(targetPrice);
+
+  } catch (error) {
+    console.error('[AFFRETIA CONTROLLER] Error calculating target price:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
