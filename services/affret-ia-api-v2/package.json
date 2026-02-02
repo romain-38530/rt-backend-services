@@ -1,7 +1,7 @@
 {
   "name": "affret-ia-api-v2",
-  "version": "2.2.1",
-  "description": "API Affret.IA intelligente pour recherche et affectation automatique des transporteurs",
+  "version": "2.7.0",
+  "description": "API Affret.IA intelligente pour recherche et affectation automatique des transporteurs + Pricing & Dashdoc",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

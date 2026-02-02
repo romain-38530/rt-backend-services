@@ -90,7 +90,7 @@ const Assignment = mongoose.model('Assignment', assignmentSchema);
 const { setupAnalyticsRoutes } = require('./routes/analytics-routes');
 
 // CloudWatch Metrics
-const { AffretIAMetrics } = require('../../infra/monitoring/cloudwatch-metrics');
+const { AffretIAMetrics } = require('./cloudwatch-stub');
 let metrics = null;
 
 // Initialize metrics
@@ -260,10 +260,6 @@ async function selectBestCarrier(carriers, algorithm = 'balanced') {
 
 // ==================== ROUTES ====================
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', service: 'affret-ia-api-v2', version: '2.2.0' });
-});
-
 // ==================== TEST SES ====================
 // Endpoint de test pour verifier la configuration AWS SES
 app.post('/api/v1/test-ses', async (req, res) => {
@@ -345,6 +341,33 @@ app.post('/api/v1/test-ses', async (req, res) => {
       code: error.Code || error.code
     });
   }
+});
+
+// ==================== HEALTH CHECK & ROOT ====================
+// Health check endpoint for load balancer
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'AFFRET.IA API v2',
+    version: '2.7.0',
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/health', (req, res) => {
+  const health = {
+    success: true,
+    service: 'AFFRET.IA API v2',
+    version: '2.7.0',
+    status: 'healthy',
+    uptime: process.uptime(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString()
+  };
+
+  const statusCode = mongoose.connection.readyState === 1 ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // ==================== AFFRET.IA ROUTES ====================
