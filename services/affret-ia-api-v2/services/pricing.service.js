@@ -13,6 +13,113 @@ class PricingService {
   }
 
   /**
+   * Extrait le prix payé au sous-traitant depuis un transport Dashdoc
+   * IMPORTANT: Utilise charter.price ou subcontracting.price (PAS pricing.invoicing_amount)
+   */
+  extractCarrierPrice(transport) {
+    // Priorité 1: charter.price
+    if (transport.charter?.price) {
+      return {
+        price: transport.charter.price,
+        currency: transport.charter.currency || 'EUR',
+        source: 'charter.price',
+        found: true
+      };
+    }
+
+    // Priorité 2: charter.purchase_price
+    if (transport.charter?.purchase_price) {
+      return {
+        price: transport.charter.purchase_price,
+        currency: transport.charter.currency || 'EUR',
+        source: 'charter.purchase_price',
+        found: true
+      };
+    }
+
+    // Priorité 3: subcontracting.price
+    if (transport.subcontracting?.price) {
+      return {
+        price: transport.subcontracting.price,
+        currency: transport.subcontracting.currency || 'EUR',
+        source: 'subcontracting.price',
+        found: true
+      };
+    }
+
+    // Priorité 4: subcontracting.purchase_price
+    if (transport.subcontracting?.purchase_price) {
+      return {
+        price: transport.subcontracting.purchase_price,
+        currency: transport.subcontracting.currency || 'EUR',
+        source: 'subcontracting.purchase_price',
+        found: true
+      };
+    }
+
+    // Priorité 5: pricing.carrier_price (au cas où)
+    if (transport.pricing?.carrier_price) {
+      return {
+        price: transport.pricing.carrier_price,
+        currency: transport.pricing.currency || 'EUR',
+        source: 'pricing.carrier_price',
+        found: true
+      };
+    }
+
+    // Fallback: pricing.invoicing_amount (avec warning)
+    if (transport.pricing?.invoicing_amount) {
+      console.warn(`⚠️ [DASHDOC] Transport ${transport.uid}: Utilisation de invoicing_amount car pas de prix sous-traitant trouvé`);
+      return {
+        price: transport.pricing.invoicing_amount,
+        currency: transport.pricing.currency || 'EUR',
+        source: 'pricing.invoicing_amount (FALLBACK)',
+        found: false
+      };
+    }
+
+    // Aucun prix trouvé
+    return {
+      price: null,
+      currency: 'EUR',
+      source: 'none',
+      found: false
+    };
+  }
+
+  /**
+   * Extrait les informations du transporteur sous-traitant
+   */
+  extractCarrierInfo(transport) {
+    // Priorité: charter > subcontracting > carrier
+    if (transport.charter?.carrier) {
+      return {
+        pk: transport.charter.carrier.pk,
+        name: transport.charter.carrier.name || 'Transporteur',
+        source: 'charter'
+      };
+    }
+
+    if (transport.subcontracting?.carrier) {
+      return {
+        pk: transport.subcontracting.carrier.pk,
+        name: transport.subcontracting.carrier.name || 'Transporteur',
+        source: 'subcontracting'
+      };
+    }
+
+    if (transport.carrier) {
+      return {
+        pk: transport.carrier.pk,
+        name: transport.carrier.name || 'Transporteur',
+        source: 'carrier'
+      };
+    }
+
+    return null;
+  }
+
+  /**
    * Récupérer l'historique des prix pour une ligne
    */
   async getPriceHistory(fromPostalCode, toPostalCode, options = {}) {
@@ -176,7 +283,8 @@ class PricingService {
       const {
         startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000), // 6 mois par défaut
         endDate = new Date(),
-        organizationId = null
+        organizationId = null,
+        dryRun = false
       } = options;
 
       console.log(`[PRICING SERVICE] Import Dashdoc depuis ${startDate.toISOString()}...`);
@@ -189,6 +297,7 @@ class PricingService {
         },
         params: {
           status: 'done',
+          is_subcontracted: true,  // ✅ Filtre uniquement les sous-traitances
           created_after: startDate.toISOString(),
           created_before: endDate.toISOString(),
           page_size: 100
@@ -196,7 +305,7 @@ class PricingService {
       });
 
       const transports = response.data.results || [];
-      console.log(`[PRICING SERVICE] ${transports.length} transports récupérés depuis Dashdoc`);
+      console.log(`[PRICING SERVICE] ${transports.length} transports sous-traités récupérés depuis Dashdoc`);
 
       let imported = 0;
       let skipped = 0;
@@ -204,15 +313,33 @@ class PricingService {
 
       for (const transport of transports) {
         try {
-          // Extraire les données nécessaires
+          // Extraire adresses
           const pickupAddress = transport.origin?.address;
           const deliveryAddress = transport.destination?.address;
-          const carrier = transport.carrier;
-          const pricing = transport.pricing;
+
+          // Extraire prix SOUS-TRAITANT (pas client)
+          const carrierPricing = this.extractCarrierPrice(transport);
+
+          // Extraire infos transporteur
+          const carrierInfo = this.extractCarrierInfo(transport);
 
           // Valider données minimales
-          if (!pickupAddress?.postcode || !deliveryAddress?.postcode || !carrier?.pk || !pricing?.invoicing_amount) {
+          if (!pickupAddress?.postcode ||
+              !deliveryAddress?.postcode ||
+              !carrierInfo ||
+              !carrierPricing.found ||
+              !carrierPricing.price) {
             skipped++;
+            if (!carrierPricing.found) {
+              console.log(`⚠️ Transport ${transport.uid} ignoré: pas de prix sous-traitant (charter/subcontracting)`);
+            }
+            continue;
+          }
+
+          // Si dry-run, juste logger
+          if (options.dryRun) {
+            console.log(`[DRY RUN] ${transport.uid}: ${pickupAddress.postcode}→${deliveryAddress.postcode}, ${carrierPricing.price}€ (${carrierPricing.source})`);
+            imported++;
             continue;
           }
 
@@ -226,11 +353,11 @@ class PricingService {
             continue;
           }
 
-          // Créer l'enregistrement
+          // Créer l'enregistrement avec prix SOUS-TRAITANT
           await PriceHistory.create({
             orderId: `DASHDOC-${transport.uid}`,
-            carrierId: `dashdoc-${carrier.pk}`,
-            carrierName: carrier.name || 'Transporteur Dashdoc',
+            carrierId: `dashdoc-${carrierInfo.pk}`,
+            carrierName: carrierInfo.name,
             route: {
               from: {
                 city: pickupAddress.city,
@@ -242,10 +369,10 @@ class PricingService {
               }
             },
             price: {
-              proposed: pricing.invoicing_amount,
-              final: pricing.invoicing_amount,
+              proposed: carrierPricing.price,  // ✅ Prix sous-traitant
+              final: carrierPricing.price,      // ✅ Prix sous-traitant
               marketAverage: 0,
-              currency: pricing.currency || 'EUR'
+              currency: carrierPricing.currency
             },
             transport: {
               vehicleType: this.mapDashdocVehicleType(transport.vehicle_type),
@@ -263,7 +390,9 @@ class PricingService {
               imported: true,
               transportId: transport.uid,
               importedAt: new Date(),
-              source: 'dashdoc'
+              source: 'dashdoc',
+              priceSource: carrierPricing.source,  // ✅ Tracer d'où vient le prix
+              carrierSource: carrierInfo.source
             },
             organizationId: organizationId || 'dashdoc-import',
             status: 'completed',
@@ -285,9 +414,13 @@ class PricingService {
 
       return {
         success: true,
+        message: dryRun ?
+          `DRY RUN - ${imported} transports sous-traités seraient importés` :
+          `${imported} prix sous-traitants importés depuis Dashdoc`,
         imported,
         skipped,
-        errors: errors.length > 0 ? errors : undefined,
+        errors: errors.length,
+        errorDetails: errors.length > 0 ? errors : undefined,
         message: `${imported} prix importés depuis Dashdoc`
       };
 
