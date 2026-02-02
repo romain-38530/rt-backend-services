@@ -1,0 +1,391 @@
+{
+    "SolutionStacks": [
+        "64bit Windows Server Core 2025 v2.22.1 running IIS 10.0",
+        "64bit Windows Server Core 2019 v2.22.1 running IIS 10.0",
+        "64bit Windows Server Core 2016 v2.22.1 running IIS 10.0",
+        "64bit Windows Server 2019 v2.22.1 running IIS 10.0",
+        "64bit Windows Server 2022 v2.22.1 running IIS 10.0",
+        "64bit Windows Server 2016 v2.22.1 running IIS 10.0",
+        "64bit Windows Server Core 2022 v2.22.1 running IIS 10.0",
+        "64bit Windows Server 2025 v2.22.1 running IIS 10.0",
+        "64bit Amazon Linux 2018.03 v2.6.33 running Packer 1.0.3",
+        "64bit Amazon Linux 2023 v5.9.3 running Tomcat 10 Corretto 21",
+        "64bit Amazon Linux 2023 v5.9.3 running Tomcat 11 Corretto 25",
+        "64bit Amazon Linux 2023 v5.9.3 running Tomcat 11 Corretto 21",
+        "64bit Amazon Linux 2023 v5.9.3 running Tomcat 9 Corretto 11",
+        "64bit Amazon Linux 2023 v5.9.3 running Tomcat 11 Corretto 17",
+        "64bit Amazon Linux 2023 v5.9.3 running Tomcat 9 Corretto 17",
+        "64bit Amazon Linux 2023 v5.9.3 running Tomcat 10 Corretto 17",
+        "64bit Amazon Linux 2023 v4.8.3 running Ruby 3.2",
+        "64bit Amazon Linux 2023 v4.8.3 running Ruby 3.3",
+        "64bit Amazon Linux 2023 v4.9.2 running Python 3.13",
+        "64bit Amazon Linux 2023 v4.8.3 running Ruby 3.4",
+        "64bit Amazon Linux 2023 v4.9.2 running Python 3.14",
+        "64bit Amazon Linux 2023 v4.9.2 running Python 3.11",
+        "64bit Amazon Linux 2023 v4.9.2 running PHP 8.4",
+        "64bit Amazon Linux 2023 v4.9.2 running Python 3.12",
+        "64bit Amazon Linux 2023 v4.9.2 running Python 3.9",
+        "64bit Amazon Linux 2023 v6.7.3 running Node.js 20",
+        "64bit Amazon Linux 2023 v4.9.2 running PHP 8.3",
+        "64bit Amazon Linux 2023 v4.5.3 running Go 1",
+        "64bit Amazon Linux 2023 v4.9.2 running PHP 8.1",
+        "64bit Amazon Linux 2023 v4.9.2 running PHP 8.2",
+        "64bit Amazon Linux 2023 v6.7.3 running Node.js 22",
+        "64bit Amazon Linux 2023 v4.9.2 running PHP 8.5",
+        "64bit Amazon Linux 2023 v6.7.3 running Node.js 24",
+        "64bit Amazon Linux 2023 v4.8.3 running Corretto 17",
+        "64bit Amazon Linux 2023 v4.8.3 running Corretto 11",
+        "64bit Amazon Linux 2023 v4.8.3 running Corretto 8",
+        "64bit Amazon Linux 2023 v3.7.2 running .NET 9",
+        "64bit Amazon Linux 2023 v4.8.3 running Corretto 25",
+        "64bit Amazon Linux 2023 v4.3.3 running ECS",
+        "64bit Amazon Linux 2023 v3.7.2 running .NET 10",
+        "64bit Amazon Linux 2023 v4.8.3 running Corretto 21",
+        "64bit Amazon Linux 2023 v3.7.2 running .NET 8",
+        "64bit Amazon Linux 2023 v4.9.2 running Docker",
+        "64bit Amazon Linux 2 v3.10.3 running Corretto 11",
+        "64bit Amazon Linux 2 v3.10.3 running Corretto 8",
+        "64bit Amazon Linux 2 v4.10.3 running Tomcat 9 Corretto 11",
+        "64bit Amazon Linux 2 v3.12.2 running PHP 8.1",
+        "64bit Amazon Linux 2 v2.12.3 running .NET Core",
+        "64bit Amazon Linux 2 v3.6.3 running ECS",
+        "64bit Amazon Linux 2 v3.10.3 running Corretto 17",
+        "64bit Amazon Linux 2 v3.14.3 running Go 1",
+        "64bit Amazon Linux 2 v4.10.3 running Tomcat 9 Corretto 8",
+        "64bit Amazon Linux 2 v4.5.2 running Docker",
+        "64bit Amazon Linux 2023 v6.7.1 running Node.js 20"
+    ],
+    "SolutionStackDetails": [
+        {
+            "SolutionStackName": "64bit Windows Server Core 2025 v2.22.1 running IIS 10.0",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Windows Server Core 2019 v2.22.1 running IIS 10.0",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Windows Server Core 2016 v2.22.1 running IIS 10.0",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Windows Server 2019 v2.22.1 running IIS 10.0",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Windows Server 2022 v2.22.1 running IIS 10.0",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Windows Server 2016 v2.22.1 running IIS 10.0",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Windows Server Core 2022 v2.22.1 running IIS 10.0",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Windows Server 2025 v2.22.1 running IIS 10.0",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2018.03 v2.6.33 running Packer 1.0.3",
+            "PermittedFileTypes": []
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v5.9.3 running Tomcat 10 Corretto 21",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v5.9.3 running Tomcat 11 Corretto 25",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v5.9.3 running Tomcat 11 Corretto 21",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v5.9.3 running Tomcat 9 Corretto 11",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v5.9.3 running Tomcat 11 Corretto 17",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v5.9.3 running Tomcat 9 Corretto 17",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v5.9.3 running Tomcat 10 Corretto 17",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.8.3 running Ruby 3.2",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.8.3 running Ruby 3.3",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running Python 3.13",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.8.3 running Ruby 3.4",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running Python 3.14",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running Python 3.11",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running PHP 8.4",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running Python 3.12",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running Python 3.9",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v6.7.3 running Node.js 20",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running PHP 8.3",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.5.3 running Go 1",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running PHP 8.1",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running PHP 8.2",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v6.7.3 running Node.js 22",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running PHP 8.5",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v6.7.3 running Node.js 24",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.8.3 running Corretto 17",
+            "PermittedFileTypes": [
+                "jar",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.8.3 running Corretto 11",
+            "PermittedFileTypes": [
+                "jar",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.8.3 running Corretto 8",
+            "PermittedFileTypes": [
+                "jar",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v3.7.2 running .NET 9",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.8.3 running Corretto 25",
+            "PermittedFileTypes": [
+                "jar",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.3.3 running ECS",
+            "PermittedFileTypes": []
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v3.7.2 running .NET 10",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.8.3 running Corretto 21",
+            "PermittedFileTypes": [
+                "jar",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v3.7.2 running .NET 8",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v4.9.2 running Docker",
+            "PermittedFileTypes": []
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v3.10.3 running Corretto 11",
+            "PermittedFileTypes": [
+                "jar",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v3.10.3 running Corretto 8",
+            "PermittedFileTypes": [
+                "jar",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v4.10.3 running Tomcat 9 Corretto 11",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v3.12.2 running PHP 8.1",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v2.12.3 running .NET Core",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v3.6.3 running ECS",
+            "PermittedFileTypes": []
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v3.10.3 running Corretto 17",
+            "PermittedFileTypes": [
+                "jar",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v3.14.3 running Go 1",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v4.10.3 running Tomcat 9 Corretto 8",
+            "PermittedFileTypes": [
+                "war",
+                "zip"
+            ]
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2 v4.5.2 running Docker",
+            "PermittedFileTypes": []
+        },
+        {
+            "SolutionStackName": "64bit Amazon Linux 2023 v6.7.1 running Node.js 20",
+            "PermittedFileTypes": [
+                "zip"
+            ]
+        }
+    ]
+}
