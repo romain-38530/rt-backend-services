@@ -86,9 +86,28 @@ const assignmentSchema = new mongoose.Schema({
 
 const Assignment = mongoose.model('Assignment', assignmentSchema);
 
+// Analytics Routes
+const { setupAnalyticsRoutes } = require('./routes/analytics-routes');
+
+// CloudWatch Metrics
+const { AffretIAMetrics } = require('../../infra/monitoring/cloudwatch-metrics');
+let metrics = null;
+
+// Initialize metrics
+try {
+  metrics = new AffretIAMetrics({ enabled: true });
+  console.log('[METRICS] CloudWatch metrics initialized for Affret.IA');
+} catch (error) {
+  console.warn('[METRICS] Failed to initialize CloudWatch:', error.message);
+}
+
 // MongoDB connection
+let db = null;
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('[MONGODB] Connected'))
+  .then(() => {
+    console.log('[MONGODB] Connected');
+    db = mongoose.connection.db;
+  })
   .catch(err => console.error('[MONGODB] Error:', err));
 
 // ==================== JWT AUTHENTICATION ====================
@@ -411,6 +430,16 @@ app.post('/api/v1/affret-ia/search', authenticateToken, async (req, res) => {
       duration: searchDuration
     });
 
+    // Send CloudWatch metrics
+    if (metrics) {
+      metrics.recordAIRequest(searchDuration, enrichedCarriers.length > 0).catch(err => {
+        console.error('Failed to send AI metrics:', err);
+      });
+      metrics.recordMatchingResult(enrichedCarriers.length, searchDuration).catch(err => {
+        console.error('Failed to send matching metrics:', err);
+      });
+    }
+
     res.json({
       success: true,
       data: {
@@ -422,6 +451,14 @@ app.post('/api/v1/affret-ia/search', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('[ERROR] Search:', error);
+
+    // Send error metrics
+    if (metrics) {
+      metrics.recordAIRequest(0, false).catch(err => {
+        console.error('Failed to send error metrics:', err);
+      });
+    }
+
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -602,6 +639,12 @@ app.get('/api/v1/affret-ia/assignments/:id', authenticateToken, async (req, res)
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// Setup Analytics Routes
+mongoose.connection.once('open', () => {
+  app.use('/api/v1/affretia/analytics', setupAnalyticsRoutes(db));
+  console.log('[ROUTES] Analytics routes initialized');
 });
 
 app.listen(PORT, () => {

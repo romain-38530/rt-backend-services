@@ -1,0 +1,10 @@
+
+[1m[0;36m=====================================[0m
+[1m[0;36mInitialisation[0m
+[1m[0;36m=====================================[0m
+
+[0;34m[INFO][0m Vérification des prérequis...
+[0;32m✓[0m Node.js: v24.13.0
+[0;32m✓[0m npm: 11.6.2
+[0;32m✓[0m AWS CLI: aws-cli/2.32.34
+[0;31m✗ [ERROR][0m EB CLI n'est pas installé. Installez avec: pip install awsebcli

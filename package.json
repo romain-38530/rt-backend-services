@@ -1,7 +1,7 @@
 {
   "name": "rt-backend-services",
-  "version": "1.0.0",
-  "description": "Backend microservices for RT Technologie platform",
+  "version": "2.2.0",
+  "description": "Backend microservices for RT Technologie platform - Symphonia",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -19,7 +19,20 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
-    "deploy": "bash infra/scripts/deploy-services.sh"
+    "deploy": "bash scripts/deploy-all.sh",
+    "deploy:staging": "bash scripts/deploy-all.sh --env staging",
+    "deploy:dry-run": "bash scripts/deploy-all.sh --dry-run",
+    "test:e2e": "npm run test:e2e:monitoring && npm run test:e2e:cache && npm run test:e2e:dashboards && npm run test:e2e:analytics && npm run test:e2e:workflow",
+    "test:e2e:monitoring": "node tests/test-e2e-monitoring.cjs",
+    "test:e2e:cache": "node tests/test-e2e-cache-redis.cjs",
+    "test:e2e:dashboards": "node tests/test-e2e-dashboards.cjs",
+    "test:e2e:analytics": "node tests/test-e2e-analytics.cjs",
+    "test:e2e:workflow": "node tests/test-e2e-complete-workflow.cjs"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "mongodb": "^6.3.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

@@ -4,6 +4,8 @@
  * Pattern base sur subscriptions-contracts-eb/scheduled-jobs.js
  */
 
+const { TMSSyncMetrics } = require('../../infra/monitoring/cloudwatch-metrics');
+
 /**
  * Configuration des intervalles (en millisecondes)
  */
@@ -13,6 +15,7 @@ const INTERVALS = {
   CARRIERS_SYNC: 5 * 60 * 1000,   // 5 minutes - Sync carriers
   VIGILANCE_UPDATE: 60 * 60 * 1000, // 1 heure - Mise à jour vigilance
   HEALTH_CHECK: 5 * 60 * 1000,    // 5 minutes - Verification connexions
+  MONITORING_CHECK: 5 * 60 * 1000, // 5 minutes - Monitoring et alertes
   CLEANUP_LOGS: 24 * 60 * 60 * 1000 // 24 heures - Nettoyage logs anciens
 };
 
@@ -24,6 +27,7 @@ let jobIntervals = {};
 let db = null;
 let tmsService = null;
 let lastSyncResults = {};
+let metrics = null; // CloudWatch metrics instance
 
 /**
  * Synchronisation automatique de toutes les connexions actives
@@ -83,15 +87,31 @@ async function runAutoSync() {
           transportsCount: result.transports?.count || 0
         };
 
+        // Send CloudWatch metrics
+        if (metrics) {
+          await metrics.recordSyncSuccess(duration, result.transports?.count || 0).catch(err => {
+            console.error('Failed to send metrics:', err);
+          });
+        }
+
         console.log(`✅ [CRON] ${connection.organizationName}: ${result.transports?.count || 0} transports synced in ${duration}ms`);
 
       } catch (error) {
         console.error(`❌ [CRON] Error syncing ${connection.organizationName}:`, error.message);
+
+        const duration = Date.now() - startTime;
         lastSyncResults[connection._id.toString()] = {
           timestamp: Date.now(),
           success: false,
           error: error.message
         };
+
+        // Send CloudWatch metrics for failure
+        if (metrics) {
+          await metrics.recordSyncFailure(duration, error.name || 'Unknown').catch(err => {
+            console.error('Failed to send error metrics:', err);
+          });
+        }
       }
     }
 
@@ -155,9 +175,12 @@ async function runCarriersSync() {
       baseUrl: connection.credentials.apiUrl
     });
 
-    // Récupérer carriers avec stats
-    console.log('[CRON CARRIERS] Fetching carriers with stats...');
-    const result = await dashdoc.syncCarriersWithStats({ limit: 500 });
+    // Récupérer TOUS les carriers avec pagination automatique
+    console.log('[CRON CARRIERS] Fetching ALL carriers with automatic pagination...');
+    const result = await dashdoc.syncCarriersWithStats({
+      usePagination: true,
+      maxPages: 100  // 100 pages pour être sûr de tout récupérer (~91 pages nécessaires pour 1734 carriers)
+    });
 
     let synced = 0;
     for (const carrier of result.results) {
@@ -176,6 +199,19 @@ async function runCarriersSync() {
     }
 
     console.log(`✅ [CRON CARRIERS] ${synced} carriers synchronized`);
+
+    // Nettoyer les carriers obsolètes (non synchronisés dans les 10 dernières minutes)
+    // Ce sont les carriers exclus par le filtre (ex: donneurs d'ordre avec remoteId=C\d+)
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const deleteResult = await db.collection('carriers').deleteMany({
+      externalSource: 'dashdoc',
+      lastSyncAt: { $lt: tenMinutesAgo }
+    });
+
+    if (deleteResult.deletedCount > 0) {
+      console.log(`🗑️  [CRON CARRIERS] Removed ${deleteResult.deletedCount} obsolete carriers`);
+    }
+
   } catch (error) {
     console.error('❌ [CRON CARRIERS] Error:', error.message);
   }
@@ -302,6 +338,194 @@ async function runCleanupLogs() {
 }
 
 /**
+ * Envoyer alertes monitoring via SNS (SMS) et SES (Email)
+ */
+async function sendMonitoringAlerts(anomalies) {
+  try {
+    const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+    const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+
+    const region = process.env.AWS_REGION || 'eu-west-3';
+    const snsClient = new SNSClient({ region });
+    const sesClient = new SESClient({ region });
+
+    const criticalCount = anomalies.filter(a => a.severity === 'critical').length;
+    const errorCount = anomalies.filter(a => a.severity === 'error').length;
+    const warningCount = anomalies.filter(a => a.severity === 'warning').length;
+
+    // Message SMS court
+    const smsMessage = `[SYMPHONIA TMS] ${criticalCount} anomalies critiques détectées. Vérifier dashboard monitoring.`;
+
+    // Message Email détaillé
+    const emailSubject = `🚨 Alerte Monitoring TMS - ${criticalCount} anomalies critiques`;
+    const emailBody = `
+      <h2>Alerte Monitoring TMS Sync</h2>
+      <p><strong>Date:</strong> ${new Date().toLocaleString('fr-FR')}</p>
+
+      <h3>Résumé</h3>
+      <ul>
+        <li><strong>Anomalies critiques:</strong> ${criticalCount}</li>
+        <li><strong>Erreurs:</strong> ${errorCount}</li>
+        <li><strong>Avertissements:</strong> ${warningCount}</li>
+      </ul>
+
+      <h3>Détails</h3>
+      <table border="1" cellpadding="5" style="border-collapse: collapse;">
+        <tr>
+          <th>Type</th>
+          <th>Job</th>
+          <th>Sévérité</th>
+          <th>Message</th>
+        </tr>
+        ${anomalies.map(a => `
+          <tr>
+            <td>${a.type}</td>
+            <td>${a.job || 'N/A'}</td>
+            <td><strong>${a.severity.toUpperCase()}</strong></td>
+            <td>${a.message}</td>
+          </tr>
+        `).join('')}
+      </table>
+
+      <p><a href="${process.env.DASHBOARD_URL || 'https://admin.symphonia.com'}/monitoring">Voir dashboard monitoring</a></p>
+    `;
+
+    const alerts = [];
+
+    // Envoi SMS via SNS si configuré
+    if (process.env.ALERT_SMS_NUMBER) {
+      try {
+        await snsClient.send(new PublishCommand({
+          PhoneNumber: process.env.ALERT_SMS_NUMBER,
+          Message: smsMessage
+        }));
+        console.log('📱 [ALERT] SMS sent');
+        alerts.push({ channel: 'sms', status: 'sent' });
+      } catch (error) {
+        console.error('❌ [ALERT] SMS error:', error.message);
+        alerts.push({ channel: 'sms', status: 'failed', error: error.message });
+      }
+    }
+
+    // Envoi Email via SES si configuré
+    if (process.env.ALERT_EMAIL) {
+      try {
+        await sesClient.send(new SendEmailCommand({
+          Source: process.env.SMTP_FROM || 'monitoring@symphonia.com',
+          Destination: { ToAddresses: [process.env.ALERT_EMAIL] },
+          Message: {
+            Subject: { Data: emailSubject },
+            Body: { Html: { Data: emailBody } }
+          }
+        }));
+        console.log('📧 [ALERT] Email sent');
+        alerts.push({ channel: 'email', status: 'sent' });
+      } catch (error) {
+        console.error('❌ [ALERT] Email error:', error.message);
+        alerts.push({ channel: 'email', status: 'failed', error: error.message });
+      }
+    }
+
+    return alerts;
+
+  } catch (error) {
+    console.error('❌ [ALERT] Error sending alerts:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Vérification monitoring et détection anomalies
+ * Execute toutes les 5 minutes
+ */
+async function runMonitoringCheck() {
+  if (!db) {
+    console.warn('⚠️  [CRON] monitoringCheck: Database not available');
+    return;
+  }
+
+  try {
+    console.log('🔄 [CRON] Running monitoringCheck...');
+
+    const now = Date.now();
+    const monitoringResults = {
+      timestamp: new Date(),
+      jobs: {},
+      anomalies: [],
+      alerts: []
+    };
+
+    // 1. Vérifier santé de chaque job
+    for (const [jobName, lastResult] of Object.entries(lastSyncResults)) {
+      const timeSinceLastSync = now - (lastResult.timestamp || 0);
+      const hasError = !lastResult.success;
+
+      // Détection anomalie: pas de sync depuis 10min
+      if (timeSinceLastSync > 10 * 60 * 1000) {
+        monitoringResults.anomalies.push({
+          type: 'NO_SYNC',
+          job: jobName,
+          severity: 'critical',
+          message: `No sync for ${Math.floor(timeSinceLastSync / 60000)} minutes`,
+          timeSinceLastSync
+        });
+      }
+
+      // Détection anomalie: durée sync > 2min
+      if (lastResult.duration && lastResult.duration > 2 * 60 * 1000) {
+        monitoringResults.anomalies.push({
+          type: 'SLOW_SYNC',
+          job: jobName,
+          severity: 'warning',
+          message: `Slow sync: ${lastResult.duration}ms`,
+          duration: lastResult.duration
+        });
+      }
+
+      // Détection anomalie: erreurs
+      if (hasError) {
+        monitoringResults.anomalies.push({
+          type: 'SYNC_ERROR',
+          job: jobName,
+          severity: 'error',
+          message: lastResult.error || 'Unknown error',
+          error: lastResult.error
+        });
+      }
+
+      monitoringResults.jobs[jobName] = {
+        lastSync: new Date(lastResult.timestamp),
+        success: lastResult.success,
+        duration: lastResult.duration,
+        timeSinceLastSync
+      };
+    }
+
+    // 2. Sauvegarder monitoring log
+    await db.collection('monitoring_logs').insertOne(monitoringResults);
+
+    // 3. Envoyer alertes si anomalies critiques
+    const criticalAnomalies = monitoringResults.anomalies.filter(a => a.severity === 'critical');
+    if (criticalAnomalies.length > 0) {
+      console.log(`⚠️  [CRON] monitoringCheck: ${criticalAnomalies.length} critical anomalies detected`);
+      const alerts = await sendMonitoringAlerts(monitoringResults.anomalies);
+      monitoringResults.alerts = alerts;
+
+      // Update log avec alertes
+      await db.collection('monitoring_logs').updateOne(
+        { _id: monitoringResults._id },
+        { $set: { alerts } }
+      );
+    }
+
+    console.log(`✅ [CRON] monitoringCheck: ${monitoringResults.anomalies.length} anomalies detected (${criticalAnomalies.length} critical)`);
+
+  } catch (error) {
+    console.error('❌ [CRON] monitoringCheck error:', error.message);
+  }
+}
+
+/**
  * Demarrer tous les jobs planifies
  */
 function startAllJobs(database, tmsServiceInstance) {
@@ -314,6 +538,14 @@ function startAllJobs(database, tmsServiceInstance) {
   tmsService = tmsServiceInstance;
   jobsRunning = true;
 
+  // Initialize CloudWatch metrics
+  try {
+    metrics = new TMSSyncMetrics({ enabled: true });
+    console.log('✅ [METRICS] CloudWatch metrics initialized');
+  } catch (error) {
+    console.warn('⚠️  [METRICS] Failed to initialize CloudWatch:', error.message);
+  }
+
   console.log('============================================================================');
   console.log('🚀 [CRON] Starting TMS Sync scheduled jobs...');
   console.log('============================================================================');
@@ -324,6 +556,7 @@ function startAllJobs(database, tmsServiceInstance) {
   jobIntervals.carriersSync = setInterval(runCarriersSync, INTERVALS.CARRIERS_SYNC);
   jobIntervals.vigilanceUpdate = setInterval(runVigilanceUpdate, INTERVALS.VIGILANCE_UPDATE);
   jobIntervals.healthCheck = setInterval(runHealthCheck, INTERVALS.HEALTH_CHECK);
+  jobIntervals.monitoringCheck = setInterval(runMonitoringCheck, INTERVALS.MONITORING_CHECK);
   jobIntervals.cleanupLogs = setInterval(runCleanupLogs, INTERVALS.CLEANUP_LOGS);
 
   console.log('✅ [CRON] autoSync: every 30 seconds (HIGH FREQUENCY)');
@@ -331,6 +564,7 @@ function startAllJobs(database, tmsServiceInstance) {
   console.log('✅ [CRON] carriersSync: every 5 minutes (CARRIERS)');
   console.log('✅ [CRON] vigilanceUpdate: every 1 hour (VIGILANCE SCORES)');
   console.log('✅ [CRON] healthCheck: every 5 minutes');
+  console.log('✅ [CRON] monitoringCheck: every 5 minutes (MONITORING & ALERTS)');
   console.log('✅ [CRON] cleanupLogs: every 24 hours');
   console.log('============================================================================');
 
@@ -403,6 +637,12 @@ function getJobsStatus() {
         intervalMs: INTERVALS.HEALTH_CHECK,
         active: !!jobIntervals.healthCheck,
         description: 'Connection health verification'
+      },
+      monitoringCheck: {
+        interval: '5 minutes',
+        intervalMs: INTERVALS.MONITORING_CHECK,
+        active: !!jobIntervals.monitoringCheck,
+        description: 'Monitoring anomalies detection and alerts'
       },
       cleanupLogs: {
         interval: '24 hours',

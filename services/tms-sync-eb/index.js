@@ -24,9 +24,12 @@ const TMSConnectionService = require('./services/tms-connection.service');
 const VigilanceService = require('./services/vigilance.service');
 const DashdocConnector = require('./connectors/dashdoc.connector');
 const scheduledJobs = require('./scheduled-jobs');
+const cacheService = require('./services/redis-cache.service');
+const packageJson = require('./package.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const VERSION = packageJson.version;
 const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 
 // MongoDB connection
@@ -54,6 +57,11 @@ async function connectMongoDB() {
 
     // Initialiser le service de vigilance
     vigilanceService = new VigilanceService(db);
+
+    // Initialiser le cache Redis
+    await cacheService.init();
+    const cacheStats = await cacheService.getStats();
+    console.log(`[CACHE] Initialized: ${cacheStats.mode}`);
 
     console.log('Connected to MongoDB');
     return true;
@@ -108,7 +116,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    version: '2.3.0',
+    version: VERSION,
     features: ['dashdoc', 'auto-sync', 'real-time-counters', 'carriers', 'vigilance'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
@@ -136,7 +144,7 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT TMS Sync API',
-    version: '2.3.0',
+    version: VERSION,
     supportedTMS: ['dashdoc'],
     features: ['carriers', 'vigilance', 'orders', 'real-time-sync'],
     endpoints: [
@@ -273,22 +281,46 @@ app.get('/api/v1/tms/connections', authenticateToken, requireMongo, async (req, 
 });
 
 /**
- * Details d'une connexion
+ * Details d'une connexion (avec cache Redis)
  */
 app.get('/api/v1/tms/connections/:id', authenticateToken, requireMongo, async (req, res) => {
   try {
-    const connection = await tmsService.getConnection(req.params.id);
+    const connectionId = req.params.id;
+
+    // 1. Vérifier cache
+    const cached = await cacheService.getConnectionStatus(connectionId);
+    if (cached) {
+      console.log(`[CACHE HIT] Connection ${connectionId}`);
+      return res.json({
+        success: true,
+        cached: true,
+        connection: cached
+      });
+    }
+
+    // 2. Fetch from database
+    const connection = await tmsService.getConnection(connectionId);
     if (!connection) {
       return res.status(404).json({ error: 'Connection not found' });
     }
 
     // Ne pas exposer le token
-    connection.credentials = {
-      apiUrl: connection.credentials?.apiUrl,
-      hasToken: !!connection.credentials?.apiToken
+    const sanitizedConnection = {
+      ...connection,
+      credentials: {
+        apiUrl: connection.credentials?.apiUrl,
+        hasToken: !!connection.credentials?.apiToken
+      }
     };
 
-    res.json({ success: true, connection });
+    // 3. Store in cache (30s TTL)
+    await cacheService.setConnectionStatus(connectionId, sanitizedConnection, 30);
+
+    res.json({
+      success: true,
+      cached: false,
+      connection: sanitizedConnection
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -572,7 +604,21 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Construction du filtre MongoDB
+    // 1. Vérifier cache (uniquement pour les requêtes sans pagination avancée)
+    const canUseCache = parseInt(skip) === 0 && parseInt(limit) <= 50;
+    if (canUseCache) {
+      const cached = await cacheService.getFilteredOrders(req.query);
+      if (cached) {
+        console.log('[CACHE HIT] Filtered orders');
+        return res.json({
+          success: true,
+          cached: true,
+          ...cached
+        });
+      }
+    }
+
+    // 2. Construction du filtre MongoDB
     const query = { externalSource: 'dashdoc' };
 
     // Filtre par tag (par défaut "Symphonia")
@@ -699,8 +745,9 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
       hasPrev: skipNum > 0
     };
 
-    res.json({
+    const response = {
       success: true,
+      cached: false,
       filters: {
         status,
         city,
@@ -717,7 +764,14 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
       },
       meta,
       orders
-    });
+    };
+
+    // 3. Store in cache (TTL 5min = 300s) if cacheable
+    if (canUseCache) {
+      await cacheService.setFilteredOrders(req.query, response, 300);
+    }
+
+    res.json(response);
 
   } catch (error) {
     console.error('Error filtering orders:', error.message);
@@ -1207,6 +1261,41 @@ app.post('/api/v1/jobs/:jobName/run', async (req, res) => {
 });
 
 /**
+ * Debug: Cleanup obsolete carriers (not synced in last 10 minutes)
+ * POST /api/v1/debug/cleanup-obsolete-carriers
+ */
+app.post('/api/v1/debug/cleanup-obsolete-carriers', requireMongo, async (req, res) => {
+  try {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+
+    // Trouver les carriers obsolètes
+    const obsoleteCarriers = await db.collection('carriers').find({
+      externalSource: 'dashdoc',
+      lastSyncAt: { $lt: tenMinutesAgo }
+    }).toArray();
+
+    // Supprimer
+    const deleteResult = await db.collection('carriers').deleteMany({
+      externalSource: 'dashdoc',
+      lastSyncAt: { $lt: tenMinutesAgo }
+    });
+
+    res.json({
+      success: true,
+      deleted: deleteResult.deletedCount,
+      carriers: obsoleteCarriers.map(c => ({
+        companyName: c.companyName,
+        remoteId: c.remoteId,
+        externalId: c.externalId,
+        lastSyncAt: c.lastSyncAt
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Debug: Verifier les coordonnees GPS d'une commande specifique
  * GET /api/v1/tms/orders/:orderId/coordinates
  */
@@ -1274,6 +1363,124 @@ app.get('/api/v1/tms/orders/:orderId/coordinates', requireMongo, async (req, res
 
   } catch (error) {
     console.error('[COORDINATES DEBUG] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ===========================================
+// GET /api/v1/cache/stats
+// Redis cache statistics
+// ===========================================
+app.get('/api/v1/cache/stats', async (req, res) => {
+  try {
+    const stats = await cacheService.getStats();
+    const health = await cacheService.healthCheck();
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      health,
+      cache: stats
+    });
+  } catch (error) {
+    console.error('[CACHE STATS] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ===========================================
+// POST /api/v1/cache/invalidate
+// Invalidate cache (manual or webhook)
+// ===========================================
+app.post('/api/v1/cache/invalidate', async (req, res) => {
+  try {
+    const { pattern } = req.body;
+
+    if (!pattern) {
+      return res.status(400).json({
+        success: false,
+        error: 'Pattern required (e.g., "tms:orders:*")'
+      });
+    }
+
+    const deletedCount = await cacheService.invalidate(pattern);
+
+    res.json({
+      success: true,
+      message: `Cache invalidated for pattern: ${pattern}`,
+      deletedCount,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('[CACHE INVALIDATE] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ===========================================
+// GET /api/v1/monitoring/status
+// Monitoring status and recent logs
+// ===========================================
+app.get('/api/v1/monitoring/status', requireMongo, async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    // Get jobs status from scheduled jobs
+    const jobsStatus = scheduledJobs.getJobsStatus();
+
+    // Get recent monitoring logs
+    const recentLogs = await db.collection('monitoring_logs')
+      .find({})
+      .sort({ timestamp: -1 })
+      .limit(parseInt(limit))
+      .toArray();
+
+    // Get active anomalies (from last 30 minutes)
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const activeAnomalies = await db.collection('monitoring_logs')
+      .aggregate([
+        { $match: { timestamp: { $gte: thirtyMinutesAgo } } },
+        { $unwind: '$anomalies' },
+        { $group: {
+          _id: '$anomalies.type',
+          count: { $sum: 1 },
+          lastOccurrence: { $max: '$timestamp' },
+          severity: { $first: '$anomalies.severity' }
+        }},
+        { $sort: { lastOccurrence: -1 } }
+      ])
+      .toArray();
+
+    // Calculate metrics
+    const totalAnomalies = recentLogs.reduce((sum, log) => sum + (log.anomalies?.length || 0), 0);
+    const criticalAnomalies = recentLogs.reduce((sum, log) =>
+      sum + (log.anomalies?.filter(a => a.severity === 'critical').length || 0), 0);
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      jobsStatus,
+      recentLogs,
+      activeAnomalies,
+      metrics: {
+        totalAnomalies,
+        criticalAnomalies,
+        logsCount: recentLogs.length
+      }
+    });
+
+  } catch (error) {
+    console.error('[MONITORING STATUS] Error:', error);
     res.status(500).json({
       success: false,
       error: error.message

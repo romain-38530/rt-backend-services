@@ -1,0 +1,38 @@
+[0;32m✓[0m AWS CLI installé: aws-cli/2.32.34 Python/3.13.11 Windows/11 exe/AMD64
+[0;32m✓[0m AWS Account ID: 004843574253
+[0;32m✓[0m Package trouvé: affret-ia-api-v2.zip (96K)
+[0;32m✓[0m Package trouvé: tms-sync-eb.zip (360K)
+[0;32m✓[0m Package trouvé: authz-eb.zip (216K)
+[0;32m✓[0m MongoDB URI configuré
+[0;34m[2026-02-02 07:48:31][0m Vérification du domaine SES: symphonia-controltower.com
+[0;34m[2026-02-02 07:48:33][0m Demande de vérification du domaine: symphonia-controltower.com
+{
+    "VerificationToken": "tu0vnf0dlySH9xNAg+hc1lhIAGsrR+Oh2nExljRs8dg="
+}
+[1;33m⚠ WARNING:[0m Domaine en attente de vérification. Ajoutez les enregistrements DNS TXT.
+[0;34m[2026-02-02 07:48:35][0m Vérification de l'email sender: ne-pas-repondre@symphonia-controltower.com
+[0;34m[2026-02-02 07:48:38][0m Envoi email de vérification à: ne-pas-repondre@symphonia-controltower.com
+[1;33m⚠ WARNING:[0m Email de vérification envoyé. Cliquez sur le lien reçu.
+[0;32m✓[0m SES Production Mode activé (quota: 200.0 emails/jour)
+[0;34m[2026-02-02 07:48:42][0m Création du topic SNS: symphonia-alerts
+[0;32m✓[0m Topic SNS créé: arn:aws:sns:eu-west-3:004843574253:symphonia-alerts
+[0;34m[2026-02-02 07:48:44][0m Abonnement SMS: +33612345678
+{
+    "SubscriptionArn": "arn:aws:sns:eu-west-3:004843574253:symphonia-alerts:709c1ee7-e5b6-49e4-8bd7-29000e2f52e2"
+}
+[0;32m✓[0m Abonnement SMS configuré
+[0;34m[2026-02-02 07:48:47][0m Configuration préférences SMS...
+
+usage: aws [options] <command> <subcommand> [<subcommand> ...] [parameters]
+To see help text, you can run:
+
+  aws help
+  aws <command> help
+  aws <command> <subcommand> help
+
+Unknown options: DefaultSenderID=Symphonia
+
+[0;34m[2026-02-02 07:48:48][0m Vérification du bucket S3: symphonia-deploy-packages-004843574253
+[0;34m[2026-02-02 07:48:50][0m Création du bucket S3: symphonia-deploy-packages-004843574253
+
+Unknown options: --create-bucket-configuration,LocationConstraint=eu-west-3

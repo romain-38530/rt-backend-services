@@ -3,6 +3,45 @@
 
 const nodemailer = require('nodemailer');
 
+// Import CloudWatch metrics
+const { CloudWatchMetrics } = require('../../infra/monitoring/cloudwatch-metrics');
+let metricsEmail = null;
+
+// Initialize metrics
+try {
+  metricsEmail = new CloudWatchMetrics({ namespace: 'SYMPHONIA', enabled: true });
+  console.log('[METRICS] CloudWatch metrics initialized for emails');
+} catch (error) {
+  console.warn('[METRICS] Failed to initialize CloudWatch:', error.message);
+}
+
+// Référence à la base de données pour le logging
+let db = null;
+
+/**
+ * Configurer la référence DB pour le logging des emails
+ */
+function setDb(database) {
+  db = database;
+}
+
+/**
+ * Logger un email envoyé dans la collection email_logs
+ */
+async function logEmail(emailData) {
+  if (!db) {
+    console.warn('[EMAIL LOG] Database not configured, skipping logging');
+    return;
+  }
+
+  try {
+    const { logEmailSent, EMAIL_TYPES } = require('./routes/email-metrics');
+    await logEmailSent(db, emailData);
+  } catch (error) {
+    console.error('[EMAIL LOG] Error logging email:', error.message);
+  }
+}
+
 // Configuration SMTP OVH
 const SMTP_CONFIG = {
   host: process.env.SMTP_HOST || 'ssl0.ovh.net',
@@ -59,6 +98,44 @@ async function sendEmail({ to, subject, html, text, from }) {
     console.error('✗ Erreur envoi email:', error.message);
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Wrapper sendEmail avec logging automatique dans email_logs
+ */
+async function sendEmailWithLogging({ to, subject, html, text, from, type, carrierId, metadata }) {
+  const startTime = Date.now();
+
+  // Envoyer l'email
+  const result = await sendEmail({ to, subject, html, text, from });
+
+  const duration = Date.now() - startTime;
+
+  // Logger le résultat dans email_logs
+  await logEmail({
+    emailId: result.messageId || null,
+    type: type || 'notification',
+    to,
+    subject,
+    carrierId: carrierId || null,
+    success: result.success,
+    error: result.error || null,
+    metadata: metadata || {}
+  });
+
+  // Send CloudWatch metrics
+  if (metricsEmail) {
+    metricsEmail.incrementCounter(result.success ? 'Email-Sent-Success' : 'Email-Sent-Failure', {
+      Type: type || 'notification'
+    }).catch(err => console.error('Failed to send email metrics:', err));
+
+    metricsEmail.recordDuration('Email-Send-Duration', duration, {
+      Type: type || 'notification',
+      Status: result.success ? 'Success' : 'Failed'
+    }).catch(err => console.error('Failed to send duration metrics:', err));
+  }
+
+  return result;
 }
 
 /**
@@ -125,10 +202,15 @@ async function sendCarrierInvitationEmail(carrierEmail, carrierName, invitedBy) 
     </html>
   `;
 
-  return sendEmail({
+  return sendEmailWithLogging({
     to: carrierEmail,
     subject,
-    html
+    html,
+    type: 'invitation',
+    metadata: {
+      carrierName,
+      invitedBy
+    }
   });
 }
 
@@ -195,10 +277,15 @@ async function sendOnboardingSuccessEmail(carrierEmail, carrierName, score) {
     </html>
   `;
 
-  return sendEmail({
+  return sendEmailWithLogging({
     to: carrierEmail,
     subject,
-    html
+    html,
+    type: 'onboarding',
+    metadata: {
+      carrierName,
+      score
+    }
   });
 }
 
@@ -280,10 +367,17 @@ async function sendVigilanceAlertEmail(carrierEmail, carrierName, documentType, 
     </html>
   `;
 
-  return sendEmail({
+  return sendEmailWithLogging({
     to: carrierEmail,
     subject,
-    html
+    html,
+    type: 'vigilance_alert',
+    metadata: {
+      carrierName,
+      documentType,
+      daysUntilExpiry,
+      expiryDate: expiryDate.toISOString()
+    }
   });
 }
 
@@ -355,10 +449,15 @@ async function sendCarrierBlockedEmail(carrierEmail, carrierName, reason) {
     </html>
   `;
 
-  return sendEmail({
+  return sendEmailWithLogging({
     to: carrierEmail,
     subject,
-    html
+    html,
+    type: 'blocked',
+    metadata: {
+      carrierName,
+      reason
+    }
   });
 }
 
@@ -419,10 +518,15 @@ async function sendCarrierUnblockedEmail(carrierEmail, carrierName) {
     </html>
   `;
 
-  return sendEmail({
+  return sendEmailWithLogging({
     to: carrierEmail,
     subject,
-    html
+    html,
+    type: 'notification',
+    metadata: {
+      carrierName,
+      action: 'unblocked'
+    }
   });
 }
 
@@ -611,15 +715,24 @@ async function sendClientOnboardingConfirmationEmail(clientEmail, companyName, r
     </html>
   `;
 
-  return sendEmail({
+  return sendEmailWithLogging({
     to: clientEmail,
     subject,
-    html
+    html,
+    type: 'onboarding',
+    metadata: {
+      companyName,
+      requestId,
+      paymentMethod: options.paymentMethod,
+      subscriptionType: options.subscriptionType
+    }
   });
 }
 
 module.exports = {
   sendEmail,
+  sendEmailWithLogging,
+  setDb,
   sendCarrierInvitationEmail,
   sendOnboardingSuccessEmail,
   sendClientOnboardingConfirmationEmail,

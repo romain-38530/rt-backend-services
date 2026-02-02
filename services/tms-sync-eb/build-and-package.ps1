@@ -1,9 +1,9 @@
 # Script pour créer un package ZIP compatible UNIX pour AWS Elastic Beanstalk
-Write-Host "Creating UNIX-compatible deployment package v2.1.9..." -ForegroundColor Cyan
+Write-Host "Creating UNIX-compatible deployment package v2.4.1..." -ForegroundColor Cyan
 
 $sourceDir = "c:\Users\rtard\dossier symphonia\rt-backend-services\services\tms-sync-eb"
-$tempDir = "C:\temp\tms-sync-v2.1.9-unix"
-$zipPath = "$sourceDir\deploy-v2.1.9-unix.zip"
+$tempDir = "C:\temp\tms-sync-v2.4.1-unix"
+$zipPath = "$sourceDir\deploy-v2.4.1-unix.zip"
 
 # Nettoyer
 if (Test-Path $tempDir) {
@@ -66,6 +66,6 @@ Write-Host "  File: $($zipInfo.Name)" -ForegroundColor Cyan
 Write-Host "  Size: $([math]::Round($zipInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
 Write-Host "  Path: $zipPath" -ForegroundColor Cyan
 Write-Host "`nNext steps:" -ForegroundColor Yellow
-Write-Host "  1. Upload to S3: aws s3 cp `"$zipPath`" s3://elasticbeanstalk-eu-central-1-515713931678/tms-sync/" -ForegroundColor Gray
+Write-Host "  1. Upload to S3: aws s3 cp `"$zipPath`" s3://elasticbeanstalk-eu-central-1-004843574253/tms-sync/" -ForegroundColor Gray
 Write-Host "  2. Deploy via EB console or CLI" -ForegroundColor Gray
 Write-Host "============================================================================" -ForegroundColor Green

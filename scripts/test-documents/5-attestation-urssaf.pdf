@@ -1,0 +1,64 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources 4 0 R /MediaBox [0 0 612 792] /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> /F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> >> >>
+endobj
+5 0 obj
+<< /Length 777 >>
+stream
+BT
+/F2 16 Tf
+50 750 Td
+(UNION DE RECOUVREMENT DES COTISATIONS) Tj
+0 -20 Td
+(DE SECURITE SOCIALE ET D'ALLOCATIONS FAMILIALES) Tj
+0 -30 Td
+(/F2 16 Tf) Tj
+(ATTESTATION DE VIGILANCE) Tj
+0 -40 Td
+(/F1 12 Tf) Tj
+(Etablie le: 01/02/2026) Tj
+0 -30 Td
+(Raison sociale: TRANSPORT EXPRESS DEMO) Tj
+0 -20 Td
+(SIRET: 12345678901234) Tj
+0 -20 Td
+(Adresse: 123 Avenue de la Logistique, 75001 Paris) Tj
+0 -30 Td
+(La presente atteste que l'entreprise citee ci-dessus) Tj
+0 -20 Td
+(est a jour de ses obligations declaratives et de paiement) Tj
+0 -20 Td
+(des cotisations et contributions sociales.) Tj
+0 -30 Td
+(/F2 12 Tf) Tj
+(Validite: jusqu'au 16/02/2026) Tj
+0 -20 Td
+(/F1 12 Tf) Tj
+(Date limite: 16 fevrier 2026) Tj
+0 -30 Td
+(Code de verification: URF-2026-99534) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000214 00000 n
+0000000343 00000 n
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1177
+%%EOF

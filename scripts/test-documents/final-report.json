@@ -1,0 +1,79 @@
+{
+  "executionTime": "2026-02-01T17:05:41.805Z",
+  "scriptsExecuted": [
+    {
+      "script": "verify-alerting-system.cjs",
+      "success": true
+    },
+    {
+      "script": "generate-test-documents.cjs",
+      "success": true
+    },
+    {
+      "script": "test-document-workflow.cjs",
+      "success": true
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0
+  },
+  "testDocuments": {
+    "path": "C:\\Users\\rtard\\dossier symphonia\\rt-backend-services\\scripts\\test-documents",
+    "exists": true
+  },
+  "detailedResults": {
+    "startTime": "2026-02-01T17:05:41.723Z",
+    "uploads": [],
+    "ocrResults": [],
+    "alerts": [],
+    "carrier": null,
+    "errors": [
+      {
+        "step": "upload",
+        "document": "Licence de Transport",
+        "error": "Failed to get upload URL: "
+      },
+      {
+        "step": "upload",
+        "document": "Assurance RC",
+        "error": "Failed to get upload URL: "
+      },
+      {
+        "step": "upload",
+        "document": "Assurance Marchandises",
+        "error": "Failed to get upload URL: "
+      },
+      {
+        "step": "upload",
+        "document": "Extrait KBIS",
+        "error": "Failed to get upload URL: "
+      },
+      {
+        "step": "upload",
+        "document": "Attestation URSSAF",
+        "error": "Failed to get upload URL: "
+      },
+      {
+        "step": "upload",
+        "document": "RIB",
+        "error": "Failed to get upload URL: "
+      },
+      {
+        "step": "carrier-status",
+        "error": "Failed to get carrier: "
+      },
+      {
+        "step": "vigilance",
+        "error": "Failed to trigger vigilance check: "
+      },
+      {
+        "step": "final-check",
+        "error": "Failed to get carrier: "
+      }
+    ],
+    "endTime": "2026-02-01T17:05:41.770Z",
+    "duration": 0.047
+  }
+}

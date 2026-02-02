@@ -1,0 +1,19 @@
+{
+  "name": "scripts",
+  "version": "1.0.0",
+  "description": "Ce dossier contient tous les scripts pour la configuration, la maintenance et le monitoring des services externes de RT SYMPHONI.A.",
+  "main": "budget-alerts.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.980.0",
+    "axios": "^1.13.4",
+    "form-data": "^4.0.5",
+    "pdfkit": "^0.17.2"
+  }
+}

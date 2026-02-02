@@ -1,0 +1,140 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║    SYMPHONIA PLATFORM v2.2.0 - DÉPLOIEMENT AWS                              ║
+║    COMMENCEZ ICI ▼                                                           ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📋 VOUS AVEZ 3 PACKAGES PRÊTS POUR AWS:
+
+   deploy/packages/
+   ├── tms-sync-eb.zip          (358 KB) ✅
+   ├── authz-eb.zip             (214 KB) ✅
+   └── affret-ia-api-v2.zip      (93 KB) ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🚀 DÉPLOIEMENT EN 3 ÉTAPES SIMPLES:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 1: CONFIGURATION (2 minutes)                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+   1. Copiez le fichier de configuration:
+      cp .env.deploy .env.deploy.local
+
+   2. Éditez avec vos valeurs:
+      nano .env.deploy.local
+      
+      Variables REQUISES:
+      ✓ MONGODB_URI          → Votre MongoDB Atlas ou URI
+      ✓ ALERT_SMS_NUMBER     → +33612345678
+      ✓ ALERT_EMAIL          → admin@symphonia.com
+      ✓ JWT_SECRET           → Générez avec: openssl rand -base64 32
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 2: LANCEMENT (1 commande)                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+   bash scripts/quick-deploy.sh
+
+   Le script va automatiquement:
+   ✓ Configurer AWS SES (email)
+   ✓ Configurer AWS SNS (SMS)
+   ✓ Créer bucket S3
+   ✓ Uploader les 3 packages
+   ✓ Créer les applications Elastic Beanstalk
+   ✓ Déployer les 3 services
+   ✓ Configurer MongoDB (6 collections)
+   ✓ Générer le rapport
+
+   ⏱  Temps: 15-20 minutes (première fois)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 3: VALIDATION                                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+   Vérifiez les URLs dans:
+   deploy/deployment-summary-YYYYMMDD-HHMMSS.txt
+
+   Testez les endpoints:
+   curl http://{tms-url}/health
+   curl http://{authz-url}/health
+   curl http://{affretia-url}/health
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📚 DOCUMENTATION DISPONIBLE:
+
+   🟢 RAPIDE (5 min):
+      deploy/QUICK_START.md
+
+   🟡 DÉTAILLÉ (15 pages):
+      deploy/DEPLOYMENT_REPORT.md
+
+   🔵 GUIDE COMPLET:
+      scripts/README_DEPLOY.md
+      DEPLOYMENT_GUIDE.md
+
+   🟣 RÉSUMÉ FINAL:
+      deploy/DEPLOYMENT_FINAL_SUMMARY.md
+
+═══════════════════════════════════════════════════════════════════════════════
+
+❓ BESOIN D'AIDE?
+
+   • Problème AWS credentials:
+     → aws configure
+
+   • Problème MongoDB:
+     → Vérifiez whitelist IP dans MongoDB Atlas
+     → mongosh "$MONGODB_URI"
+
+   • Problème packages:
+     → bash scripts/deploy-local.sh
+
+   • Voir tous les problèmes courants:
+     → Consultez scripts/README_DEPLOY.md section "Troubleshooting"
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ PRÉREQUIS:
+
+   [✓] AWS CLI installé et configuré (aws configure)
+   [✓] MongoDB Atlas accessible ou instance MongoDB
+   [✓] Packages dans deploy/packages/ (déjà créés!)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 FONCTIONNALITÉS DÉPLOYÉES:
+
+   TMS Sync EB:
+   • Cache Redis avec fallback mémoire
+   • Monitoring automatique (5 min)
+   • Alertes SMS + Email
+   • CloudWatch metrics
+
+   Authz EB:
+   • Webhooks carriers (HMAC-SHA256)
+   • Email metrics & analytics
+   • Carrier scoring (leaderboard)
+   • Alertes SMS documents expirants
+
+   Affret IA API v2:
+   • Analytics conversion (funnel)
+   • Blockers analysis
+   • Timeline tracking
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🚀 PRÊT? LANCEZ LE DÉPLOIEMENT:
+
+   bash scripts/quick-deploy.sh
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Version: 2.2.0
+Date: 2026-02-01
+Status: ✅ Production Ready
+
+Bon déploiement! 🎉

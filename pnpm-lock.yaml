@@ -7,6 +7,16 @@ settings:
 importers:
 
   .:
+    dependencies:
+      axios:
+        specifier: ^1.6.2
+        version: 1.13.2
+      dotenv:
+        specifier: ^16.3.1
+        version: 16.6.1
+      mongodb:
+        specifier: ^6.3.0
+        version: 6.21.0
     devDependencies:
       '@types/node':
         specifier: ^20.10.0
@@ -263,6 +273,9 @@ importers:
       express:
         specifier: ^4.18.2
         version: 4.21.2
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.2
       mongoose:
         specifier: ^8.0.3
         version: 8.20.1
@@ -365,12 +378,21 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.490.0
         version: 3.937.0
+      '@aws-sdk/client-ses':
+        specifier: ^3.490.0
+        version: 3.936.0
+      '@aws-sdk/client-sns':
+        specifier: ^3.490.0
+        version: 3.965.0
       '@aws-sdk/client-textract':
         specifier: ^3.490.0
         version: 3.940.0
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.490.0
         version: 3.957.0
+      axios:
+        specifier: ^1.6.2
+        version: 1.13.2
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -1121,6 +1143,9 @@ importers:
       helmet:
         specifier: ^7.1.0
         version: 7.2.0
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.2
       mongodb:
         specifier: ^6.3.0
         version: 6.21.0
@@ -1868,6 +1893,12 @@ importers:
 
   services/tms-sync-eb:
     dependencies:
+      '@aws-sdk/client-ses':
+        specifier: ^3.490.0
+        version: 3.936.0
+      '@aws-sdk/client-sns':
+        specifier: ^3.490.0
+        version: 3.965.0
       axios:
         specifier: ^1.6.2
         version: 1.13.2
@@ -1883,6 +1914,12 @@ importers:
       helmet:
         specifier: ^7.1.0
         version: 7.2.0
+      ioredis:
+        specifier: ^5.9.1
+        version: 5.9.1
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.2
       mongodb:
         specifier: ^6.3.0
         version: 6.21.0

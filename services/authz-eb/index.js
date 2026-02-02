@@ -6,9 +6,12 @@ const { MongoClient, ObjectId } = require('mongodb');
 const fetch = require('node-fetch');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { setupCarrierRoutes, checkAndSendVigilanceAlerts } = require('./carriers');
-const { sendClientOnboardingConfirmationEmail } = require('./email');
+const { setupCarrierRoutes, checkAndSendVigilanceAlerts, runDocumentExpiryAlerts } = require('./carriers');
+const { sendClientOnboardingConfirmationEmail, setDb: setEmailDb } = require('./email');
 const { setupSubUsersRoutes } = require('./subusers');
+const { setupWebhookRoutes } = require('./routes/carrier-webhooks');
+const { setupEmailMetricsRoutes } = require('./routes/email-metrics');
+const { setupCarrierScoringRoutes } = require('./routes/carrier-scoring');
 const cron = require('node-cron');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
@@ -67,6 +70,10 @@ async function connectMongoDB() {
     await mongoClient.connect();
     db = mongoClient.db();
     mongoConnected = true;
+
+    // Configure email module with database reference
+    setEmailDb(db);
+
     console.log('✓ Connected to MongoDB');
     return true;
   } catch (error) {
@@ -1278,6 +1285,9 @@ async function startServer() {
   if (mongoConnected && db) {
     setupCarrierRoutes(app, db);
     setupSubUsersRoutes(app, db, jwt, JWT_SECRET);
+    setupWebhookRoutes(app, db);
+    setupEmailMetricsRoutes(app, db);
+    setupCarrierScoringRoutes(app, db);
     console.log('✓ Carrier management routes configured');
 
     // Cron job: Alertes de vigilance quotidiennes a 8h00 (heure Paris)
@@ -1294,6 +1304,21 @@ async function startServer() {
       timezone: 'Europe/Paris'
     });
     console.log('✓ Vigilance alerts cron job scheduled (daily at 8:00 AM Paris)');
+
+    // Cron job: Alertes SMS documents expirants a 9h00 (heure Paris)
+    // Verifie les documents expirant a J-0, J-1, J-3, J-7 et envoie des SMS
+    cron.schedule('0 9 * * *', async () => {
+      console.log('[CRON] Running daily document expiry alerts check...');
+      try {
+        const stats = await runDocumentExpiryAlerts(db);
+        console.log(`[CRON] Document expiry alerts complete: ${stats.alertsSent} SMS sent, ${stats.alertsFailed} failed`);
+      } catch (error) {
+        console.error('[CRON] Error during document expiry alerts:', error.message);
+      }
+    }, {
+      timezone: 'Europe/Paris'
+    });
+    console.log('✓ Document expiry alerts cron job scheduled (daily at 9:00 AM Paris)');
   }
 
   app.listen(PORT, '0.0.0.0', () => {

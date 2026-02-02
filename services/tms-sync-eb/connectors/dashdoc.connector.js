@@ -145,6 +145,60 @@ class DashdocConnector {
   }
 
   /**
+   * Recuperer TOUS les carriers avec pagination automatique
+   * Parcourt toutes les pages jusqu'a obtenir tous les resultats
+   * @param {Object} options - Options de filtre
+   * @param {Number} maxPages - Limite de securite (defaut: 100 pages = 50 000 carriers)
+   * @returns {Promise<Array>} Tous les carriers
+   */
+  async getAllCarriersWithPagination(options = {}, maxPages = 100) {
+    const allCarriers = [];
+    let page = 1;
+    let hasMorePages = true;
+    const limit = 500; // Limite API Dashdoc pour companies
+
+    console.log('[DASHDOC CARRIERS] Starting full pagination...');
+    console.log('[DASHDOC CARRIERS] Options:', options);
+
+    while (hasMorePages && page <= maxPages) {
+      try {
+        console.log(`[DASHDOC CARRIERS] Fetching page ${page}...`);
+
+        const result = await this.getCarriers({
+          ...options,
+          limit,
+          page
+        });
+
+        allCarriers.push(...result.results);
+
+        console.log(`[DASHDOC CARRIERS] Page ${page}: ${result.results.length} carriers, Total: ${allCarriers.length}/${result.count || 'unknown'}`);
+
+        // Verifier si il y a une page suivante (utilise result.next de l'API Dashdoc)
+        hasMorePages = result.next !== null && result.next !== undefined;
+        page++;
+
+        // Petit delai pour ne pas surcharger l'API
+        if (hasMorePages) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+      } catch (error) {
+        console.error(`[DASHDOC CARRIERS] Error fetching page ${page}:`, error.message);
+        // Continuer avec ce qu'on a recupere
+        break;
+      }
+    }
+
+    if (page >= maxPages && hasMorePages) {
+      console.warn(`[DASHDOC CARRIERS] Reached max pages limit (${maxPages}). Some carriers may be missing.`);
+    }
+
+    console.log(`[DASHDOC CARRIERS] Pagination complete: ${allCarriers.length} total carriers`);
+    return allCarriers;
+  }
+
+  /**
    * Recuperer les livraisons
    */
   async getDeliveries(options = {}) {
@@ -269,13 +323,35 @@ class DashdocConnector {
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit || 500);
     if (options.page) params.append('page', options.page);
-    // Filtrer uniquement les transporteurs
+
+    // Filtrer uniquement les transporteurs (is_carrier=true)
     params.append('is_carrier', 'true');
 
+    // Tenter d'exclure les donneurs d'ordre avec is_shipper=false
+    // Note: ce paramètre peut ne pas être supporté par Dashdoc API
+    params.append('is_shipper', 'false');
+
     const response = await this.client.get(`/companies/?${params.toString()}`);
+
+    // Filtrer manuellement les donneurs d'ordre identifiés par leurs remoteId
+    // Pattern observé: remoteId commençant par "C" seul = donneur d'ordre (ex: "C10006")
+    // "S" ou "CF" = sous-traitant/carrier (ex: "S70392", "CF30078")
+    const filteredResults = response.data.results.filter(c => {
+      // Exclure si remoteId commence par "C" suivi de chiffres uniquement
+      if (c.remote_id && /^C\d+$/.test(c.remote_id)) {
+        console.log(`[DASHDOC] Filtering out client: ${c.name} (${c.remote_id})`);
+        return false;
+      }
+      return true;
+    });
+
+    console.log(`[DASHDOC] Carriers: ${response.data.results.length} from API, ${filteredResults.length} after filtering`);
+
     return {
-      count: response.data.count,
-      results: response.data.results.map(c => this.mapCarrier(c))
+      count: response.data.count,  // Count AVANT filtrage pour la pagination
+      filteredCount: filteredResults.length,  // Count APRES filtrage
+      next: response.data.next,  // URL de la page suivante
+      results: filteredResults.map(c => this.mapCarrier(c))
     };
   }
 
@@ -375,28 +451,69 @@ class DashdocConnector {
 
   /**
    * Synchroniser les transporteurs avec enrichissement des stats
+   * @param {Object} options - Options incluant pagination
+   * @param {Boolean} options.usePagination - Activer pagination automatique (defaut: true)
+   * @param {Number} options.maxPages - Limite de securite pour pagination (defaut: 20)
    */
   async syncCarriersWithStats(options = {}) {
-    const carriers = await this.getCarriers(options);
+    // Par defaut, utiliser la pagination pour recuperer TOUS les carriers
+    const usePagination = options.usePagination !== false;
+    const maxPages = options.maxPages || 20; // 20 pages * 500 = 10 000 carriers max
+
+    let carriersArray;
+
+    if (usePagination) {
+      console.log('[DASHDOC CARRIERS] Using pagination to fetch ALL carriers...');
+      carriersArray = await this.getAllCarriersWithPagination(options, maxPages);
+    } else {
+      console.log('[DASHDOC CARRIERS] Using single call (no pagination)...');
+      const carriers = await this.getCarriers(options);
+      carriersArray = carriers.results;
+    }
+
+    console.log(`[DASHDOC CARRIERS] Total carriers to enrich: ${carriersArray.length}`);
 
     // Enrichir avec les stats (en parallele par batch)
-    const enrichedCarriers = await Promise.all(
-      carriers.results.map(async (carrier) => {
-        if (carrier.externalId) {
-          const stats = await this.getCarrierStats(carrier.externalId);
-          return {
-            ...carrier,
-            totalOrders: stats.totalOrders,
-            lastOrderAt: stats.lastOrderAt,
-            score: stats.onTimeRate
-          };
-        }
-        return carrier;
-      })
-    );
+    // Pour eviter de surcharger l'API, on traite par batch de 10
+    const enrichedCarriers = [];
+    const batchSize = 10;
+
+    for (let i = 0; i < carriersArray.length; i += batchSize) {
+      const batch = carriersArray.slice(i, i + batchSize);
+      console.log(`[DASHDOC CARRIERS] Enriching batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(carriersArray.length / batchSize)}...`);
+
+      const enrichedBatch = await Promise.all(
+        batch.map(async (carrier) => {
+          if (carrier.externalId) {
+            try {
+              const stats = await this.getCarrierStats(carrier.externalId);
+              return {
+                ...carrier,
+                totalOrders: stats.totalOrders,
+                lastOrderAt: stats.lastOrderAt,
+                score: stats.onTimeRate
+              };
+            } catch (error) {
+              console.warn(`[DASHDOC CARRIERS] Failed to get stats for ${carrier.companyName}:`, error.message);
+              return carrier;
+            }
+          }
+          return carrier;
+        })
+      );
+
+      enrichedCarriers.push(...enrichedBatch);
+
+      // Petit delai entre les batchs
+      if (i + batchSize < carriersArray.length) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+
+    console.log(`[DASHDOC CARRIERS] Enrichment complete: ${enrichedCarriers.length} carriers`);
 
     return {
-      count: carriers.count,
+      count: enrichedCarriers.length,
       results: enrichedCarriers
     };
   }

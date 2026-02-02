@@ -1,0 +1,23 @@
+{
+  "tmsType": "dashdoc",
+  "organizationName": "SYMPHONIA",
+  "isActive": true,
+  "connectionStatus": "connected",
+  "credentials": {
+    "apiToken": "8321c7a8f7fe8f75192fa15a6c883a11758e0084",
+    "apiUrl": "https://www.dashdoc.eu/api/v4"
+  },
+  "syncConfig": {
+    "autoSync": true,
+    "transportLimit": 0,
+    "companyLimit": 0,
+    "contactLimit": 0,
+    "maxPages": 100
+  },
+  "createdAt": {
+    "$date": "2026-01-30T17:00:00.000Z"
+  },
+  "updatedAt": {
+    "$date": "2026-01-30T17:00:00.000Z"
+  }
+}

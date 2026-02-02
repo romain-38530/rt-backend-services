@@ -7,6 +7,32 @@ const fetch = require('node-fetch');
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { TextractClient, AnalyzeDocumentCommand, DetectDocumentTextCommand } = require('@aws-sdk/client-textract');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+
+// Import webhook functions (loaded dynamically to avoid circular dependency)
+let triggerWebhookEvent, WEBHOOK_EVENTS;
+try {
+  const webhooks = require('./routes/carrier-webhooks');
+  triggerWebhookEvent = webhooks.triggerWebhookEvent;
+  WEBHOOK_EVENTS = webhooks.WEBHOOK_EVENTS;
+} catch (error) {
+  console.warn('[CARRIERS] Webhooks module not available:', error.message);
+}
+
+// Import analytics tracker
+const analyticsTracker = require('./helpers/analytics-tracker');
+
+// Import CloudWatch metrics
+const { CloudWatchMetrics } = require('../../infra/monitoring/cloudwatch-metrics');
+let metricsCarrier = null;
+
+// Initialize metrics
+try {
+  metricsCarrier = new CloudWatchMetrics({ namespace: 'SYMPHONIA', enabled: true });
+  console.log('[METRICS] CloudWatch metrics initialized for carriers');
+} catch (error) {
+  console.warn('[METRICS] Failed to initialize CloudWatch:', error.message);
+}
 
 // Configuration S3 pour documents
 const s3Client = new S3Client({
@@ -16,6 +42,11 @@ const S3_BUCKET = process.env.S3_DOCUMENTS_BUCKET || 'rt-carrier-documents';
 
 // Configuration Textract pour OCR
 const textractClient = new TextractClient({
+  region: process.env.AWS_REGION || 'eu-central-1'
+});
+
+// Configuration SNS pour SMS
+const snsClient = new SNSClient({
   region: process.env.AWS_REGION || 'eu-central-1'
 });
 
@@ -707,8 +738,47 @@ function setupCarrierRoutes(app, db) {
   // =====================================================================
   app.get('/api/carriers', async (req, res) => {
     try {
-      const { industrielId, level, status, vigilanceStatus, search, page = 1, limit = 50, sortBy = 'score', sortOrder = 'desc' } = req.query;
+      const { industrielId, level, status, vigilanceStatus, search, page = 1, limit = 50, sortBy = 'score', sortOrder = 'desc', subContractors } = req.query;
 
+      // PAR DÉFAUT: Récupérer depuis TMS Sync API (vrais carriers Dashdoc)
+      // Sauf si localOnly=true (pour carriers MongoDB locaux)
+      if (req.query.localOnly !== 'true') {
+        const axios = require('axios');
+        const TMS_SYNC_URL = process.env.TMS_SYNC_API_URL || 'http://rt-tms-sync-api-v2.eba-gpxm3qif.eu-central-1.elasticbeanstalk.com';
+
+        try {
+          console.log(`[CARRIERS] Fetching from TMS Sync API: ${TMS_SYNC_URL}/api/v1/tms/carriers`);
+
+          const tmsResponse = await axios.get(`${TMS_SYNC_URL}/api/v1/tms/carriers`, {
+            params: {
+              limit: parseInt(limit),
+              skip: (parseInt(page) - 1) * parseInt(limit),
+              search: search || undefined,
+              level: level || undefined
+            },
+            timeout: 10000
+          });
+
+          if (tmsResponse.data && tmsResponse.data.success) {
+            console.log(`[CARRIERS] TMS Sync returned ${tmsResponse.data.total} carriers`);
+            return res.json({
+              carriers: tmsResponse.data.carriers,
+              pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: tmsResponse.data.total,
+                pages: Math.ceil(tmsResponse.data.total / parseInt(limit))
+              }
+            });
+          }
+        } catch (tmsError) {
+          console.error('[CARRIERS] Error fetching from TMS Sync:', tmsError.message);
+          // Fallback to local MongoDB carriers if TMS Sync fails
+          console.log('[CARRIERS] Falling back to local MongoDB carriers');
+        }
+      }
+
+      // Sinon, comportement par défaut (carriers locaux MongoDB)
       const filter = {};
       if (industrielId) filter.referencedBy = industrielId;
       if (level) filter.level = level;
@@ -1676,6 +1746,35 @@ function setupCarrierRoutes(app, db) {
         s3Key
       });
 
+      // Déclencher webhook document.uploaded
+      if (triggerWebhookEvent && WEBHOOK_EVENTS) {
+        triggerWebhookEvent(db, carrierId, WEBHOOK_EVENTS.DOCUMENT_UPLOADED, {
+          carrierId,
+          document: {
+            id: result.insertedId.toString(),
+            type: documentType,
+            fileName,
+            uploadedAt: document.uploadedAt.toISOString(),
+            status: DOCUMENT_STATUS.PENDING
+          },
+          timestamp: new Date().toISOString()
+        }).catch(err => console.error('[WEBHOOK] Error triggering document.uploaded:', err));
+      }
+
+      // Track document upload analytics
+      analyticsTracker.trackDocumentUpload(carrier, {
+        type: documentType,
+        status: DOCUMENT_STATUS.PENDING
+      }, req).catch(err => console.error('Analytics tracking failed:', err));
+
+      // Send CloudWatch metrics
+      if (metricsCarrier) {
+        metricsCarrier.incrementCounter('Carrier-Document-Upload', {
+          DocumentType: documentType,
+          Status: DOCUMENT_STATUS.PENDING
+        }).catch(err => console.error('Failed to send metrics:', err));
+      }
+
       res.status(201).json({
         document: {
           id: result.insertedId.toString(),
@@ -1901,6 +2000,23 @@ function setupCarrierRoutes(app, db) {
 
       const document = await db.collection('carrier_documents').findOne({ _id: new ObjectId(documentId) });
 
+      // Déclencher webhook document.verified ou document.rejected
+      if (triggerWebhookEvent && WEBHOOK_EVENTS) {
+        const eventType = approved ? WEBHOOK_EVENTS.DOCUMENT_VERIFIED : WEBHOOK_EVENTS.DOCUMENT_REJECTED;
+        triggerWebhookEvent(db, carrierId, eventType, {
+          carrierId,
+          document: {
+            id: documentId,
+            type: document.documentType,
+            fileName: document.fileName,
+            status,
+            verifiedAt: document.verifiedAt?.toISOString(),
+            rejectionReason: !approved ? rejectionReason : null
+          },
+          timestamp: new Date().toISOString()
+        }).catch(err => console.error(`[WEBHOOK] Error triggering ${eventType}:`, err));
+      }
+
       res.json({
         document: {
           id: document._id.toString(),
@@ -2050,6 +2166,12 @@ function setupCarrierRoutes(app, db) {
       // Sync avec orders
       const updatedCarrier = await db.collection('carriers').findOne({ _id: new ObjectId(carrierId) });
       syncCarrierWithOrders(updatedCarrier, score);
+
+      // Track conversion analytics
+      analyticsTracker.trackConversion(updatedCarrier, {
+        plan: newLevel,
+        amount: 0 // À adapter selon votre modèle de pricing
+      }, req).catch(err => console.error('Analytics tracking failed:', err));
 
       res.json({
         success: true,
@@ -2388,6 +2510,197 @@ async function checkAndSendVigilanceAlerts(db) {
   return alerts;
 }
 
+/**
+ * Fonction d'alertes SMS pour documents expirants
+ * Execute quotidiennement (cron daily 9h)
+ *
+ * @param {object} db - Instance MongoDB
+ * @returns {Promise<object>} Statistiques des alertes envoyees
+ */
+async function runDocumentExpiryAlerts(db) {
+  console.log('🔔 [DOCUMENT ALERTS] Starting document expiry alerts check...');
+
+  const now = new Date();
+  const stats = {
+    timestamp: now,
+    totalDocuments: 0,
+    alertsSent: 0,
+    alertsFailed: 0,
+    byUrgency: {
+      'J-0': 0,
+      'J-1': 0,
+      'J-3': 0,
+      'J-7': 0
+    }
+  };
+
+  try {
+    // Définir les périodes d'expiration
+    const periods = [
+      { days: 0, label: 'J-0', emoji: '🚨', urgency: 'URGENT' },
+      { days: 1, label: 'J-1', emoji: '⚠️', urgency: 'ALERTE' },
+      { days: 3, label: 'J-3', emoji: '⏰', urgency: 'Rappel' },
+      { days: 7, label: 'J-7', emoji: '📋', urgency: 'Info' }
+    ];
+
+    for (const period of periods) {
+      const startOfDay = new Date(now);
+      startOfDay.setDate(now.getDate() + period.days);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(startOfDay);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      console.log(`\n${period.emoji} [${period.label}] Checking documents expiring between ${startOfDay.toLocaleDateString()} and ${endOfDay.toLocaleDateString()}...`);
+
+      // Rechercher les carriers avec documents expirant dans cette période
+      const carriersWithExpiringDocs = await db.collection('carriers').aggregate([
+        {
+          $match: {
+            'documents.expiryDate': {
+              $gte: startOfDay,
+              $lte: endOfDay
+            },
+            'documents.status': 'verified',
+            phone: { $exists: true, $ne: '' },
+            status: { $ne: 'blocked' }
+          }
+        },
+        {
+          $project: {
+            companyName: 1,
+            email: 1,
+            phone: 1,
+            expiringDocs: {
+              $filter: {
+                input: '$documents',
+                as: 'doc',
+                cond: {
+                  $and: [
+                    { $gte: ['$$doc.expiryDate', startOfDay] },
+                    { $lte: ['$$doc.expiryDate', endOfDay] },
+                    { $eq: ['$$doc.status', 'verified'] }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          $match: {
+            expiringDocs: { $ne: [] }
+          }
+        }
+      ]).toArray();
+
+      console.log(`   Found ${carriersWithExpiringDocs.length} carriers with expiring documents`);
+
+      stats.totalDocuments += carriersWithExpiringDocs.reduce((sum, c) => sum + c.expiringDocs.length, 0);
+
+      // Envoyer SMS pour chaque carrier (avec rate limiting)
+      for (const carrier of carriersWithExpiringDocs) {
+        try {
+          // Construire liste des documents
+          const docsList = carrier.expiringDocs
+            .map(doc => doc.documentType || doc.type)
+            .join(', ');
+
+          // Templates SMS selon urgence
+          let message = '';
+          if (period.days === 0) {
+            message = `🚨 URGENT - Document(s) expire(nt) AUJOURD'HUI: ${docsList}. Mettez-les à jour immédiatement sur votre espace SYMPHONIA pour éviter le blocage. ${carrier.companyName}`;
+          } else if (period.days === 1) {
+            message = `⚠️ ALERTE - Document(s) expire(nt) DEMAIN: ${docsList}. Veuillez les mettre à jour dès maintenant sur votre espace SYMPHONIA. ${carrier.companyName}`;
+          } else if (period.days === 3) {
+            message = `⏰ Rappel - Document(s) expire(nt) dans 3 jours: ${docsList}. Pensez à les renouveler sur SYMPHONIA. ${carrier.companyName}`;
+          } else if (period.days === 7) {
+            message = `📋 Info - Document(s) expire(nt) dans 7 jours: ${docsList}. Préparez vos documents pour le renouvellement. ${carrier.companyName}`;
+          }
+
+          // Envoyer SMS via SNS (si ALERT_SMS_NUMBER configuré, sinon utiliser phone carrier)
+          const phoneNumber = carrier.phone.startsWith('+') ? carrier.phone : `+33${carrier.phone.substring(1)}`;
+
+          // Skip si simulation mode (pour tests)
+          if (process.env.ALERT_DRY_RUN === 'true') {
+            console.log(`   [DRY RUN] Would send SMS to ${phoneNumber}: ${message}`);
+            stats.alertsSent++;
+            stats.byUrgency[period.label]++;
+          } else {
+            await snsClient.send(new PublishCommand({
+              PhoneNumber: phoneNumber,
+              Message: message,
+              MessageAttributes: {
+                'AWS.SNS.SMS.SMSType': {
+                  DataType: 'String',
+                  StringValue: period.days <= 1 ? 'Transactional' : 'Promotional'
+                }
+              }
+            }));
+
+            console.log(`   ✅ SMS sent to ${carrier.companyName} (${phoneNumber})`);
+            stats.alertsSent++;
+            stats.byUrgency[period.label]++;
+          }
+
+          // Log notification
+          await db.collection('notification_logs').insertOne({
+            timestamp: new Date(),
+            carrierId: carrier._id,
+            carrierName: carrier.companyName,
+            type: 'document_expiry_alert',
+            channel: 'sms',
+            destination: phoneNumber,
+            message,
+            urgency: period.urgency,
+            daysUntilExpiry: period.days,
+            documents: carrier.expiringDocs.map(d => ({
+              type: d.documentType || d.type,
+              expiryDate: d.expiryDate
+            })),
+            status: 'sent'
+          });
+
+          // Rate limiting: 1 SMS par seconde
+          if (carriersWithExpiringDocs.indexOf(carrier) < carriersWithExpiringDocs.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+
+        } catch (error) {
+          console.error(`   ❌ Failed to send SMS to ${carrier.companyName}:`, error.message);
+          stats.alertsFailed++;
+
+          // Log failed notification
+          await db.collection('notification_logs').insertOne({
+            timestamp: new Date(),
+            carrierId: carrier._id,
+            carrierName: carrier.companyName,
+            type: 'document_expiry_alert',
+            channel: 'sms',
+            destination: carrier.phone,
+            message: `Failed: ${error.message}`,
+            urgency: period.urgency,
+            daysUntilExpiry: period.days,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
+    }
+
+    console.log(`\n✅ [DOCUMENT ALERTS] Completed successfully`);
+    console.log(`   Total documents checked: ${stats.totalDocuments}`);
+    console.log(`   Alerts sent: ${stats.alertsSent}`);
+    console.log(`   Alerts failed: ${stats.alertsFailed}`);
+    console.log(`   By urgency:`, stats.byUrgency);
+
+    return stats;
+
+  } catch (error) {
+    console.error('❌ [DOCUMENT ALERTS] Error:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   setupCarrierRoutes,
   CARRIER_LEVEL,
@@ -2401,5 +2714,6 @@ module.exports = {
   checkVigilanceStatus,
   checkAndSendVigilanceAlerts,
   logCarrierEvent,
-  syncCarrierWithOrders
+  syncCarrierWithOrders,
+  runDocumentExpiryAlerts
 };
