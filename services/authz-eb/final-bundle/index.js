@@ -1210,6 +1210,444 @@ app.post('/api/onboarding/submit', async (req, res) => {
   }
 });
 
+// ==================== STRIPE PAYMENT ROUTES ====================
+
+// Stripe configuration
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const STRIPE_API_URL = 'https://api.stripe.com/v1';
+
+// Price IDs for subscription products
+const STRIPE_PRICES = {
+  affret_ia: process.env.STRIPE_PRICE_AFFRET_IA || 'price_1SoX3KRzJcFnHbQGYOYq21al',
+  pack_industrie: process.env.STRIPE_PRICE_PACK_INDUSTRIE || 'price_1SoX3KRzJcFnHbQGuBkHkP0r',
+  tms_connection: process.env.STRIPE_PRICE_TMS_CONNECTION || 'price_1SoX3LRzJcFnHbQG8x6z12Ni',
+  transporteur_premium: process.env.STRIPE_PRICE_TRANSPORTEUR_PREMIUM || 'price_1SoX3LRzJcFnHbQGTransPrem',
+  industriel_standard: process.env.STRIPE_PRICE_INDUSTRIEL_STANDARD || 'price_1SoX3LRzJcFnHbQGIndStd'
+};
+
+// Helper function to make Stripe API requests
+async function stripeRequest(method, endpoint, data = null) {
+  if (!STRIPE_SECRET_KEY) {
+    throw new Error('Stripe API key not configured');
+  }
+
+  const options = {
+    method,
+    headers: {
+      'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  };
+
+  if (data) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined && value !== null) {
+        if (typeof value === 'object') {
+          for (const [subKey, subValue] of Object.entries(value)) {
+            params.append(`${key}[${subKey}]`, subValue);
+          }
+        } else {
+          params.append(key, value);
+        }
+      }
+    }
+    options.body = params.toString();
+  }
+
+  const response = await fetch(`${STRIPE_API_URL}${endpoint}`, options);
+  const result = await response.json();
+
+  if (!response.ok) {
+    const error = new Error(result.error?.message || 'Stripe API error');
+    error.code = result.error?.code;
+    error.type = result.error?.type;
+    throw error;
+  }
+
+  return result;
+}
+
+// Create or get Stripe customer for user
+async function getOrCreateStripeCustomer(user) {
+  if (!db) throw new Error('Database not connected');
+
+  // Check if user already has a Stripe customer ID
+  if (user.stripeCustomerId) {
+    return user.stripeCustomerId;
+  }
+
+  // Create new Stripe customer
+  const customer = await stripeRequest('POST', '/customers', {
+    email: user.email,
+    name: user.name || user.companyName || user.email,
+    metadata: {
+      userId: user._id.toString(),
+      portal: user.portal,
+      companyName: user.companyName || ''
+    }
+  });
+
+  // Save customer ID to user
+  await db.collection('users').updateOne(
+    { _id: user._id },
+    { $set: { stripeCustomerId: customer.id, updatedAt: new Date() } }
+  );
+
+  return customer.id;
+}
+
+// POST /api/stripe/create-checkout-session - Create checkout session for subscription
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    if (!STRIPE_SECRET_KEY) {
+      return res.status(503).json({ success: false, message: 'Stripe not configured' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const { priceId, successUrl, cancelUrl } = req.body;
+
+    if (!priceId) {
+      return res.status(400).json({ success: false, message: 'priceId is required' });
+    }
+
+    // Get or create Stripe customer
+    const customerId = await getOrCreateStripeCustomer(user);
+
+    // Create checkout session
+    const session = await stripeRequest('POST', '/checkout/sessions', {
+      customer: customerId,
+      mode: 'subscription',
+      'line_items[0][price]': priceId,
+      'line_items[0][quantity]': 1,
+      success_url: successUrl || 'https://transporteur.symphonia-controltower.com/subscription/success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: cancelUrl || 'https://transporteur.symphonia-controltower.com/subscription/cancel',
+      'metadata[userId]': user._id.toString(),
+      'metadata[email]': user.email,
+      'subscription_data[metadata][userId]': user._id.toString()
+    });
+
+    // Log checkout session creation
+    await db.collection('stripe_events').insertOne({
+      type: 'checkout_session_created',
+      userId: user._id,
+      sessionId: session.id,
+      priceId,
+      createdAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      sessionId: session.id,
+      url: session.url
+    });
+
+  } catch (error) {
+    console.error('Stripe checkout error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/stripe/create-session - Create setup intent for card registration
+app.post('/api/stripe/create-session', async (req, res) => {
+  try {
+    const { email, requestId } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'email is required' });
+    }
+
+    if (!STRIPE_SECRET_KEY) {
+      return res.status(503).json({ success: false, message: 'Stripe not configured' });
+    }
+
+    // Check if there's an onboarding request
+    let user = null;
+    if (requestId && db) {
+      try {
+        const request = await db.collection('onboarding_requests').findOne({
+          _id: new ObjectId(requestId)
+        });
+        if (request) {
+          user = { email: request.email, companyName: request.companyName };
+        }
+      } catch (e) {
+        // Ignore invalid requestId
+      }
+    }
+
+    // Create or find customer by email
+    let customer;
+    const existingCustomers = await stripeRequest('GET', `/customers?email=${encodeURIComponent(email)}&limit=1`);
+
+    if (existingCustomers.data && existingCustomers.data.length > 0) {
+      customer = existingCustomers.data[0];
+    } else {
+      customer = await stripeRequest('POST', '/customers', {
+        email,
+        name: user?.companyName || email,
+        metadata: { requestId: requestId || '', source: 'setup_intent' }
+      });
+    }
+
+    // Create setup intent
+    const setupIntent = await stripeRequest('POST', '/setup_intents', {
+      customer: customer.id,
+      'payment_method_types[0]': 'card',
+      'payment_method_types[1]': 'sepa_debit',
+      'metadata[email]': email,
+      'metadata[requestId]': requestId || ''
+    });
+
+    res.json({
+      success: true,
+      clientSecret: setupIntent.client_secret,
+      customerId: customer.id
+    });
+
+  } catch (error) {
+    console.error('Stripe setup intent error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/stripe/subscription-status - Get current user's subscription status
+app.get('/api/stripe/subscription-status', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Return subscription from user document
+    res.json({
+      success: true,
+      subscription: user.subscription || null,
+      stripeCustomerId: user.stripeCustomerId || null,
+      stripeSubscriptionId: user.stripeSubscriptionId || null
+    });
+
+  } catch (error) {
+    console.error('Subscription status error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/stripe/invoices - List invoices for current user
+app.get('/api/stripe/invoices', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    if (!STRIPE_SECRET_KEY) {
+      return res.status(503).json({ success: false, message: 'Stripe not configured' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+    if (!user || !user.stripeCustomerId) {
+      return res.json({ success: true, invoices: [] });
+    }
+
+    const invoices = await stripeRequest('GET', `/invoices?customer=${user.stripeCustomerId}&limit=20`);
+
+    res.json({
+      success: true,
+      invoices: invoices.data.map(inv => ({
+        id: inv.id,
+        number: inv.number,
+        status: inv.status,
+        amount: inv.amount_due / 100,
+        currency: inv.currency,
+        created: new Date(inv.created * 1000).toISOString(),
+        pdfUrl: inv.invoice_pdf,
+        hostedUrl: inv.hosted_invoice_url
+      }))
+    });
+
+  } catch (error) {
+    console.error('Invoices list error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/stripe/webhooks - Stripe webhook handler
+app.post('/api/stripe/webhooks', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    let event;
+    const sig = req.headers['stripe-signature'];
+
+    // Verify webhook signature if secret is configured
+    if (STRIPE_WEBHOOK_SECRET && sig) {
+      const crypto = require('crypto');
+      const payload = req.body;
+      const timestamp = sig.split(',').find(s => s.startsWith('t='))?.split('=')[1];
+      const signatures = sig.split(',').filter(s => s.startsWith('v1=')).map(s => s.split('=')[1]);
+
+      const signedPayload = `${timestamp}.${payload}`;
+      const expectedSig = crypto.createHmac('sha256', STRIPE_WEBHOOK_SECRET)
+        .update(signedPayload)
+        .digest('hex');
+
+      if (!signatures.includes(expectedSig)) {
+        console.error('Webhook signature verification failed');
+        return res.status(400).json({ error: 'Invalid signature' });
+      }
+    }
+
+    event = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    console.log('Stripe webhook received:', event.type);
+
+    // Log event
+    if (db) {
+      await db.collection('stripe_events').insertOne({
+        eventId: event.id,
+        type: event.type,
+        data: event.data.object,
+        createdAt: new Date()
+      });
+    }
+
+    // Handle event types
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const userId = session.metadata?.userId;
+
+        if (userId && db) {
+          // Update user subscription status
+          await db.collection('users').updateOne(
+            { _id: new ObjectId(userId) },
+            {
+              $set: {
+                stripeSubscriptionId: session.subscription,
+                stripeCustomerId: session.customer,
+                'subscription.status': 'active',
+                'subscription.subscriptionStatus': 'active',
+                'subscription.stripeSessionId': session.id,
+                updatedAt: new Date()
+              }
+            }
+          );
+          console.log('User subscription activated:', userId);
+        }
+        break;
+      }
+
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object;
+        const userId = subscription.metadata?.userId;
+
+        if (userId && db) {
+          const status = subscription.status === 'active' ? 'active' :
+                        subscription.status === 'trialing' ? 'trial' :
+                        subscription.status === 'past_due' ? 'past_due' : subscription.status;
+
+          await db.collection('users').updateOne(
+            { _id: new ObjectId(userId) },
+            {
+              $set: {
+                stripeSubscriptionId: subscription.id,
+                'subscription.status': status,
+                'subscription.subscriptionStatus': status,
+                'subscription.currentPeriodStart': new Date(subscription.current_period_start * 1000),
+                'subscription.currentPeriodEnd': new Date(subscription.current_period_end * 1000),
+                updatedAt: new Date()
+              }
+            }
+          );
+          console.log('User subscription updated:', userId, status);
+        }
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object;
+        const userId = subscription.metadata?.userId;
+
+        if (userId && db) {
+          await db.collection('users').updateOne(
+            { _id: new ObjectId(userId) },
+            {
+              $set: {
+                'subscription.status': 'cancelled',
+                'subscription.subscriptionStatus': 'cancelled',
+                'subscription.cancelledAt': new Date(),
+                updatedAt: new Date()
+              }
+            }
+          );
+          console.log('User subscription cancelled:', userId);
+        }
+        break;
+      }
+
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object;
+        console.log('Payment succeeded for invoice:', invoice.id);
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object;
+        const customerId = invoice.customer;
+
+        if (db) {
+          // Find user by customer ID and update status
+          await db.collection('users').updateOne(
+            { stripeCustomerId: customerId },
+            {
+              $set: {
+                'subscription.status': 'past_due',
+                'subscription.subscriptionStatus': 'past_due',
+                'subscription.lastPaymentFailure': new Date(),
+                updatedAt: new Date()
+              }
+            }
+          );
+          console.log('Payment failed for customer:', customerId);
+        }
+        break;
+      }
+    }
+
+    res.json({ received: true });
+
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/checkout/create-session - Alternative endpoint for checkout
+app.post('/api/checkout/create-session', async (req, res) => {
+  // Redirect to main stripe endpoint
+  req.url = '/api/stripe/create-checkout-session';
+  app.handle(req, res);
+});
+
+// ==================== END STRIPE PAYMENT ROUTES ====================
+
 // Start server
 async function startServer() {
   await connectMongoDB();
