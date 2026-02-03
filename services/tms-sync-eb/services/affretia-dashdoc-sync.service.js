@@ -51,6 +51,18 @@ class AffretIADashdocSyncService {
    */
   async loadDashdocConnections() {
     try {
+      // Vérifier que mongoose est connecté
+      if (mongoose.connection.readyState !== 1) {
+        console.log('[Affret.IA → Dashdoc Sync] MongoDB non connecté, chargement différé des connexions');
+        return;
+      }
+
+      // Vérifier que le modèle existe
+      if (!mongoose.models.TMSConnection) {
+        console.log('[Affret.IA → Dashdoc Sync] Modèle TMSConnection non trouvé, chargement différé');
+        return;
+      }
+
       const connections = await TMSConnection.find({
         tmsProvider: 'dashdoc',
         status: 'active'

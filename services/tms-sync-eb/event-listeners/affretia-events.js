@@ -19,8 +19,13 @@ class AffretIAEventListeners {
   async initialize() {
     console.log('[Affret.IA Events] Initialisation des listeners...');
 
-    // Initialiser le service de sync Dashdoc
-    await affretIADashdocSyncService.initialize();
+    try {
+      // Initialiser le service de sync Dashdoc
+      await affretIADashdocSyncService.initialize();
+    } catch (error) {
+      console.error('[Affret.IA Events] Erreur initialisation service sync:', error.message);
+      console.log('[Affret.IA Events] Le service continuera mais sans connecteurs pré-chargés');
+    }
 
     // S'abonner aux événements WebSocket si io est disponible
     if (this.io) {
