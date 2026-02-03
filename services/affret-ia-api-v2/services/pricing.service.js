@@ -8,7 +8,8 @@ const PriceHistory = require('../models/PriceHistory');
 
 class PricingService {
   constructor() {
-    this.dashdocApiUrl = process.env.DASHDOC_API_URL || 'https://api.dashdoc.com/api/v4';
+    // ⚠️ IMPORTANT: URL correcte = api.dashdoc.EU (pas .com !)
+    this.dashdocApiUrl = process.env.DASHDOC_API_URL || 'https://api.dashdoc.eu/api/v4';
     this.dashdocApiKey = process.env.DASHDOC_API_KEY;
   }
 
