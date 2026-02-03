@@ -1,0 +1,1362 @@
+{
+  "created": "2026-02-01T10:17:20.441619Z",
+  "deleted": null,
+  "updated": "2026-02-02T14:24:43.189662Z",
+  "created_device": null,
+  "creation_method": "web_app",
+  "business_privacy": false,
+  "has_observations": false,
+  "has_weight_to_be_checked": null,
+  "is_multiple_compartments": false,
+  "is_order": true,
+  "global_status": "done",
+  "invite_code": "",
+  "requested_vehicle": "",
+  "volume_display_unit": "m3",
+  "uid": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+  "remote_id": "",
+  "sequential_id": 32344220,
+  "deliveries": [
+    {
+      "uid": "019c18b4-fd00-71d3-90d8-643481454b7e",
+      "sequential_id": 34977443,
+      "tracking_id": "XXXXXX-XXXXXX",
+      "shipper_address": {
+        "pk": 110762175,
+        "remote_id": "",
+        "name": "SARL SETT TRANSPORTS",
+        "address": "1088 Av. Jean François Champollion",
+        "city": "Pontcharra",
+        "postcode": "38530",
+        "country": "FR",
+        "administrative_area": "",
+        "latitude": 45.42486,
+        "longitude": 6.00464,
+        "radius": 500,
+        "coords_validated": false,
+        "is_demo": false,
+        "is_carrier": true,
+        "is_shipper": true,
+        "is_origin": false,
+        "is_destination": false,
+        "created_by": 3802458,
+        "created": "2025-02-03T15:02:59.581907Z",
+        "instructions": "",
+        "company": {
+          "name": "SARL SETT TRANSPORTS",
+          "vat_number": "FR21350675567",
+          "country": "FR",
+          "phone_number": "+33476047111",
+          "pk": 3802458,
+          "remote_id": "C10000",
+          "invoicing_remote_id": "",
+          "trade_number": "35067556700050",
+          "is_verified": true,
+          "settings_contract_html": "",
+          "settings_special_agreements": "",
+          "settings_print_mode": false,
+          "settings_logo": "https://storage.googleapis.com/dashdoc-media/media/carriers/181c20ab-92a9-461e-a637-6f06ab3bb2d7.png",
+          "settings_stamp": null,
+          "settings_transport_order_observations": "<div><p><strong>PRÉAMBULE</strong><br>Les présentes Conditions Générales de Vente (CGV) régissent l’ensemble des prestations de transport réalisées par SETT Transports (ci-après « SETT ») au profit du Transporteur (ci-après « le Transporteur »). Leur acceptation par ce dernier vaut adhésion intégrale et sans réserve aux dispositions ci-après, lesquelles prévalent sur tout accord ou usage contraire.</p><p><strong>ARTICLE 1 – OBJET ET CHAMP D’APPLICATION</strong><br>1.1 Les présentes CGV ont pour objet de définir les conditions dans lesquelles le Transporteur exécute les prestations de transport, tant au niveau national qu’international, pour le compte de SETT, dans le respect des lois, règlements et conventions en vigueur, notamment la Convention relative au contrat de transport international de marchandises par route (Convention CMR) et, pour le transport européen, le règlement (CEE) n°3118/93 et ses éventuelles modifications ultérieures.<br>1.2 Toute dérogation aux présentes conditions devra faire l’objet d’un accord écrit et préalable de SETT.</p><p><strong>ARTICLE 2 – DISPOSITIONS IMPÉRATIVES ET DOCUMENTATION</strong><br>2.1 <strong>Sous-affrètement</strong><br>Le sous-affrètement, qu’il soit partiel ou total, est formellement interdit, sauf autorisation expresse et écrite de SETT.<br>2.2 <strong>Documentation</strong><br>Il est expressément interdit d’utiliser une lettre de transport CMR sous forme numérique ou dématérialisée. Le Transporteur s’engage à transmettre dans un délai de sept (7) jours la lettre de voiture ainsi que les bons de livraison (BL) originaux, dûment émargés et tamponnés.<br>2.3 <strong>Obligations contractuelles</strong><br>En acceptant le présent chargement, le Transporteur reconnaît que le prix de la prestation couvre l’intégralité de ses coûts (transports, charges, taxes afférentes, etc.) et s’engage à signaler sans délai toute non-conformité, incluant notamment les retards, détériorations ou autres irrégularités affectant la marchandise, à l’exception des instructions impératives détaillées au présent article.</p><p><strong>ARTICLE 3 – CONDITIONS DE RÈGLEMENT</strong><br>3.1 Le Transporteur devra faire parvenir à SETT, conjointement avec la facture correspondante, l’ensemble des documents justificatifs requis (CMR, BL, emballages consignés – ex. bons de palette originaux) dans un délai maximum de quarante-huit (48) heures après la prestation, et ce, afin de garantir le paiement dans les délais contractuels.<br>3.2 Le règlement des prestations s’effectuera par virement bancaire, selon les conditions usuelles de SETT, soit trente (30) jours fin de mois à compter de la réception de la facture, sous réserve de la conformité des documents transmis et de l’échange effectif des emballages consignés.<br>3.3 Il est rappelé que le prix de transport inclut l’indexation relative au prix du gasoil.</p><p><strong>ARTICLE 4 – RETARDS, TEMPS D’ATTENTE ET PÉNALITÉS</strong><br>4.1 <strong>Temps d’attente</strong><br>En cas d’attente au chargement ou à la livraison, une indemnité forfaitaire de 35 euros par heure (à compter de la quatrième heure complète) sera appliquée.<br>4.2 <strong>Pénalités de retard</strong><br>Le Transporteur accepte que toute pénalité de retard éventuellement imposée par le client soit répercutée intégralement sur sa facturation, sans possibilité de remise ou d’aménagement.</p><p><strong>ARTICLE 5 – OBLIGATIONS DU TRANSPORTEUR ET RESPONSABILITÉS</strong><br>5.1 Le Transporteur, ainsi que l’ensemble de ses sous-traitants ou personnels (véhicules, chauffeurs, etc.), s’engagent à respecter strictement l’intégralité des dispositions législatives et réglementaires en vigueur, notamment celles relatives au cabotage et aux conditions de transport international ou national.<br>5.2 Le Transporteur est seul responsable de tout dommage, retard ou perte affectant les marchandises dès lors qu’elles entrent sous son contrôle. Il assumera l’intégralité des réclamations pouvant en découler.<br>5.3 Les véhicules mis à disposition devront être en parfait état de fonctionnement et de propreté, conformément aux instructions émises par SETT et/ou le client concerné.<br>5.4 Le Transporteur devra, préalablement à toute prestation, fournir à SETT une attestation certifiant qu’il est à jour dans le paiement de ses cotisations fiscales et de sécurité sociale. À défaut, SETT se réserve le droit de retenir tout paiement jusqu’à régularisation.<br>5.5 Tout incident, accident ou situation à risque survenant lors de l’exécution de la prestation devra être immédiatement communiqué à SETT, afin de permettre la prise de mesures correctives adaptées.<br>5.6 En cas de première expédition, le Transporteur s’engage à fournir une copie de sa licence d’exploitation européenne ainsi qu’une attestation d’assurance couvrant les marchandises transportées et en cours de validité.</p><p><strong>ARTICLE 6 – DOCUMENTS DE TRANSPORT ET CONTRÔLE</strong><br>6.1 Le Transporteur est tenu de s’assurer que l’ensemble des documents de transport soit établi conformément à la législation applicable.<br>6.2 Dans le cadre de transports nationaux, seuls les documents adaptés seront utilisés ; il en va de même pour les transports internationaux. En cas d’utilisation de documents inappropriés, le Transporteur s’engage à indemniser SETT de tout préjudice, y compris les sanctions administratives ou pénales encourues.<br>6.3 Le Transporteur s’engage à renvoyer, par voie électronique ou par tout autre moyen convenu, une copie des présentes CGV dûment confirmée, ainsi que les documents de chargement/déchargement dans un délai maximal de vingt-quatre (24) heures après la prestation. Tout manquement à cette obligation pourra entraîner l’application d’une pénalité équivalente au montant de la prestation de transport.</p><p><strong>ARTICLE 7 – SOUS-TRAITANCE</strong><br>La sous-traitance des prestations de transport ne pourra intervenir qu’après obtention d’une autorisation écrite préalable et expresse de SETT. En cas de non-respect de cette obligation, SETT se réserve le droit de réclamer des dommages-intérêts correspondant à l’intégralité des préjudices subis, voire de mettre fin unilatéralement à la collaboration.</p><p><strong>ARTICLE 8 – RÈGLEMENT DES LITIGES</strong><br>8.1 Tout litige relatif à l’interprétation ou à l’exécution des présentes CGV sera soumis, à défaut de règlement amiable, aux juridictions compétentes du siège social de SETT.<br>8.2 Pour les contrats de transport international, les dispositions de la Convention CMR s’appliqueront pour les questions expressément couvertes par celle-ci. Pour le reste, le droit français sera applicable, à l’exception de ses règles relatives aux conflits de lois.<br>8.3 Pour les transports nationaux, seuls les textes législatifs et réglementaires nationaux s’appliqueront, indépendamment du type de lettre de transport utilisée.</p><p><strong>ARTICLE 9 – DISPOSITIONS DIVERSES</strong><br>9.1 Toute modification des présentes CGV devra être faite par écrit et signée par les parties.<br>9.2 En cas d’impossibilité d’exécuter tout ou partie de la prestation dans les délais convenus, le Transporteur s’engage à en informer SETT dans les plus brefs délais afin de rechercher une solution amiable permettant d’en limiter les conséquences.<br>9.3 La non-réalisation d’une mission dans le respect des délais pourra entraîner un retard de règlement ou toute autre mesure conservatoire de la part de SETT.</p><p><strong>ARTICLE 10 – OBLIGATION D’UTILISATION DE DASHDOC</strong><br>10.1 Le Transporteur est tenu d’utiliser impérativement la plateforme Dashdoc pour assurer le suivi des documents de transport, notamment la lettre de transport CMR et les bons de livraison (BL).<br>10.2 Tous les documents relatifs au transport doivent être déposés sur Dashdoc dans les délais impartis par SETT, et ce afin de garantir leur traçabilité et la conformité du suivi opérationnel.<br>10.3 Le Transporteur s’engage également à déposer, via la même plateforme, l’ensemble des factures afférentes aux prestations exécutées, conformément aux modalités et délais contractuels définis par SETT.<br>10.4 Le non-respect de cette obligation pourra entraîner la suspension des paiements et/ou l’application de pénalités, sans préjudice de toute autre action en réparation des dommages subis par SETT.</p><p>10.5 l'acceptation de la commande sur le portail Dashdoc est bloquant pour le règlement </p><p>Pour toute question : <strong>l.accary@rt-groupe.com pour la comptabilité fournisseur</strong></p><p><strong>ARTICLE 11 - PENALITE APPLICABLE EN CAS DE NON RESPECTER DES ENGAGEMENTS CONTRATUELLES</strong></p><p>11.1 Retard compris entre 30 min et 1h : 40€</p><p>11.2 Retard supérieur à 1h : 80€</p><p>11.3 Plantage (no show) Transport dédié : Non paiement du terme fixe + facturation</p><p>écart prix d'origine et surcoût de dépannage</p><p>11.4 Plantage (no show) Transport affrété : Non paiement de la prestation + facturation</p><p>écart prix d'origine et surcoût de dépannage</p><p>11.5 Non reprise des emballages 100€ de pénalité par non reprise</p><p>11.6 Palette Europe non rendu ou non déposée en PFM 18€ / Palettes</p><p>11.7 Non utilisation de application TRAVIS / SYSTER : 10€ / Livraison</p><p>11.8 Mauvaise utilisation chauffeur : 10€ / Livraison</p><p>11.9 Non port des EPI : 10€ forfaitaire</p><p></p><p></p></div>",
+          "settings_display_rental_worked_hours": true,
+          "settings_constrain_reference_edition": false,
+          "settings_ignore_creator_constraint_in_signature_process": false
+        },
+        "original": 110762175
+      },
+      "loads": [
+        {
+          "remote_id": "",
+          "description": "Alimentaire",
+          "reference": "",
+          "trucker_observations": "",
+          "weight": 19040,
+          "weight_unit": "kilogram",
+          "tare_weight": null,
+          "volume": null,
+          "volume_unit": "m3",
+          "linear_meters": null,
+          "length_unit": "meter",
+          "quantity": 29,
+          "steres": null,
+          "wood_volume_unit": "stere",
+          "category": "pallets",
+          "dangerous_goods_category": "",
+          "adr_un_code": "",
+          "adr_un_description_by_language": {},
+          "legal_mentions": "",
+          "complementary_information": "",
+          "use_container_number": false,
+          "container_number": "",
+          "use_container_seal_number": false,
+          "container_seal_number": "",
+          "temperature": "",
+          "temperature_unit": "celsius",
+          "idtf_number": "",
+          "identifiers_observations": "",
+          "identifiers": [],
+          "is_dangerous": false,
+          "refrigerated": false,
+          "use_identifiers": false,
+          "volume_display_unit": "m3",
+          "handling_unit": null,
+          "good": null,
+          "uid": "019c0de3-1d87-7acc-9276-7e6e35d73d10"
+        }
+      ],
+      "planned_loads": [
+        {
+          "remote_id": "",
+          "description": "Alimentaire",
+          "reference": "",
+          "trucker_observations": "",
+          "weight": 19040,
+          "weight_unit": "kilogram",
+          "tare_weight": null,
+          "volume": null,
+          "volume_unit": "m3",
+          "linear_meters": null,
+          "length_unit": "meter",
+          "quantity": 29,
+          "steres": null,
+          "wood_volume_unit": "stere",
+          "category": "pallets",
+          "dangerous_goods_category": "",
+          "adr_un_code": "",
+          "adr_un_description_by_language": {},
+          "legal_mentions": "",
+          "complementary_information": "",
+          "use_container_number": false,
+          "container_number": "",
+          "use_container_seal_number": false,
+          "container_seal_number": "",
+          "temperature": "",
+          "temperature_unit": "celsius",
+          "idtf_number": "",
+          "identifiers_observations": "",
+          "identifiers": [],
+          "is_dangerous": false,
+          "refrigerated": false,
+          "use_identifiers": false,
+          "volume_display_unit": "m3",
+          "handling_unit": null,
+          "good": null,
+          "uid": "019c0de3-1d87-7acc-9276-7e6e35d73d10"
+        }
+      ],
+      "origin_loads": null,
+      "destination_loads": null,
+      "shipper_reference": "",
+      "preferred_weighing_site": "none",
+      "multiple_rounds": false,
+      "tracking_contacts": [
+        {
+          "uid": "019c18b4-fd01-7c50-b237-bad7670a207a",
+          "contact": {
+            "uid": "c4ec7e21-b14b-40de-8bd1-078c88b28c6c",
+            "created": "2025-03-12T16:48:08.947520Z",
+            "company": {
+              "pk": 3991213,
+              "name": "MENIER TRANSPORTS",
+              "trade_number": "89823001600021",
+              "country": "FR",
+              "settings_contract_html": "",
+              "settings_logo": null,
+              "settings_stamp": null,
+              "settings_print_mode": false,
+              "settings_special_agreements": "",
+              "settings_transport_order_observations": "",
+              "settings_display_rental_worked_hours": true,
+              "settings_constrain_reference_edition": false,
+              "settings_ignore_creator_constraint_in_signature_process": false,
+              "vat_number": "FR87898230016",
+              "is_verified": false,
+              "phone_number": "+33678378662",
+              "remote_id": "S70152",
+              "invoicing_remote_id": ""
+            },
+            "first_name": "Mohamed",
+            "last_name": "SOLTANI",
+            "email": "elbad69@hotmail.fr",
+            "phone_number": "+33678378662",
+            "language": "fr",
+            "fax_number": "",
+            "remote_id": "",
+            "jobs": [
+              "dispatcher"
+            ],
+            "does_receive_share_emails": false,
+            "does_receive_reminder_emails": false
+          },
+          "subscribed_to_status_updates": false,
+          "role": "carrier"
+        }
+      ],
+      "remote_id": "",
+      "origin": {
+        "uid": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+        "remote_id": "",
+        "address": {
+          "pk": 140894443,
+          "remote_id": "",
+          "name": "DEPOT ST GEORGES D'ESPERANCHE",
+          "address": "Route de Saint-Just",
+          "city": "Saint-Georges-d'Espéranche",
+          "postcode": "38790",
+          "country": "FR",
+          "administrative_area": "",
+          "latitude": 45.58464,
+          "longitude": 5.05395,
+          "radius": 500,
+          "coords_validated": true,
+          "is_demo": false,
+          "is_carrier": false,
+          "is_shipper": false,
+          "is_origin": true,
+          "is_destination": true,
+          "created_by": 3802458,
+          "created": "2026-01-30T07:51:53.993163Z",
+          "instructions": "UTILISATION APPLICATION TRAVIS OBLIGATOIRE !! \nÀ défaut d'utilisation toute pénalité imputée engagera votre responsabilité et sera déduite de votre facture.",
+          "theoretical_activity_duration_in_min": null,
+          "company": null,
+          "original": 128597888
+        },
+        "signature_process": "sign_on_glass",
+        "loading_instructions": "UTILISATION APPLICATION TRAVIS OBLIGATOIRE !! \nÀ défaut d'utilisation toute pénalité imputée engagera votre responsabilité et sera déduite de votre facture.",
+        "unloading_instructions": "",
+        "instructions": "UTILISATION APPLICATION TRAVIS OBLIGATOIRE !! \nÀ défaut d'utilisation toute pénalité imputée engagera votre responsabilité et sera déduite de votre facture.",
+        "reference": "19466845",
+        "action": "",
+        "supports_exchanges": [],
+        "category": "loading",
+        "trucker_instructions": null,
+        "real_start": "2026-02-02T11:01:51.828000Z",
+        "real_end": "2026-02-02T11:01:51.828000Z",
+        "slots": [
+          {
+            "end": "2026-01-31T08:30:00+00:00",
+            "start": "2026-01-31T08:30:00+00:00"
+          }
+        ],
+        "eta": null,
+        "eta_tracking": false,
+        "punctuality_status": "untracked",
+        "is_booking_needed": false,
+        "trip": {
+          "uid": "019c18b4-fd03-74a6-91df-742eac1a5bc5",
+          "name": "",
+          "is_prepared": false
+        },
+        "manual_emission_value": null
+      },
+      "destination": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": "",
+        "address": {
+          "pk": 141054876,
+          "remote_id": "",
+          "name": "RT LOG SQF",
+          "address": "25 Rue du Mollaret",
+          "city": "Saint-Quentin-Fallavier",
+          "postcode": "38070",
+          "country": "FR",
+          "administrative_area": "",
+          "latitude": 45.64922572993117,
+          "longitude": 5.108506312006653,
+          "radius": 200,
+          "coords_validated": true,
+          "is_demo": false,
+          "is_carrier": false,
+          "is_shipper": false,
+          "is_origin": true,
+          "is_destination": true,
+          "created_by": 3802458,
+          "created": "2026-02-01T10:14:20.884224Z",
+          "instructions": "",
+          "theoretical_activity_duration_in_min": null,
+          "company": null,
+          "original": 136085628
+        },
+        "signature_process": "sign_on_glass",
+        "loading_instructions": "",
+        "unloading_instructions": "",
+        "instructions": "",
+        "reference": "",
+        "action": "",
+        "supports_exchanges": [],
+        "category": "unloading",
+        "trucker_instructions": null,
+        "real_start": "2026-02-02T11:01:51.828000Z",
+        "real_end": "2026-02-02T11:01:51.828000Z",
+        "slots": [
+          {
+            "end": "2026-01-31T14:00:00+00:00",
+            "start": "2026-01-31T14:00:00+00:00"
+          }
+        ],
+        "eta": null,
+        "eta_tracking": false,
+        "punctuality_status": "untracked",
+        "is_booking_needed": false,
+        "trip": {
+          "uid": "019c18b4-fd03-74a6-91df-742eac1a5bc5",
+          "name": "",
+          "is_prepared": false
+        },
+        "manual_emission_value": null
+      }
+    }
+  ],
+  "rental_deliveries": [],
+  "segments": [
+    {
+      "uid": "019c18b4-fd04-718c-8430-8969a0f172ac",
+      "trucker": null,
+      "origin": {
+        "uid": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+        "remote_id": "",
+        "address": {
+          "pk": 140894443,
+          "remote_id": "",
+          "name": "DEPOT ST GEORGES D'ESPERANCHE",
+          "address": "Route de Saint-Just",
+          "city": "Saint-Georges-d'Espéranche",
+          "postcode": "38790",
+          "country": "FR",
+          "administrative_area": "",
+          "latitude": 45.58464,
+          "longitude": 5.05395,
+          "radius": 500,
+          "coords_validated": true,
+          "is_demo": false,
+          "is_carrier": false,
+          "is_shipper": false,
+          "is_origin": true,
+          "is_destination": true,
+          "created_by": 3802458,
+          "created": "2026-01-30T07:51:53.993163Z",
+          "instructions": "UTILISATION APPLICATION TRAVIS OBLIGATOIRE !! \nÀ défaut d'utilisation toute pénalité imputée engagera votre responsabilité et sera déduite de votre facture.",
+          "theoretical_activity_duration_in_min": null,
+          "company": null,
+          "original": 128597888
+        },
+        "signature_process": "sign_on_glass",
+        "loading_instructions": "UTILISATION APPLICATION TRAVIS OBLIGATOIRE !! \nÀ défaut d'utilisation toute pénalité imputée engagera votre responsabilité et sera déduite de votre facture.",
+        "unloading_instructions": "",
+        "instructions": "UTILISATION APPLICATION TRAVIS OBLIGATOIRE !! \nÀ défaut d'utilisation toute pénalité imputée engagera votre responsabilité et sera déduite de votre facture.",
+        "reference": "19466845",
+        "action": "",
+        "supports_exchanges": [],
+        "category": "loading",
+        "trucker_instructions": null,
+        "real_start": "2026-02-02T11:01:51.828000Z",
+        "real_end": "2026-02-02T11:01:51.828000Z",
+        "slots": [
+          {
+            "end": "2026-01-31T08:30:00+00:00",
+            "start": "2026-01-31T08:30:00+00:00"
+          }
+        ],
+        "eta": null,
+        "eta_tracking": false,
+        "punctuality_status": "untracked",
+        "is_booking_needed": false,
+        "trip": {
+          "uid": "019c18b4-fd03-74a6-91df-742eac1a5bc5",
+          "name": "",
+          "is_prepared": false
+        },
+        "manual_emission_value": null
+      },
+      "destination": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": "",
+        "address": {
+          "pk": 141054876,
+          "remote_id": "",
+          "name": "RT LOG SQF",
+          "address": "25 Rue du Mollaret",
+          "city": "Saint-Quentin-Fallavier",
+          "postcode": "38070",
+          "country": "FR",
+          "administrative_area": "",
+          "latitude": 45.64922572993117,
+          "longitude": 5.108506312006653,
+          "radius": 200,
+          "coords_validated": true,
+          "is_demo": false,
+          "is_carrier": false,
+          "is_shipper": false,
+          "is_origin": true,
+          "is_destination": true,
+          "created_by": 3802458,
+          "created": "2026-02-01T10:14:20.884224Z",
+          "instructions": "",
+          "theoretical_activity_duration_in_min": null,
+          "company": null,
+          "original": 136085628
+        },
+        "signature_process": "sign_on_glass",
+        "loading_instructions": "",
+        "unloading_instructions": "",
+        "instructions": "",
+        "reference": "",
+        "action": "",
+        "supports_exchanges": [],
+        "category": "unloading",
+        "trucker_instructions": null,
+        "real_start": "2026-02-02T11:01:51.828000Z",
+        "real_end": "2026-02-02T11:01:51.828000Z",
+        "slots": [
+          {
+            "end": "2026-01-31T14:00:00+00:00",
+            "start": "2026-01-31T14:00:00+00:00"
+          }
+        ],
+        "eta": null,
+        "eta_tracking": false,
+        "punctuality_status": "untracked",
+        "is_booking_needed": false,
+        "trip": {
+          "uid": "019c18b4-fd03-74a6-91df-742eac1a5bc5",
+          "name": "",
+          "is_prepared": false
+        },
+        "manual_emission_value": null
+      },
+      "vehicle": null,
+      "trailers": [],
+      "child_transport": null,
+      "fuel_consumption": null,
+      "remote_id": "",
+      "sort_order": 0,
+      "scheduled_start_range": null,
+      "scheduled_start": null,
+      "scheduled_end_range": null,
+      "scheduled_end": null
+    }
+  ],
+  "carrier_address": {
+    "pk": 113621777,
+    "remote_id": "",
+    "name": "MENIER TRANSPORTS",
+    "address": "4 RUE DU 11 NOVEMBRE",
+    "city": "Saint-Priest",
+    "postcode": "69800",
+    "country": "FR",
+    "administrative_area": "",
+    "latitude": 45.70078,
+    "longitude": 4.92639,
+    "radius": 500,
+    "coords_validated": false,
+    "is_demo": false,
+    "is_carrier": true,
+    "is_shipper": false,
+    "is_origin": false,
+    "is_destination": false,
+    "created_by": 3991213,
+    "created": "2025-03-12T16:47:34.121862Z",
+    "instructions": "",
+    "theoretical_activity_duration_in_min": null,
+    "company": {
+      "pk": 3991213,
+      "remote_id": "S70152",
+      "name": "MENIER TRANSPORTS",
+      "siren": "",
+      "vat_number": "FR87898230016",
+      "trade_number": "89823001600021",
+      "country": "FR",
+      "phone_number": "+33678378662",
+      "settings": {
+        "signature_process": "sign_on_glass",
+        "cmr_only": false,
+        "print_mode": false,
+        "special_agreements": "",
+        "contract_html": "",
+        "stamp": null,
+        "logo": null,
+        "enforce_qualimat_standard": false,
+        "qualimat_certificate_number": "",
+        "certification_name": "",
+        "idtf_certification": "",
+        "transport_order_observations": ""
+      },
+      "email": "",
+      "website": "",
+      "is_verified": false
+    },
+    "original": null
+  },
+  "carrier_reference": "",
+  "status_updates": [
+    {
+      "uid": "019c0de3-5eeb-7829-9ead-f4fad46030e8",
+      "created": "2026-01-30T07:52:10.731576Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": {
+        "display_name": "Maxime Dufey",
+        "company": 3802458,
+        "pk": 324006,
+        "email": "admintransport@rt-groupe.com",
+        "phone_number": "+33785577607"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+      "site_id": {
+        "uid": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "reference": {
+          "new": "19466845",
+          "old": "19347469"
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c0de3-7a4f-79b3-a21d-ff8a318bedd0",
+      "created": "2026-01-30T07:52:17.743753Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": {
+        "display_name": "Maxime Dufey",
+        "company": 3802458,
+        "pk": 324006,
+        "email": "admintransport@rt-groupe.com",
+        "phone_number": "+33785577607"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+      "site_id": {
+        "uid": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "slots": {
+          "new": [
+            {
+              "end": "2026-01-31T08:30:00+00:00",
+              "start": "2026-01-31T08:30:00+00:00"
+            }
+          ],
+          "old": null
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c0de3-d208-76c2-a374-213b534f76c4",
+      "created": "2026-01-30T07:52:40.206102Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": {
+        "display_name": "Maxime Dufey",
+        "company": 3802458,
+        "pk": 324006,
+        "email": "admintransport@rt-groupe.com",
+        "phone_number": "+33785577607"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": null,
+      "site_id": null,
+      "delivery": "019c0de3-1d86-72e5-b333-3fa433187dad",
+      "segment": null,
+      "transport": "019c0de3-1d85-7767-a593-ce399caaff58",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "deliveries": [
+          {
+            "planned_loads": [
+              {
+                "new": "29 Palettes, Alimentaire, 19040kg",
+                "old": "26 Palettes, Alimentaire, 18240kg"
+              }
+            ]
+          }
+        ]
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c18b3-0ce5-75a5-a92f-a67f3c46d13b",
+      "created": "2026-02-01T10:15:13.382068Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": {
+        "display_name": "Romain Tardy",
+        "company": 3802458,
+        "pk": 336251,
+        "email": "r.tardy@rt-groupe.com",
+        "phone_number": "+33607678524"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "slots": {
+          "new": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ],
+          "old": null
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c18b4-fcfd-7393-9e8a-17198cac8c2c",
+      "created": "2026-02-01T10:17:20.463089Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "created",
+      "author": {
+        "display_name": "Romain Tardy",
+        "company": 3802458,
+        "pk": 336251,
+        "email": "r.tardy@rt-groupe.com",
+        "phone_number": "+33607678524"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": null,
+      "site_id": null,
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": null,
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1a9c-ac37-7059-a8ad-78606ce8ce3b",
+      "created": "2026-02-01T19:10:01.271814Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": {
+        "display_name": "Baptiste Mattio",
+        "company": 3802458,
+        "pk": 323984,
+        "email": "b.mattio@rt-groupe.com",
+        "phone_number": "+33668403603"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "slots": {
+          "new": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ],
+          "old": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ]
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1a9c-ac89-7a98-b787-3326cc2cd3cf",
+      "created": "2026-02-01T19:10:01.354228Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": null,
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "slots": {
+          "new": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ],
+          "old": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ]
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1aa5-3633-7244-9a8d-b6e50ecdfbc1",
+      "created": "2026-02-01T19:19:20.883596Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": {
+        "display_name": "Baptiste Mattio",
+        "company": 3802458,
+        "pk": 323984,
+        "email": "b.mattio@rt-groupe.com",
+        "phone_number": "+33668403603"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "slots": {
+          "new": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ],
+          "old": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ]
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1aa5-36af-77b1-9554-43f94e4c2361",
+      "created": "2026-02-01T19:19:21.007581Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": null,
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "slots": {
+          "new": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ],
+          "old": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ]
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1aa5-a507-7701-b16d-704d2823f016",
+      "created": "2026-02-01T19:19:49.256307Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": {
+        "display_name": "Baptiste Mattio",
+        "company": 3802458,
+        "pk": 323984,
+        "email": "b.mattio@rt-groupe.com",
+        "phone_number": "+33668403603"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "slots": {
+          "new": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ],
+          "old": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ]
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1aa5-a56e-7d8a-91c3-fe33a9d6dcf6",
+      "created": "2026-02-01T19:19:49.359425Z",
+      "created_device": null,
+      "creation_method": "auto",
+      "category": "updated",
+      "author": null,
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": {
+        "slots": {
+          "new": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ],
+          "old": [
+            {
+              "end": "2026-01-31T14:00:00+00:00",
+              "start": "2026-01-31T14:00:00+00:00"
+            }
+          ]
+        }
+      },
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1e04-275a-791d-8f45-7e03f06cdc9e",
+      "created": "2026-02-02T11:01:54.839063Z",
+      "created_device": "2026-02-02T11:01:51.827999Z",
+      "creation_method": "trucker",
+      "category": "on_loading_site",
+      "author": {
+        "display_name": "Gregory Charrin",
+        "company": 3802458,
+        "pk": 322933,
+        "email": "",
+        "phone_number": "+33611623189"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+      "site_id": {
+        "uid": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": null,
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1e04-275c-7992-bdff-024cc3277c0d",
+      "created": "2026-02-02T11:01:54.839208Z",
+      "created_device": "2026-02-02T11:01:51.827999Z",
+      "creation_method": "trucker",
+      "category": "on_unloading_site",
+      "author": {
+        "display_name": "Gregory Charrin",
+        "company": 3802458,
+        "pk": 322933,
+        "email": "",
+        "phone_number": "+33611623189"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": null,
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1e04-275b-7d42-91f1-6ac4dd323c41",
+      "created": "2026-02-02T11:01:54.839155Z",
+      "created_device": "2026-02-02T11:01:51.828000Z",
+      "creation_method": "trucker",
+      "category": "loading_complete",
+      "author": {
+        "display_name": "Gregory Charrin",
+        "company": 3802458,
+        "pk": 322933,
+        "email": "",
+        "phone_number": "+33611623189"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+      "site_id": {
+        "uid": "019c18b4-fcfe-7607-975b-d413f9ff57b2",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": null,
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1e04-275d-76bf-8ef6-baef473e55ea",
+      "created": "2026-02-02T11:01:54.839268Z",
+      "created_device": "2026-02-02T11:01:51.828000Z",
+      "creation_method": "trucker",
+      "category": "unloading_complete",
+      "author": {
+        "display_name": "Gregory Charrin",
+        "company": 3802458,
+        "pk": 322933,
+        "email": "",
+        "phone_number": "+33611623189"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+      "site_id": {
+        "uid": "019c18b4-fcff-7fc3-b83e-05d1fc379d22",
+        "remote_id": ""
+      },
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": null,
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    },
+    {
+      "uid": "019c1e04-27e5-76a3-8a29-5c57ae2f6486",
+      "created": "2026-02-02T11:01:54.839365Z",
+      "created_device": "2026-02-02T11:01:54.789612Z",
+      "creation_method": "auto",
+      "category": "done",
+      "author": {
+        "display_name": "Gregory Charrin",
+        "company": 3802458,
+        "pk": 322933,
+        "email": "",
+        "phone_number": "+33611623189"
+      },
+      "content": "",
+      "content_signatory": "",
+      "target": null,
+      "site": null,
+      "site_id": null,
+      "delivery": null,
+      "segment": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "signature": null,
+      "latitude": null,
+      "longitude": null,
+      "update_details": null,
+      "author_company": 3802458,
+      "credit_note": null,
+      "invoice": null
+    }
+  ],
+  "status": "done",
+  "created_by": {
+    "pk": 3802458,
+    "name": "SARL SETT TRANSPORTS",
+    "trade_number": "35067556700050",
+    "country": "FR",
+    "settings_contract_html": "",
+    "settings_logo": "https://storage.googleapis.com/dashdoc-media/media/carriers/181c20ab-92a9-461e-a637-6f06ab3bb2d7.png",
+    "settings_stamp": null,
+    "settings_print_mode": false,
+    "settings_special_agreements": "",
+    "settings_transport_order_observations": "<div><p><strong>PRÉAMBULE</strong><br>Les présentes Conditions Générales de Vente (CGV) régissent l’ensemble des prestations de transport réalisées par SETT Transports (ci-après « SETT ») au profit du Transporteur (ci-après « le Transporteur »). Leur acceptation par ce dernier vaut adhésion intégrale et sans réserve aux dispositions ci-après, lesquelles prévalent sur tout accord ou usage contraire.</p><p><strong>ARTICLE 1 – OBJET ET CHAMP D’APPLICATION</strong><br>1.1 Les présentes CGV ont pour objet de définir les conditions dans lesquelles le Transporteur exécute les prestations de transport, tant au niveau national qu’international, pour le compte de SETT, dans le respect des lois, règlements et conventions en vigueur, notamment la Convention relative au contrat de transport international de marchandises par route (Convention CMR) et, pour le transport européen, le règlement (CEE) n°3118/93 et ses éventuelles modifications ultérieures.<br>1.2 Toute dérogation aux présentes conditions devra faire l’objet d’un accord écrit et préalable de SETT.</p><p><strong>ARTICLE 2 – DISPOSITIONS IMPÉRATIVES ET DOCUMENTATION</strong><br>2.1 <strong>Sous-affrètement</strong><br>Le sous-affrètement, qu’il soit partiel ou total, est formellement interdit, sauf autorisation expresse et écrite de SETT.<br>2.2 <strong>Documentation</strong><br>Il est expressément interdit d’utiliser une lettre de transport CMR sous forme numérique ou dématérialisée. Le Transporteur s’engage à transmettre dans un délai de sept (7) jours la lettre de voiture ainsi que les bons de livraison (BL) originaux, dûment émargés et tamponnés.<br>2.3 <strong>Obligations contractuelles</strong><br>En acceptant le présent chargement, le Transporteur reconnaît que le prix de la prestation couvre l’intégralité de ses coûts (transports, charges, taxes afférentes, etc.) et s’engage à signaler sans délai toute non-conformité, incluant notamment les retards, détériorations ou autres irrégularités affectant la marchandise, à l’exception des instructions impératives détaillées au présent article.</p><p><strong>ARTICLE 3 – CONDITIONS DE RÈGLEMENT</strong><br>3.1 Le Transporteur devra faire parvenir à SETT, conjointement avec la facture correspondante, l’ensemble des documents justificatifs requis (CMR, BL, emballages consignés – ex. bons de palette originaux) dans un délai maximum de quarante-huit (48) heures après la prestation, et ce, afin de garantir le paiement dans les délais contractuels.<br>3.2 Le règlement des prestations s’effectuera par virement bancaire, selon les conditions usuelles de SETT, soit trente (30) jours fin de mois à compter de la réception de la facture, sous réserve de la conformité des documents transmis et de l’échange effectif des emballages consignés.<br>3.3 Il est rappelé que le prix de transport inclut l’indexation relative au prix du gasoil.</p><p><strong>ARTICLE 4 – RETARDS, TEMPS D’ATTENTE ET PÉNALITÉS</strong><br>4.1 <strong>Temps d’attente</strong><br>En cas d’attente au chargement ou à la livraison, une indemnité forfaitaire de 35 euros par heure (à compter de la quatrième heure complète) sera appliquée.<br>4.2 <strong>Pénalités de retard</strong><br>Le Transporteur accepte que toute pénalité de retard éventuellement imposée par le client soit répercutée intégralement sur sa facturation, sans possibilité de remise ou d’aménagement.</p><p><strong>ARTICLE 5 – OBLIGATIONS DU TRANSPORTEUR ET RESPONSABILITÉS</strong><br>5.1 Le Transporteur, ainsi que l’ensemble de ses sous-traitants ou personnels (véhicules, chauffeurs, etc.), s’engagent à respecter strictement l’intégralité des dispositions législatives et réglementaires en vigueur, notamment celles relatives au cabotage et aux conditions de transport international ou national.<br>5.2 Le Transporteur est seul responsable de tout dommage, retard ou perte affectant les marchandises dès lors qu’elles entrent sous son contrôle. Il assumera l’intégralité des réclamations pouvant en découler.<br>5.3 Les véhicules mis à disposition devront être en parfait état de fonctionnement et de propreté, conformément aux instructions émises par SETT et/ou le client concerné.<br>5.4 Le Transporteur devra, préalablement à toute prestation, fournir à SETT une attestation certifiant qu’il est à jour dans le paiement de ses cotisations fiscales et de sécurité sociale. À défaut, SETT se réserve le droit de retenir tout paiement jusqu’à régularisation.<br>5.5 Tout incident, accident ou situation à risque survenant lors de l’exécution de la prestation devra être immédiatement communiqué à SETT, afin de permettre la prise de mesures correctives adaptées.<br>5.6 En cas de première expédition, le Transporteur s’engage à fournir une copie de sa licence d’exploitation européenne ainsi qu’une attestation d’assurance couvrant les marchandises transportées et en cours de validité.</p><p><strong>ARTICLE 6 – DOCUMENTS DE TRANSPORT ET CONTRÔLE</strong><br>6.1 Le Transporteur est tenu de s’assurer que l’ensemble des documents de transport soit établi conformément à la législation applicable.<br>6.2 Dans le cadre de transports nationaux, seuls les documents adaptés seront utilisés ; il en va de même pour les transports internationaux. En cas d’utilisation de documents inappropriés, le Transporteur s’engage à indemniser SETT de tout préjudice, y compris les sanctions administratives ou pénales encourues.<br>6.3 Le Transporteur s’engage à renvoyer, par voie électronique ou par tout autre moyen convenu, une copie des présentes CGV dûment confirmée, ainsi que les documents de chargement/déchargement dans un délai maximal de vingt-quatre (24) heures après la prestation. Tout manquement à cette obligation pourra entraîner l’application d’une pénalité équivalente au montant de la prestation de transport.</p><p><strong>ARTICLE 7 – SOUS-TRAITANCE</strong><br>La sous-traitance des prestations de transport ne pourra intervenir qu’après obtention d’une autorisation écrite préalable et expresse de SETT. En cas de non-respect de cette obligation, SETT se réserve le droit de réclamer des dommages-intérêts correspondant à l’intégralité des préjudices subis, voire de mettre fin unilatéralement à la collaboration.</p><p><strong>ARTICLE 8 – RÈGLEMENT DES LITIGES</strong><br>8.1 Tout litige relatif à l’interprétation ou à l’exécution des présentes CGV sera soumis, à défaut de règlement amiable, aux juridictions compétentes du siège social de SETT.<br>8.2 Pour les contrats de transport international, les dispositions de la Convention CMR s’appliqueront pour les questions expressément couvertes par celle-ci. Pour le reste, le droit français sera applicable, à l’exception de ses règles relatives aux conflits de lois.<br>8.3 Pour les transports nationaux, seuls les textes législatifs et réglementaires nationaux s’appliqueront, indépendamment du type de lettre de transport utilisée.</p><p><strong>ARTICLE 9 – DISPOSITIONS DIVERSES</strong><br>9.1 Toute modification des présentes CGV devra être faite par écrit et signée par les parties.<br>9.2 En cas d’impossibilité d’exécuter tout ou partie de la prestation dans les délais convenus, le Transporteur s’engage à en informer SETT dans les plus brefs délais afin de rechercher une solution amiable permettant d’en limiter les conséquences.<br>9.3 La non-réalisation d’une mission dans le respect des délais pourra entraîner un retard de règlement ou toute autre mesure conservatoire de la part de SETT.</p><p><strong>ARTICLE 10 – OBLIGATION D’UTILISATION DE DASHDOC</strong><br>10.1 Le Transporteur est tenu d’utiliser impérativement la plateforme Dashdoc pour assurer le suivi des documents de transport, notamment la lettre de transport CMR et les bons de livraison (BL).<br>10.2 Tous les documents relatifs au transport doivent être déposés sur Dashdoc dans les délais impartis par SETT, et ce afin de garantir leur traçabilité et la conformité du suivi opérationnel.<br>10.3 Le Transporteur s’engage également à déposer, via la même plateforme, l’ensemble des factures afférentes aux prestations exécutées, conformément aux modalités et délais contractuels définis par SETT.<br>10.4 Le non-respect de cette obligation pourra entraîner la suspension des paiements et/ou l’application de pénalités, sans préjudice de toute autre action en réparation des dommages subis par SETT.</p><p>10.5 l'acceptation de la commande sur le portail Dashdoc est bloquant pour le règlement </p><p>Pour toute question : <strong>l.accary@rt-groupe.com pour la comptabilité fournisseur</strong></p><p><strong>ARTICLE 11 - PENALITE APPLICABLE EN CAS DE NON RESPECTER DES ENGAGEMENTS CONTRATUELLES</strong></p><p>11.1 Retard compris entre 30 min et 1h : 40€</p><p>11.2 Retard supérieur à 1h : 80€</p><p>11.3 Plantage (no show) Transport dédié : Non paiement du terme fixe + facturation</p><p>écart prix d'origine et surcoût de dépannage</p><p>11.4 Plantage (no show) Transport affrété : Non paiement de la prestation + facturation</p><p>écart prix d'origine et surcoût de dépannage</p><p>11.5 Non reprise des emballages 100€ de pénalité par non reprise</p><p>11.6 Palette Europe non rendu ou non déposée en PFM 18€ / Palettes</p><p>11.7 Non utilisation de application TRAVIS / SYSTER : 10€ / Livraison</p><p>11.8 Mauvaise utilisation chauffeur : 10€ / Livraison</p><p>11.9 Non port des EPI : 10€ forfaitaire</p><p></p><p></p></div>",
+    "settings_display_rental_worked_hours": true,
+    "settings_constrain_reference_edition": false,
+    "settings_ignore_creator_constraint_in_signature_process": false,
+    "vat_number": "FR21350675567",
+    "is_verified": true
+  },
+  "messages": [
+    {
+      "author": {
+        "display_name": "Romain Tardy",
+        "company": 3802458,
+        "pk": 336251,
+        "email": "r.tardy@rt-groupe.com",
+        "phone_number": "+33607678524"
+      },
+      "author_company_id": 3802458,
+      "created_device": null,
+      "created": "2026-02-01T10:17:23.281527Z",
+      "creation_method": "manager",
+      "delivery": null,
+      "document_title": null,
+      "document_type": "",
+      "document": null,
+      "is_attached_to_cmr": false,
+      "latitude": null,
+      "longitude": null,
+      "message": "events.notification.order_received",
+      "readable_by_company_ids": [
+        3802458
+      ],
+      "readable_by_trucker": true,
+      "reference": "",
+      "site_remote_id": null,
+      "site": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "type": "share",
+      "uid": "019c18b5-0840-7595-bf68-a6491dff6076",
+      "sent_to_emails": [
+        "elbad69@hotmail.fr"
+      ],
+      "sent_to_phones": null,
+      "cmr_ids": null,
+      "signatory_first_name": null,
+      "visible_by_everyone": false,
+      "ml_document_identification": null,
+      "extracted_reference": null,
+      "email_context": 25100944,
+      "current_email_status": {
+        "status": "delivered",
+        "status_updated_at": "2026-02-01T10:17:25+00:00",
+        "details": null,
+        "all_events": [
+          {
+            "event_type": "submitted",
+            "occurred_at": "2026-02-01T10:17:23.257096+00:00",
+            "recipient_email": "elbad69@hotmail.fr"
+          },
+          {
+            "event_type": "delivered",
+            "occurred_at": "2026-02-01T10:17:25+00:00",
+            "recipient_email": ""
+          }
+        ]
+      }
+    },
+    {
+      "author": null,
+      "author_company_id": 3802458,
+      "created_device": null,
+      "created": "2026-02-01T19:10:03.530836Z",
+      "creation_method": null,
+      "delivery": null,
+      "document_title": null,
+      "document_type": "",
+      "document": null,
+      "is_attached_to_cmr": false,
+      "latitude": null,
+      "longitude": null,
+      "message": "events.notification.order_updated",
+      "readable_by_company_ids": [
+        3802458
+      ],
+      "readable_by_trucker": true,
+      "reference": "",
+      "site_remote_id": null,
+      "site": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "type": "share",
+      "uid": "019c1a9c-b4fb-7562-a64a-a42141074083",
+      "sent_to_emails": [
+        "elbad69@hotmail.fr"
+      ],
+      "sent_to_phones": null,
+      "cmr_ids": null,
+      "signatory_first_name": null,
+      "visible_by_everyone": false,
+      "ml_document_identification": null,
+      "extracted_reference": null,
+      "email_context": null,
+      "current_email_status": null
+    },
+    {
+      "author": null,
+      "author_company_id": 3802458,
+      "created_device": null,
+      "created": "2026-02-01T19:19:23.460262Z",
+      "creation_method": null,
+      "delivery": null,
+      "document_title": null,
+      "document_type": "",
+      "document": null,
+      "is_attached_to_cmr": false,
+      "latitude": null,
+      "longitude": null,
+      "message": "events.notification.order_updated",
+      "readable_by_company_ids": [
+        3802458
+      ],
+      "readable_by_trucker": true,
+      "reference": "",
+      "site_remote_id": null,
+      "site": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "type": "share",
+      "uid": "019c1aa5-4034-7579-97c9-907844407ee1",
+      "sent_to_emails": [
+        "elbad69@hotmail.fr"
+      ],
+      "sent_to_phones": null,
+      "cmr_ids": null,
+      "signatory_first_name": null,
+      "visible_by_everyone": false,
+      "ml_document_identification": null,
+      "extracted_reference": null,
+      "email_context": null,
+      "current_email_status": null
+    },
+    {
+      "author": null,
+      "author_company_id": 3802458,
+      "created_device": null,
+      "created": "2026-02-01T19:19:51.468907Z",
+      "creation_method": null,
+      "delivery": null,
+      "document_title": null,
+      "document_type": "",
+      "document": null,
+      "is_attached_to_cmr": false,
+      "latitude": null,
+      "longitude": null,
+      "message": "events.notification.order_updated",
+      "readable_by_company_ids": [
+        3802458
+      ],
+      "readable_by_trucker": true,
+      "reference": "",
+      "site_remote_id": null,
+      "site": null,
+      "transport": "019c18b4-fcfc-775a-b63a-a228046b25b8",
+      "type": "share",
+      "uid": "019c1aa5-ad9e-7f43-8f43-0526853ece87",
+      "sent_to_emails": [
+        "elbad69@hotmail.fr"
+      ],
+      "sent_to_phones": null,
+      "cmr_ids": null,
+      "signatory_first_name": null,
+      "visible_by_everyone": false,
+      "ml_document_identification": null,
+      "extracted_reference": null,
+      "email_context": null,
+      "current_email_status": null
+    }
+  ],
+  "documents": [
+    {
+      "pk": 41951502,
+      "file_updated_date": "2026-02-02T11:02:08.335080Z",
+      "delivery": "019c18b4-fd00-71d3-90d8-643481454b7e",
+      "delivery_sequential_id": 34977443,
+      "reference": "34977443",
+      "category": "ldv",
+      "name": "National bill of lading",
+      "file": "https://www.dashdoc.eu/api/v4/delivery-documents/019c18b4-fd4a-7a10-ba3c-a018248693e1/",
+      "business_privacy_scope": null,
+      "cancelled": null
+    },
+    {
+      "pk": 41953509,
+      "file_updated_date": "2026-02-01T19:20:02.419156Z",
+      "delivery": null,
+      "reference": "",
+      "category": "chc",
+      "name": "Charter confirmation",
+      "file": "https://www.dashdoc.eu/api/v4/delivery-documents/019c1aa5-d86c-73a8-98f9-fc03a0aea1e9/",
+      "business_privacy_scope": null,
+      "cancelled": null
+    }
+  ],
+  "invoicing_address": null,
+  "customer_to_invoice": null,
+  "invoice_number": null,
+  "parent_transport": {
+    "uid": "019c0de3-1d85-7767-a593-ce399caaff58",
+    "pk": 32282915,
+    "sequential_id": 32282915,
+    "has_strong_link": true,
+    "remote_id": ""
+  },
+  "parent_transports": [
+    {
+      "uid": "019c0de3-1d85-7767-a593-ce399caaff58",
+      "pk": 32282915,
+      "sequential_id": 32282915,
+      "has_strong_link": true,
+      "remote_id": ""
+    }
+  ],
+  "price": null,
+  "invoiced_price": null,
+  "billing_metrics": null,
+  "quotation_total_price": "12.00",
+  "pricing_total_price": "12.00",
+  "loading_plan": null,
+  "shape": "simple",
+  "instructions": "",
+  "tags": [
+    {
+      "pk": 122497,
+      "name": "CHARGEMENT OK",
+      "color": "#FAC938",
+      "tag_group_id": 1452
+    }
+  ],
+  "estimated_distance": 10.28,
+  "carbon_footprint": 52.21697380479999,
+  "external_transport": null,
+  "archived_by": [],
+  "requires_washing": false,
+  "requires_acceptance": false,
+  "effective_price_total": "12.00",
+  "agreed_price_total": "12.00",
+  "invoiced_price_total": "12.00",
+  "shipper_final_price_total": null,
+  "purchase_cost_total": null,
+  "currency": "EUR"
+}

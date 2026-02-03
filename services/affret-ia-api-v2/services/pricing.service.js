@@ -15,66 +15,67 @@ class PricingService {
 
   /**
    * Extrait le prix payé au sous-traitant depuis un transport Dashdoc
-   * IMPORTANT: Utilise charter.price ou subcontracting.price (PAS pricing.invoicing_amount)
+   * ⚠️ NOUVELLE STRUCTURE: Prix au niveau racine du transport
+   * Structure Dashdoc: les prix sont dans agreed_price_total, effective_price_total, etc.
    */
   extractCarrierPrice(transport) {
-    // Priorité 1: charter.price
-    if (transport.charter?.price) {
+    // Priorité 1: purchase_cost_total (coût d'achat = prix sous-traitant)
+    if (transport.purchase_cost_total) {
       return {
-        price: transport.charter.price,
-        currency: transport.charter.currency || 'EUR',
-        source: 'charter.price',
+        price: parseFloat(transport.purchase_cost_total),
+        currency: transport.currency || 'EUR',
+        source: 'purchase_cost_total',
         found: true
       };
     }
 
-    // Priorité 2: charter.purchase_price
-    if (transport.charter?.purchase_price) {
+    // Priorité 2: agreed_price_total (prix convenu)
+    if (transport.agreed_price_total) {
       return {
-        price: transport.charter.purchase_price,
-        currency: transport.charter.currency || 'EUR',
-        source: 'charter.purchase_price',
+        price: parseFloat(transport.agreed_price_total),
+        currency: transport.currency || 'EUR',
+        source: 'agreed_price_total',
         found: true
       };
     }
 
-    // Priorité 3: subcontracting.price
-    if (transport.subcontracting?.price) {
+    // Priorité 3: effective_price_total (prix effectif)
+    if (transport.effective_price_total) {
       return {
-        price: transport.subcontracting.price,
-        currency: transport.subcontracting.currency || 'EUR',
-        source: 'subcontracting.price',
+        price: parseFloat(transport.effective_price_total),
+        currency: transport.currency || 'EUR',
+        source: 'effective_price_total',
         found: true
       };
     }
 
-    // Priorité 4: subcontracting.purchase_price
-    if (transport.subcontracting?.purchase_price) {
+    // Priorité 4: pricing_total_price (prix de tarification)
+    if (transport.pricing_total_price) {
       return {
-        price: transport.subcontracting.purchase_price,
-        currency: transport.subcontracting.currency || 'EUR',
-        source: 'subcontracting.purchase_price',
+        price: parseFloat(transport.pricing_total_price),
+        currency: transport.currency || 'EUR',
+        source: 'pricing_total_price',
         found: true
       };
     }
 
-    // Priorité 5: pricing.carrier_price (au cas où)
-    if (transport.pricing?.carrier_price) {
+    // Priorité 5: quotation_total_price (prix de devis)
+    if (transport.quotation_total_price) {
       return {
-        price: transport.pricing.carrier_price,
-        currency: transport.pricing.currency || 'EUR',
-        source: 'pricing.carrier_price',
+        price: parseFloat(transport.quotation_total_price),
+        currency: transport.currency || 'EUR',
+        source: 'quotation_total_price',
         found: true
       };
     }
 
-    // Fallback: pricing.invoicing_amount (avec warning)
-    if (transport.pricing?.invoicing_amount) {
-      console.warn(`⚠️ [DASHDOC] Transport ${transport.uid}: Utilisation de invoicing_amount car pas de prix sous-traitant trouvé`);
+    // Fallback: invoiced_price_total (prix facturé)
+    if (transport.invoiced_price_total) {
+      console.warn(`⚠️ [DASHDOC] Transport ${transport.uid}: Utilisation de invoiced_price_total car pas de prix sous-traitant trouvé`);
       return {
-        price: transport.pricing.invoicing_amount,
-        currency: transport.pricing.currency || 'EUR',
-        source: 'pricing.invoicing_amount (FALLBACK)',
+        price: parseFloat(transport.invoiced_price_total),
+        currency: transport.currency || 'EUR',
+        source: 'invoiced_price_total (FALLBACK)',
         found: false
       };
     }
@@ -90,34 +91,82 @@ class PricingService {
 
   /**
    * Extrait les informations du transporteur sous-traitant
+   * ⚠️ NOUVELLE STRUCTURE: Contact dans deliveries[0].tracking_contacts[0].contact + carrier_address
    */
   extractCarrierInfo(transport) {
-    // Priorité: charter > subcontracting > carrier
-    if (transport.charter?.carrier) {
-      return {
-        pk: transport.charter.carrier.pk,
-        name: transport.charter.carrier.name || 'Transporteur',
-        source: 'charter'
+    let carrierData = null;
+    let contactData = null;
+    let source = null;
+
+    // Priorité 1: carrier_address (infos complètes de l'entreprise)
+    if (transport.carrier_address?.company) {
+      carrierData = {
+        pk: transport.carrier_address.company.pk,
+        name: transport.carrier_address.company.name || transport.carrier_address.name,
+        siren: transport.carrier_address.company.siren || transport.carrier_address.company.trade_number,
+        phone: transport.carrier_address.company.phone_number,
+        email: transport.carrier_address.company.email || null,
+        address: {
+          address: transport.carrier_address.address,
+          city: transport.carrier_address.city,
+          postalCode: transport.carrier_address.postcode,
+          country: transport.carrier_address.country || 'FR'
+        }
       };
+      source = 'carrier_address';
     }
 
-    if (transport.subcontracting?.carrier) {
-      return {
-        pk: transport.subcontracting.carrier.pk,
-        name: transport.subcontracting.carrier.name || 'Transporteur',
-        source: 'subcontracting'
-      };
+    // Priorité 2: deliveries[0].tracking_contacts[0].contact (contact du transporteur)
+    if (transport.deliveries && transport.deliveries.length > 0) {
+      const delivery = transport.deliveries[0];
+
+      if (delivery.tracking_contacts && delivery.tracking_contacts.length > 0) {
+        const trackingContact = delivery.tracking_contacts.find(tc => tc.role === 'carrier');
+
+        if (trackingContact?.contact) {
+          contactData = {
+            email: trackingContact.contact.email,
+            phone: trackingContact.contact.phone_number,
+            firstName: trackingContact.contact.first_name,
+            lastName: trackingContact.contact.last_name
+          };
+
+          // Si on n'a pas trouvé carrier_address, utiliser les infos de tracking_contact
+          if (!carrierData && trackingContact.contact.company) {
+            carrierData = {
+              pk: trackingContact.contact.company.pk,
+              name: trackingContact.contact.company.name,
+              siren: trackingContact.contact.company.trade_number,
+              phone: trackingContact.contact.company.phone_number,
+              email: trackingContact.contact.email,
+              address: null
+            };
+            source = 'tracking_contacts';
+          }
+        }
+      }
     }
 
-    if (transport.carrier) {
-      return {
-        pk: transport.carrier.pk,
-        name: transport.carrier.name || 'Transporteur',
-        source: 'carrier'
-      };
+    if (!carrierData) {
+      return null;
     }
 
-    return null;
+    // Fusionner les données carrier + contact
+    return {
+      pk: carrierData.pk,
+      name: carrierData.name || 'Transporteur',
+      email: contactData?.email || carrierData.email || null,
+      phone: contactData?.phone || carrierData.phone || null,
+      siren: carrierData.siren || null,
+      address: carrierData.address || null,
+      contact: contactData ? {
+        firstName: contactData.firstName,
+        lastName: contactData.lastName,
+        email: contactData.email,
+        phone: contactData.phone
+      } : null,
+      source: source
+    };
   }
 
   /**
@@ -173,15 +222,24 @@ class PricingService {
       }
 
       // Agrégation pour grouper par transporteur
+      // ⚠️ IMPORTANT: On garde le prix le plus BAS + sa date pour négociation
       const carriers = await PriceHistory.aggregate([
         { $match: query },
+        {
+          $sort: { 'price.final': 1 }  // Trier par prix croissant pour avoir le min en premier
+        },
         {
           $group: {
             _id: '$carrierId',
             carrierName: { $first: '$carrierName' },
+            carrierEmail: { $first: '$carrierEmail' },      // ✅ Contact
+            carrierPhone: { $first: '$carrierPhone' },      // ✅ Contact
+            carrierSiren: { $first: '$carrierSiren' },
             totalTransports: { $sum: 1 },
             avgPrice: { $avg: '$price.final' },
             minPrice: { $min: '$price.final' },
+            minPriceDate: { $first: '$completedAt' },       // ✅ Date du prix le plus bas
+            minPriceOrderId: { $first: '$orderId' },        // ✅ Référence commande
             maxPrice: { $max: '$price.final' },
             lastTransport: { $max: '$completedAt' },
             routes: {
@@ -210,15 +268,22 @@ class PricingService {
         subcontractors: carriers.map(c => ({
           carrierId: c._id,
           carrierName: c.carrierName,
+          carrierEmail: c.carrierEmail,        // ✅ Contact
+          carrierPhone: c.carrierPhone,        // ✅ Contact
+          carrierSiren: c.carrierSiren,
           totalTransports: c.totalTransports,
           avgPrice: Math.round(c.avgPrice),
+          minPrice: c.minPrice,                // ✅ Prix le plus BAS
+          minPriceDate: c.minPriceDate,        // ✅ Date du prix le plus bas
+          minPriceOrderId: c.minPriceOrderId,  // ✅ Référence commande
           priceRange: {
             min: c.minPrice,
             max: c.maxPrice
           },
           lastTransport: c.lastTransport,
           routesCovered: c.routes.length,
-          isPreferred: c.totalTransports >= minTransports
+          isPreferred: c.totalTransports >= minTransports,
+          negotiationArgument: `A déjà fait cette route ${c.totalTransports} fois, dont une à ${c.minPrice}€ le ${new Date(c.minPriceDate).toLocaleDateString('fr-FR')}`
         })),
         count: carriers.length
       };
@@ -290,15 +355,16 @@ class PricingService {
 
       console.log(`[PRICING SERVICE] Import Dashdoc depuis ${startDate.toISOString()}...`);
 
-      // Appel API Dashdoc - Récupérer les transports complétés
+      // Appel API Dashdoc - Récupérer TOUS les affrètements
+      // ⚠️ IMPORTANT: Format auth = Token (pas Bearer), URL = api.dashdoc.eu (pas .com)
       const response = await axios.get(`${this.dashdocApiUrl}/transports/`, {
         headers: {
-          'Authorization': `Bearer ${this.dashdocApiKey}`,
+          'Authorization': `Token ${this.dashdocApiKey}`,  // ✅ Token, pas Bearer
           'Content-Type': 'application/json'
         },
         params: {
-          status: 'done',
-          is_subcontracted: true,  // ✅ Filtre uniquement les sous-traitances
+          business_status: 'orders',  // ✅ Affrètements uniquement (8371)
+          archived: false,            // ✅ Non archivés
           created_after: startDate.toISOString(),
           created_before: endDate.toISOString(),
           page_size: 100
@@ -314,9 +380,21 @@ class PricingService {
 
       for (const transport of transports) {
         try {
-          // Extraire adresses
-          const pickupAddress = transport.origin?.address;
-          const deliveryAddress = transport.destination?.address;
+          // ⚠️ NOUVELLE STRUCTURE: Les données sont dans deliveries[0]
+          const delivery = transport.deliveries && transport.deliveries.length > 0 ? transport.deliveries[0] : null;
+
+          if (!delivery) {
+            skipped++;
+            console.log(`⚠️ Transport ${transport.uid} ignoré: pas de delivery`);
+            continue;
+          }
+
+          // Extraire adresses depuis deliveries[0].origin et deliveries[0].destination
+          const pickupAddress = delivery.origin?.address;
+          const deliveryAddress = delivery.destination?.address;
+
+          // Extraire cargo depuis deliveries[0].loads[0]
+          const loads = delivery.loads && delivery.loads.length > 0 ? delivery.loads[0] : null;
 
           // Extraire prix SOUS-TRAITANT (pas client)
           const carrierPricing = this.extractCarrierPrice(transport);
@@ -332,7 +410,11 @@ class PricingService {
               !carrierPricing.price) {
             skipped++;
             if (!carrierPricing.found) {
-              console.log(`⚠️ Transport ${transport.uid} ignoré: pas de prix sous-traitant (charter/subcontracting)`);
+              console.log(`⚠️ Transport ${transport.uid} ignoré: pas de prix sous-traitant`);
+            } else if (!pickupAddress?.postcode) {
+              console.log(`⚠️ Transport ${transport.uid} ignoré: pas d'adresse pickup`);
+            } else if (!deliveryAddress?.postcode) {
+              console.log(`⚠️ Transport ${transport.uid} ignoré: pas d'adresse delivery`);
             }
             continue;
           }
@@ -354,11 +436,15 @@ class PricingService {
             continue;
           }
 
-          // Créer l'enregistrement avec prix SOUS-TRAITANT
+          // Créer l'enregistrement avec prix SOUS-TRAITANT + infos contact
           await PriceHistory.create({
             orderId: `DASHDOC-${transport.uid}`,
             carrierId: `dashdoc-${carrierInfo.pk}`,
             carrierName: carrierInfo.name,
+            carrierEmail: carrierInfo.email,        // ✅ Contact pour Affret.IA
+            carrierPhone: carrierInfo.phone,        // ✅ Contact pour Affret.IA
+            carrierSiren: carrierInfo.siren,        // ✅ Identifiant entreprise
+            carrierContact: carrierInfo.contact,    // ✅ Nom + prénom contact
             route: {
               from: {
                 city: pickupAddress.city,
@@ -376,11 +462,11 @@ class PricingService {
               currency: carrierPricing.currency
             },
             transport: {
-              vehicleType: this.mapDashdocVehicleType(transport.vehicle_type),
-              weight: transport.weight_kg || 0,
-              volume: transport.volume_m3 || 0,
-              palettes: transport.pallets_count || 0,
-              distance: transport.distance_km || 0
+              vehicleType: this.mapDashdocVehicleType(transport.requested_vehicle || ''),
+              weight: loads?.weight || 0,              // ✅ Depuis deliveries[0].loads[0].weight
+              volume: loads?.volume || 0,              // ✅ Depuis deliveries[0].loads[0].volume
+              palettes: loads?.quantity || 0,          // ✅ Depuis deliveries[0].loads[0].quantity
+              distance: transport.estimated_distance || 0
             },
             negotiation: {
               rounds: 0,
@@ -393,7 +479,8 @@ class PricingService {
               importedAt: new Date(),
               source: 'dashdoc',
               priceSource: carrierPricing.source,  // ✅ Tracer d'où vient le prix
-              carrierSource: carrierInfo.source
+              carrierSource: carrierInfo.source,
+              carrierAddress: carrierInfo.address  // ✅ Adresse transporteur
             },
             organizationId: organizationId || 'dashdoc-import',
             status: 'completed',
@@ -491,6 +578,53 @@ class PricingService {
   }
 
   /**
+   * Obtenir le meilleur prix historique d'un transporteur sur une route
+   * ⚠️ ARGUMENT DE NÉGOCIATION: "Vous avez fait cette route à X€ le DD/MM/YYYY"
+   */
+  async getBestCarrierPrice(carrierId, fromPostalCode, toPostalCode, organizationId) {
+    try {
+      // Chercher tous les transports de ce carrier sur cette route
+      const history = await PriceHistory.find({
+        carrierId,
+        organizationId,
+        'route.from.postalCode': fromPostalCode,
+        'route.to.postalCode': toPostalCode,
+        status: 'completed'
+      })
+      .sort({ 'price.final': 1 })  // Trier par prix croissant
+      .limit(10)  // Garder les 10 meilleurs prix
+      .select('price.final completedAt orderId route');
+
+      if (!history || history.length === 0) {
+        return {
+          found: false,
+          message: 'Aucun historique avec ce transporteur sur cette route'
+        };
+      }
+
+      const bestPrice = history[0];  // Le moins cher
+
+      return {
+        found: true,
+        bestPrice: bestPrice.price.final,
+        bestPriceDate: bestPrice.completedAt,
+        bestPriceOrderId: bestPrice.orderId,
+        totalTransports: history.length,
+        allPrices: history.map(h => ({
+          price: h.price.final,
+          date: h.completedAt,
+          orderId: h.orderId
+        })),
+        negotiationArgument: `Vous avez réalisé ${history.length} fois cette route, dont une à ${bestPrice.price.final}€ le ${new Date(bestPrice.completedAt).toLocaleDateString('fr-FR')}`
+      };
+
+    } catch (error) {
+      console.error('[PRICING SERVICE] Erreur récupération meilleur prix carrier:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Calculer un score de confiance basé sur l'historique
    */
   calculateConfidenceScore(count, stdDev, avgPrice) {
@@ -542,14 +676,22 @@ class PricingService {
       // Pour l'instant, retourner simulation
       const simulatedCarriers = this.generateSimulatedCarriers(6, priceReference);
 
-      // Marquer les sous-traitants
+      // Marquer les sous-traitants avec leur MEILLEUR prix historique + date
       const carriersWithPreference = simulatedCarriers.map(carrier => {
-        const isPreferred = subcontractors.some(sub => sub.carrierId === carrier.carrierId);
+        const preferred = subcontractors.find(sub => sub.carrierId === carrier.carrierId);
+        const isPreferred = !!preferred;
+
         return {
           ...carrier,
           isPreferred,
-          historicalAvgPrice: isPreferred ?
-            subcontractors.find(sub => sub.carrierId === carrier.carrierId)?.avgPrice : null
+          historical: isPreferred ? {
+            avgPrice: preferred.avgPrice,
+            minPrice: preferred.minPrice,          // ✅ Prix le plus BAS
+            minPriceDate: preferred.minPriceDate,  // ✅ Date de ce prix
+            minPriceOrderId: preferred.minPriceOrderId,
+            totalTransports: preferred.totalTransports,
+            negotiationArgument: `A déjà fait cette route ${preferred.totalTransports} fois, dont une à ${preferred.minPrice}€ le ${new Date(preferred.minPriceDate).toLocaleDateString('fr-FR')}`
+          } : null
         };
       });
 

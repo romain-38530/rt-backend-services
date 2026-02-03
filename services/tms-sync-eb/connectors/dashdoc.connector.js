@@ -724,6 +724,22 @@ class DashdocConnector {
         }
       } : null,
 
+      // Moyen de transport affecté (véhicule/chauffeur)
+      transportMeans: {
+        hasVehicle: !!(t.segments?.[0]?.vehicle),
+        hasTrucker: !!(t.segments?.[0]?.trucker),
+        vehicle: t.segments?.[0]?.vehicle ? {
+          licensePlate: t.segments[0].vehicle.license_plate,
+          type: t.segments[0].vehicle.type,
+          externalId: t.segments[0].vehicle.pk
+        } : null,
+        trucker: t.segments?.[0]?.trucker ? {
+          name: `${t.segments[0].trucker.user?.first_name || ''} ${t.segments[0].trucker.user?.last_name || ''}`.trim(),
+          phone: t.segments[0].trucker.user?.phone_number,
+          externalId: t.segments[0].trucker.pk
+        } : null
+      },
+
       // Pricing
       pricing: {
         totalPrice: parseFloat(t.pricing_total_price) || null,
