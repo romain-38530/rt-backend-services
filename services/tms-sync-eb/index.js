@@ -23,6 +23,8 @@ const jwt = require('jsonwebtoken');
 const TMSConnectionService = require('./services/tms-connection.service');
 const VigilanceService = require('./services/vigilance.service');
 const DashdocConnector = require('./connectors/dashdoc.connector');
+const AffretIAEventListeners = require('./event-listeners/affretia-events');
+const affretIASyncRoutes = require('./routes/affretia-sync.routes');
 const scheduledJobs = require('./scheduled-jobs');
 const cacheService = require('./services/redis-cache.service');
 const packageJson = require('./package.json');
@@ -62,6 +64,15 @@ async function connectMongoDB() {
     await cacheService.init();
     const cacheStats = await cacheService.getStats();
     console.log(`[CACHE] Initialized: ${cacheStats.mode}`);
+
+    // Initialiser le service de sync Affret.IA → Dashdoc
+    try {
+      const affretIAListeners = new AffretIAEventListeners(null); // null car pas de WebSocket ici
+      await affretIAListeners.initialize();
+      console.log('[Affret.IA Sync] Service initialized');
+    } catch (error) {
+      console.error('[Affret.IA Sync] Failed to initialize:', error);
+    }
 
     console.log('Connected to MongoDB');
     return true;
@@ -117,7 +128,7 @@ app.get('/health', async (req, res) => {
     port: PORT,
     env: process.env.NODE_ENV || 'development',
     version: VERSION,
-    features: ['dashdoc', 'auto-sync', 'real-time-counters', 'carriers', 'vigilance'],
+    features: ['dashdoc', 'auto-sync', 'real-time-counters', 'carriers', 'vigilance', 'affretia-sync'],
     mongodb: {
       configured: !!process.env.MONGODB_URI,
       connected: mongoConnected
@@ -146,7 +157,7 @@ app.get('/', (req, res) => {
     message: 'RT TMS Sync API',
     version: VERSION,
     supportedTMS: ['dashdoc'],
-    features: ['carriers', 'vigilance', 'orders', 'real-time-sync'],
+    features: ['carriers', 'vigilance', 'orders', 'real-time-sync', 'affretia-dashdoc-sync'],
     endpoints: [
       'GET /health',
       'POST /api/v1/tms/connections',
@@ -165,7 +176,11 @@ app.get('/', (req, res) => {
       'GET /api/v1/tms/carriers/:id/vigilance',
       'POST /api/v1/tms/carriers/:id/vigilance/update',
       'POST /api/v1/tms/carriers/vigilance/update-all',
-      'GET /api/v1/tms/carriers/vigilance/stats'
+      'GET /api/v1/tms/carriers/vigilance/stats',
+      'POST /api/v1/tms/affretia-sync/manual',
+      'POST /api/v1/tms/affretia-sync/test',
+      'POST /api/v1/tms/affretia-sync/webhook',
+      'GET /api/v1/tms/affretia-sync/status'
     ]
   });
 });
@@ -1487,6 +1502,9 @@ app.get('/api/v1/monitoring/status', requireMongo, async (req, res) => {
     });
   }
 });
+
+// Routes Affret.IA synchronization
+app.use('/api/v1/tms/affretia-sync', authenticateToken, affretIASyncRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {

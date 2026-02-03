@@ -1095,6 +1095,34 @@ exports.assignCarrier = async (req, res) => {
       sessionId
     });
 
+    // Appeler le webhook de synchronisation Dashdoc
+    try {
+      await axios.post(
+        `${process.env.TMS_SYNC_API_URL || 'http://localhost:3008'}/api/v1/tms/affretia-sync/webhook`,
+        {
+          eventName: 'carrier.assigned',
+          data: {
+            orderId: session.orderId,
+            carrierId: session.selection.carrierId,
+            price: session.selection.finalPrice,
+            sessionId
+          }
+        },
+        {
+          timeout: 10000,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.TMS_SYNC_API_TOKEN}`
+          }
+        }
+      );
+
+      console.log(`[Affret.IA] Webhook synchronisation Dashdoc envoyé`);
+    } catch (error) {
+      console.error(`[Affret.IA] Erreur envoi webhook synchronisation:`, error.message);
+      // Ne pas bloquer l'affectation si le webhook échoue
+    }
+
     res.json({
       success: true,
       data: {
