@@ -11,11 +11,6 @@
 const mongoose = require('mongoose');
 const DashdocUpdateConnector = require('../connectors/dashdoc-update.connector');
 
-// Modèles MongoDB
-const TMSConnection = mongoose.model('TMSConnection');
-const Order = mongoose.model('Order');
-const Carrier = mongoose.model('Carrier');
-
 class AffretIADashdocSyncService {
   constructor() {
     this.connectors = new Map(); // Cache des connecteurs Dashdoc par connexion
@@ -63,6 +58,7 @@ class AffretIADashdocSyncService {
         return;
       }
 
+      const TMSConnection = mongoose.model('TMSConnection');
       const connections = await TMSConnection.find({
         tmsProvider: 'dashdoc',
         status: 'active'
@@ -236,6 +232,7 @@ class AffretIADashdocSyncService {
    */
   async getOrder(orderId) {
     try {
+      const Order = mongoose.model('Order');
       const order = await Order.findById(orderId);
       return order;
     } catch (error) {
@@ -249,6 +246,7 @@ class AffretIADashdocSyncService {
    */
   async getCarrier(carrierId) {
     try {
+      const Carrier = mongoose.model('Carrier');
       const carrier = await Carrier.findById(carrierId);
       return carrier;
     } catch (error) {
