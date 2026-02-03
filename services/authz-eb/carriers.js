@@ -703,6 +703,134 @@ function formatCarrierResponse(carrier, documents = [], score = null) {
 function setupCarrierRoutes(app, db) {
 
   // =====================================================================
+  // GET /api/tracking-consolidated/pickups - Pickups consolidés pour transporteur
+  // =====================================================================
+  app.get('/api/tracking-consolidated/pickups', async (req, res) => {
+    try {
+      const { date, carrierId } = req.query;
+
+      // Date par défaut: aujourd'hui
+      const searchDate = date ? new Date(date) : new Date();
+      const startOfDay = new Date(searchDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(searchDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Rechercher les pickups dans la base
+      const pickups = await db.collection('orders').find({
+        $or: [
+          { 'pickup.date': { $gte: startOfDay, $lte: endOfDay } },
+          { 'pickupDate': { $gte: startOfDay, $lte: endOfDay } }
+        ],
+        ...(carrierId ? { carrierId } : {}),
+        status: { $in: ['assigned', 'in_progress', 'pending_pickup', 'pickup_scheduled'] }
+      }).limit(100).toArray();
+
+      // Formater la réponse
+      const formattedPickups = pickups.map(order => ({
+        id: order._id.toString(),
+        orderId: order.orderId || order._id.toString(),
+        reference: order.reference || order.orderReference,
+        status: order.status,
+        pickup: {
+          address: order.pickup?.address || order.pickupAddress,
+          city: order.pickup?.city || order.pickupCity,
+          postalCode: order.pickup?.postalCode || order.pickupPostalCode,
+          date: order.pickup?.date || order.pickupDate,
+          timeSlot: order.pickup?.timeSlot || order.pickupTimeSlot
+        },
+        delivery: {
+          address: order.delivery?.address || order.deliveryAddress,
+          city: order.delivery?.city || order.deliveryCity,
+          postalCode: order.delivery?.postalCode || order.deliveryPostalCode
+        },
+        cargo: order.cargo,
+        tracking: order.tracking || null
+      }));
+
+      res.json({
+        success: true,
+        date: searchDate.toISOString().split('T')[0],
+        pickups: formattedPickups,
+        count: formattedPickups.length
+      });
+
+    } catch (error) {
+      console.error('[TRACKING-CONSOLIDATED] Erreur pickups:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        pickups: [],
+        count: 0
+      });
+    }
+  });
+
+  // =====================================================================
+  // GET /api/tracking-consolidated/deliveries - Livraisons consolidées
+  // =====================================================================
+  app.get('/api/tracking-consolidated/deliveries', async (req, res) => {
+    try {
+      const { date, carrierId } = req.query;
+
+      // Date par défaut: aujourd'hui
+      const searchDate = date ? new Date(date) : new Date();
+      const startOfDay = new Date(searchDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(searchDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Rechercher les livraisons dans la base
+      const deliveries = await db.collection('orders').find({
+        $or: [
+          { 'delivery.date': { $gte: startOfDay, $lte: endOfDay } },
+          { 'deliveryDate': { $gte: startOfDay, $lte: endOfDay } }
+        ],
+        ...(carrierId ? { carrierId } : {}),
+        status: { $in: ['in_transit', 'pending_delivery', 'delivery_scheduled', 'out_for_delivery'] }
+      }).limit(100).toArray();
+
+      // Formater la réponse
+      const formattedDeliveries = deliveries.map(order => ({
+        id: order._id.toString(),
+        orderId: order.orderId || order._id.toString(),
+        reference: order.reference || order.orderReference,
+        status: order.status,
+        pickup: {
+          address: order.pickup?.address || order.pickupAddress,
+          city: order.pickup?.city || order.pickupCity,
+          postalCode: order.pickup?.postalCode || order.pickupPostalCode
+        },
+        delivery: {
+          address: order.delivery?.address || order.deliveryAddress,
+          city: order.delivery?.city || order.deliveryCity,
+          postalCode: order.delivery?.postalCode || order.deliveryPostalCode,
+          date: order.delivery?.date || order.deliveryDate,
+          timeSlot: order.delivery?.timeSlot || order.deliveryTimeSlot
+        },
+        cargo: order.cargo,
+        tracking: order.tracking || null
+      }));
+
+      res.json({
+        success: true,
+        date: searchDate.toISOString().split('T')[0],
+        deliveries: formattedDeliveries,
+        count: formattedDeliveries.length
+      });
+
+    } catch (error) {
+      console.error('[TRACKING-CONSOLIDATED] Erreur deliveries:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        deliveries: [],
+        count: 0
+      });
+    }
+  });
+
+  // =====================================================================
   // GET /api/carriers - Liste des transporteurs (format frontend)
   // =====================================================================
   app.get('/api/carriers', async (req, res) => {
@@ -823,6 +951,77 @@ function setupCarrierRoutes(app, db) {
     } catch (error) {
       console.error('Error getting carrier:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // =====================================================================
+  // GET /api/carriers/:carrierId/vigilance - Statut de vigilance
+  // Proxy vers AFFRET.IA API pour compatibilité frontend
+  // =====================================================================
+  app.get('/api/carriers/:carrierId/vigilance', async (req, res) => {
+    try {
+      const { carrierId } = req.params;
+
+      // Chercher d'abord dans la base locale
+      let carrier;
+      try {
+        carrier = await db.collection('carriers').findOne({ _id: new ObjectId(carrierId) });
+      } catch (e) {
+        carrier = await db.collection('carriers').findOne({ externalId: carrierId });
+      }
+
+      // Si on a un carrier local avec un vigilanceStatus, le retourner
+      if (carrier && carrier.vigilanceStatus) {
+        return res.json({
+          success: true,
+          data: {
+            carrierId: carrier._id.toString(),
+            overallStatus: carrier.vigilanceStatus,
+            complianceScore: carrier.vigilanceScore || 0,
+            checks: carrier.vigilanceChecks || {},
+            lastChecked: carrier.vigilanceLastChecked || null,
+            nextCheckDue: carrier.vigilanceNextCheck || null
+          }
+        });
+      }
+
+      // Sinon, appeler l'API AFFRET.IA
+      const axios = require('axios');
+      try {
+        const response = await axios.get(
+          `${AFFRET_IA_API_URL}/v1/affretia/vigilance/${carrierId}`,
+          { timeout: 5000 }
+        );
+        return res.json(response.data);
+      } catch (apiError) {
+        // Si AFFRET.IA ne trouve pas non plus, retourner un statut par défaut
+        if (apiError.response?.status === 404) {
+          return res.json({
+            success: true,
+            data: {
+              carrierId,
+              overallStatus: 'pending',
+              complianceScore: 0,
+              checks: {},
+              message: 'Aucune vérification de vigilance effectuée pour ce transporteur'
+            }
+          });
+        }
+        throw apiError;
+      }
+
+    } catch (error) {
+      console.error('[VIGILANCE] Error getting vigilance status:', error.message);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        data: {
+          carrierId: req.params.carrierId,
+          overallStatus: 'unknown',
+          complianceScore: 0,
+          message: 'Erreur lors de la récupération du statut de vigilance'
+        }
+      });
     }
   });
 

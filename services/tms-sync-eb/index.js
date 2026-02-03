@@ -533,7 +533,7 @@ app.get('/api/v1/tms/connections/:id/stats', requireMongo, async (req, res) => {
  */
 app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
   try {
-    const { tag = 'Symphonia', status, limit = 100, skip = 0 } = req.query;
+    const { tag = 'Symphonia', status, limit = 100, skip = 0, noTransportMeans } = req.query;
 
     const query = { externalSource: 'dashdoc' };
 
@@ -549,6 +549,23 @@ app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
     } else {
       // Par defaut, exclure les commandes annulees (cancelled, declined)
       query.status = { $nin: ['CANCELLED', 'DECLINED'] };
+    }
+
+    // Filtre: uniquement les commandes SANS moyen de transport assigné
+    if (noTransportMeans === 'true' || noTransportMeans === true) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { 'transportMeans.hasVehicle': { $ne: true } },
+          { 'transportMeans.hasVehicle': { $exists: false } }
+        ]
+      });
+      query.$and.push({
+        $or: [
+          { 'transportMeans.hasTrucker': { $ne: true } },
+          { 'transportMeans.hasTrucker': { $exists: false } }
+        ]
+      });
     }
 
     const [orders, total] = await Promise.all([
@@ -613,6 +630,7 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
       dateTo,
       isDangerous,
       isRefrigerated,
+      noTransportMeans,
       skip = 0,
       limit = 50,
       sortBy = 'createdAt',
@@ -724,6 +742,24 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
     // Filtre marchandise refrigeree
     if (isRefrigerated === 'true' || isRefrigerated === true) {
       query['cargo.isRefrigerated'] = true;
+    }
+
+    // Filtre: uniquement les commandes SANS moyen de transport assigné
+    // (ni véhicule, ni chauffeur)
+    if (noTransportMeans === 'true' || noTransportMeans === true) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { 'transportMeans.hasVehicle': { $ne: true } },
+          { 'transportMeans.hasVehicle': { $exists: false } }
+        ]
+      });
+      query.$and.push({
+        $or: [
+          { 'transportMeans.hasTrucker': { $ne: true } },
+          { 'transportMeans.hasTrucker': { $exists: false } }
+        ]
+      });
     }
 
     // Parametres de pagination

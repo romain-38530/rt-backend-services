@@ -425,11 +425,13 @@ app.get('/api/v1/orders', authenticateToken, async (req, res) => {
       }
       query.customerId = req.query.customerId;
     }
-    if (req.query.carrierId) {
+    // Supporter les deux formats: carrierId et carrier (alias)
+    const carrierIdParam = req.query.carrierId || req.query.carrier;
+    if (carrierIdParam) {
       // Mode Transporteur: filter by carrierId (user is the assigned carrier)
       // Authorization check: verify user is authorized to view this carrier's orders
       if (userType === 'carrier' || userType === 'transporteur' || userType === 'transporter') {
-        if (req.query.carrierId !== userId && req.query.carrierId !== (req.user.carrierId || req.user.companyId)) {
+        if (carrierIdParam !== userId && carrierIdParam !== (req.user.carrierId || req.user.companyId)) {
           return res.status(403).json({
             success: false,
             error: 'Not authorized to view orders for this carrier',
@@ -437,11 +439,11 @@ app.get('/api/v1/orders', authenticateToken, async (req, res) => {
           });
         }
       }
-      query.carrierId = req.query.carrierId;
+      query.carrierId = carrierIdParam;
     }
 
     // If no filter provided, default to user's own data based on type
-    if (!req.query.customerId && !req.query.carrierId) {
+    if (!req.query.customerId && !carrierIdParam) {
       if (userType === 'carrier' || userType === 'transporteur' || userType === 'transporter') {
         query.carrierId = req.user.carrierId || req.user.companyId || userId;
       } else if (userType === 'industrial' || userType === 'industrie' || userType === 'customer') {
@@ -991,9 +993,11 @@ app.get('/api/orders', async (req, res) => {
       // Mode Industriel: filter by customerId (user is the client/donneur d'ordre)
       query.customerId = req.query.customerId;
     }
-    if (req.query.carrierId) {
+    // Supporter les deux formats: carrierId et carrier (alias)
+    const carrierIdParamAlias = req.query.carrierId || req.query.carrier;
+    if (carrierIdParamAlias) {
       // Mode Transporteur: filter by carrierId (user is the assigned carrier)
-      query.carrierId = req.query.carrierId;
+      query.carrierId = carrierIdParamAlias;
     }
 
     // Search filter
