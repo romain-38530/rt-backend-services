@@ -1,18 +1,28 @@
 /**
  * Scheduled Jobs - TMS Sync
- * Synchronisation automatique haute frequence avec Dashdoc
- * Pattern base sur subscriptions-contracts-eb/scheduled-jobs.js
+ * Synchronisation automatique avec Dashdoc via Data Lake
+ *
+ * ARCHITECTURE DATA LAKE:
+ * - DatalakeSyncService: Synchronise toutes les données Dashdoc vers MongoDB
+ * - Les services consommateurs lisent depuis MongoDB (pas d'appels API directs)
+ * - Les écritures vers Dashdoc restent directes (assignation carrier, etc.)
  */
 
 const { TMSSyncMetrics } = require('./cloudwatch-stub');
+const { DatalakeSyncService, createReaders } = require('./services/dashdoc-datalake');
+const { createAllIndexes, COLLECTIONS } = require('./models/dashdoc-datalake');
 
 /**
  * Configuration des intervalles (en millisecondes)
  */
 const INTERVALS = {
-  AUTO_SYNC: 30 * 1000,           // 30 secondes - Sync haute frequence
-  SYMPHONIA_SYNC: 60 * 1000,      // 1 minute - Sync transports avec tag Symphonia
-  CARRIERS_SYNC: 5 * 60 * 1000,   // 5 minutes - Sync carriers
+  // Data Lake sync
+  DATALAKE_INCREMENTAL: 25 * 1000, // 25 secondes - Sync incrémentale (transports, counters)
+  DATALAKE_PERIODIC: 5 * 60 * 1000, // 5 minutes - Sync données de référence
+  DATALAKE_FULL: 60 * 60 * 1000,   // 1 heure - Full sync
+
+  // Jobs actifs
+  SYMPHONIA_SYNC: 60 * 1000,      // 1 minute - Sync transports avec tag Symphonia (depuis Data Lake)
   VIGILANCE_UPDATE: 60 * 60 * 1000, // 1 heure - Mise à jour vigilance
   HEALTH_CHECK: 5 * 60 * 1000,    // 5 minutes - Verification connexions
   MONITORING_CHECK: 5 * 60 * 1000, // 5 minutes - Monitoring et alertes
@@ -27,100 +37,11 @@ let jobIntervals = {};
 let db = null;
 let tmsService = null;
 let lastSyncResults = {};
-let metrics = null; // CloudWatch metrics instance
+let metrics = null;
 
-/**
- * Synchronisation automatique de toutes les connexions actives
- * Execute toutes les 30 secondes
- */
-async function runAutoSync() {
-  if (!db || !tmsService) {
-    console.warn('⚠️  [CRON] autoSync: Database or service not available');
-    return;
-  }
-
-  try {
-    console.log('🔄 [CRON] Running autoSync (30s interval)...');
-
-    // Recuperer toutes les connexions actives avec autoSync active
-    const activeConnections = await db.collection('tmsConnections').find({
-      isActive: true,
-      connectionStatus: 'connected',
-      'syncConfig.autoSync': true
-    }).toArray();
-
-    if (activeConnections.length === 0) {
-      console.log('✅ [CRON] autoSync: No active connections to sync');
-      return;
-    }
-
-    console.log(`🔄 [CRON] autoSync: ${activeConnections.length} connections to sync`);
-
-    for (const connection of activeConnections) {
-      try {
-        // Eviter de sync si derniere sync trop recente (< 25s)
-        const now = Date.now();
-        const lastSync = lastSyncResults[connection._id.toString()]?.timestamp || 0;
-
-        if (now - lastSync < 25000) {
-          console.log(`⏭️  [CRON] Skipping ${connection.organizationName}: Last sync too recent`);
-          continue;
-        }
-
-        console.log(`🔄 [CRON] Syncing ${connection.organizationName}...`);
-        const startTime = Date.now();
-
-        // Lancer la synchronisation complete
-        const result = await tmsService.executeSync(connection._id.toString(), {
-          transportLimit: 0, // 0 = illimite avec pagination
-          companyLimit: 0,
-          contactLimit: 0,
-          maxPages: 100 // Limite de securite
-        });
-
-        const duration = Date.now() - startTime;
-
-        lastSyncResults[connection._id.toString()] = {
-          timestamp: now,
-          duration,
-          success: result.success,
-          transportsCount: result.transports?.count || 0
-        };
-
-        // Send CloudWatch metrics
-        if (metrics) {
-          await metrics.recordSyncSuccess(duration, result.transports?.count || 0).catch(err => {
-            console.error('Failed to send metrics:', err);
-          });
-        }
-
-        console.log(`✅ [CRON] ${connection.organizationName}: ${result.transports?.count || 0} transports synced in ${duration}ms`);
-
-      } catch (error) {
-        console.error(`❌ [CRON] Error syncing ${connection.organizationName}:`, error.message);
-
-        const duration = Date.now() - startTime;
-        lastSyncResults[connection._id.toString()] = {
-          timestamp: Date.now(),
-          success: false,
-          error: error.message
-        };
-
-        // Send CloudWatch metrics for failure
-        if (metrics) {
-          await metrics.recordSyncFailure(duration, error.name || 'Unknown').catch(err => {
-            console.error('Failed to send error metrics:', err);
-          });
-        }
-      }
-    }
-
-    console.log('✅ [CRON] autoSync completed');
-
-  } catch (error) {
-    console.error('❌ [CRON] autoSync error:', error.message);
-  }
-}
+// Data Lake instances (par connexion)
+let datalakeSyncServices = {};
+let datalakeReaders = null;
 
 /**
  * Verification de sante des connexions
@@ -151,73 +72,6 @@ async function runHealthCheck() {
 }
 
 /**
- * Synchronisation des carriers depuis Dashdoc
- * Execute toutes les 5 minutes
- */
-async function runCarriersSync() {
-  if (!db || !tmsService) return;
-
-  try {
-    console.log('🔄 [CRON] Running carriers sync...');
-
-    const connection = await db.collection('tmsConnections').findOne({
-      tmsType: 'dashdoc',
-      isActive: true
-    });
-
-    if (!connection) {
-      console.warn('⚠️  [CRON] No active Dashdoc connection');
-      return;
-    }
-
-    const DashdocConnector = require('./connectors/dashdoc.connector');
-    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
-      baseUrl: connection.credentials.apiUrl
-    });
-
-    // Récupérer TOUS les carriers avec pagination automatique
-    console.log('[CRON CARRIERS] Fetching ALL carriers with automatic pagination...');
-    const result = await dashdoc.syncCarriersWithStats({
-      usePagination: true,
-      maxPages: 100  // 100 pages pour être sûr de tout récupérer (~91 pages nécessaires pour 1734 carriers)
-    });
-
-    let synced = 0;
-    for (const carrier of result.results) {
-      await db.collection('carriers').updateOne(
-        { externalId: carrier.externalId },
-        {
-          $set: {
-            ...carrier,
-            lastSyncAt: new Date(),
-            tmsConnectionId: connection._id.toString()
-          }
-        },
-        { upsert: true }
-      );
-      synced++;
-    }
-
-    console.log(`✅ [CRON CARRIERS] ${synced} carriers synchronized`);
-
-    // Nettoyer les carriers obsolètes (non synchronisés dans les 10 dernières minutes)
-    // Ce sont les carriers exclus par le filtre (ex: donneurs d'ordre avec remoteId=C\d+)
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    const deleteResult = await db.collection('carriers').deleteMany({
-      externalSource: 'dashdoc',
-      lastSyncAt: { $lt: tenMinutesAgo }
-    });
-
-    if (deleteResult.deletedCount > 0) {
-      console.log(`🗑️  [CRON CARRIERS] Removed ${deleteResult.deletedCount} obsolete carriers`);
-    }
-
-  } catch (error) {
-    console.error('❌ [CRON CARRIERS] Error:', error.message);
-  }
-}
-
-/**
  * Mise à jour des scores de vigilance
  * Execute toutes les heures
  */
@@ -242,16 +96,20 @@ async function runVigilanceUpdate() {
 }
 
 /**
- * Synchronisation automatique des transports avec tag Symphonia
+ * Synchronisation des transports avec tag Symphonia
+ * Lit depuis le Data Lake MongoDB (plus d'appels API directs)
  * Execute toutes les 1 minute
  */
 async function runSymphoniaSync() {
-  if (!db) return;
+  if (!db || !datalakeReaders) {
+    console.warn('⚠️  [CRON] symphoniaSync: Database or Data Lake not available');
+    return;
+  }
 
   try {
-    console.log('🔄 [CRON] Running Symphonia sync...');
+    console.log('🔄 [CRON] Running Symphonia sync (from Data Lake)...');
 
-    // Recuperer la connexion Dashdoc active
+    // Récupérer la connexion active pour le connectionId
     const connection = await db.collection('tmsConnections').findOne({
       tmsType: 'dashdoc',
       isActive: true
@@ -262,53 +120,57 @@ async function runSymphoniaSync() {
       return;
     }
 
-    // Creer client axios pour appeler Dashdoc API
-    const axios = require('axios');
-    const client = axios.create({
-      baseURL: connection.credentials.apiUrl || 'https://www.dashdoc.eu/api/v4',
-      timeout: 30000,
-      headers: {
-        'Authorization': `Token ${connection.credentials.apiToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const connectionId = connection._id.toString();
 
-    // Recuperer tous les transports avec tag Symphonia (PK: 126835)
-    console.log('[CRON SYMPHONIA] Fetching transports with Symphonia tag...');
-    const response = await client.get('/transports/?tags__in=126835&limit=100');
-    const transports = response.data.results || [];
+    // Lire les transports avec tag Symphonia depuis le Data Lake
+    // Tag Symphonia PK: 126835
+    const result = await datalakeReaders.transports.find(
+      { tag: 'Symphonia' },  // ou utiliser l'ID du tag
+      { limit: 500 },
+      connectionId
+    );
 
-    if (transports.length === 0) {
+    if (result.results.length === 0) {
       console.log('✅ [CRON SYMPHONIA] No transports with Symphonia tag found');
       return;
     }
 
-    console.log(`[CRON SYMPHONIA] Found ${transports.length} transports with Symphonia tag`);
+    console.log(`[CRON SYMPHONIA] Found ${result.results.length} transports with Symphonia tag`);
 
-    // Mapper et sauvegarder chaque transport
-    const DashdocConnector = require('./connectors/dashdoc.connector');
-    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
-      baseUrl: connection.credentials.apiUrl
-    });
-
+    // Synchroniser vers la collection orders (format legacy)
     let synced = 0;
-    for (const transport of transports) {
+    for (const transport of result.results) {
       try {
-        const mappedOrder = dashdoc.mapTransport(transport);
-
         await db.collection('orders').updateOne(
-          { externalId: mappedOrder.externalId },
-          { $set: mappedOrder },
+          { externalId: transport.dashdocUid },
+          {
+            $set: {
+              externalId: transport.dashdocUid,
+              externalSource: 'dashdoc',
+              sequentialId: transport.sequentialId,
+              status: transport.status,
+              pickup: transport.pickup,
+              delivery: transport.delivery,
+              cargo: transport.cargo,
+              carrier: transport.carrier,
+              transportMeans: transport.transportMeans,
+              pricing: transport.pricing,
+              tags: transport.tags,
+              createdAt: transport.createdAt,
+              updatedAt: transport.updatedAt,
+              syncedFromDatalake: true,
+              lastSyncAt: new Date()
+            }
+          },
           { upsert: true }
         );
-
         synced++;
       } catch (error) {
-        console.error(`[CRON SYMPHONIA] Error syncing transport ${transport.sequential_id}:`, error.message);
+        console.error(`[CRON SYMPHONIA] Error syncing transport ${transport.sequentialId}:`, error.message);
       }
     }
 
-    console.log(`✅ [CRON SYMPHONIA] ${synced}/${transports.length} transports synchronized`);
+    console.log(`✅ [CRON SYMPHONIA] ${synced}/${result.results.length} transports synchronized`);
 
   } catch (error) {
     console.error('❌ [CRON SYMPHONIA] Error:', error.message);
@@ -353,10 +215,8 @@ async function sendMonitoringAlerts(anomalies) {
     const errorCount = anomalies.filter(a => a.severity === 'error').length;
     const warningCount = anomalies.filter(a => a.severity === 'warning').length;
 
-    // Message SMS court
     const smsMessage = `[SYMPHONIA TMS] ${criticalCount} anomalies critiques détectées. Vérifier dashboard monitoring.`;
 
-    // Message Email détaillé
     const emailSubject = `🚨 Alerte Monitoring TMS - ${criticalCount} anomalies critiques`;
     const emailBody = `
       <h2>Alerte Monitoring TMS Sync</h2>
@@ -392,7 +252,6 @@ async function sendMonitoringAlerts(anomalies) {
 
     const alerts = [];
 
-    // Envoi SMS via SNS si configuré
     if (process.env.ALERT_SMS_NUMBER) {
       try {
         await snsClient.send(new PublishCommand({
@@ -407,7 +266,6 @@ async function sendMonitoringAlerts(anomalies) {
       }
     }
 
-    // Envoi Email via SES si configuré
     if (process.env.ALERT_EMAIL) {
       try {
         await sesClient.send(new SendEmailCommand({
@@ -451,16 +309,41 @@ async function runMonitoringCheck() {
     const monitoringResults = {
       timestamp: new Date(),
       jobs: {},
+      datalake: {},
       anomalies: [],
       alerts: []
     };
 
-    // 1. Vérifier santé de chaque job
+    // 1. Vérifier état du Data Lake
+    for (const [connectionId, syncService] of Object.entries(datalakeSyncServices)) {
+      try {
+        const stats = await syncService.getStats();
+        monitoringResults.datalake[connectionId] = stats;
+
+        // Vérifier si le Data Lake est en erreur
+        if (!stats.isRunning) {
+          monitoringResults.anomalies.push({
+            type: 'DATALAKE_STOPPED',
+            job: `datalake-${connectionId}`,
+            severity: 'critical',
+            message: 'Data Lake sync service stopped'
+          });
+        }
+      } catch (error) {
+        monitoringResults.anomalies.push({
+          type: 'DATALAKE_ERROR',
+          job: `datalake-${connectionId}`,
+          severity: 'error',
+          message: error.message
+        });
+      }
+    }
+
+    // 2. Vérifier santé de chaque job legacy
     for (const [jobName, lastResult] of Object.entries(lastSyncResults)) {
       const timeSinceLastSync = now - (lastResult.timestamp || 0);
       const hasError = !lastResult.success;
 
-      // Détection anomalie: pas de sync depuis 10min
       if (timeSinceLastSync > 10 * 60 * 1000) {
         monitoringResults.anomalies.push({
           type: 'NO_SYNC',
@@ -471,7 +354,6 @@ async function runMonitoringCheck() {
         });
       }
 
-      // Détection anomalie: durée sync > 2min
       if (lastResult.duration && lastResult.duration > 2 * 60 * 1000) {
         monitoringResults.anomalies.push({
           type: 'SLOW_SYNC',
@@ -482,7 +364,6 @@ async function runMonitoringCheck() {
         });
       }
 
-      // Détection anomalie: erreurs
       if (hasError) {
         monitoringResults.anomalies.push({
           type: 'SYNC_ERROR',
@@ -501,17 +382,16 @@ async function runMonitoringCheck() {
       };
     }
 
-    // 2. Sauvegarder monitoring log
+    // 3. Sauvegarder monitoring log
     await db.collection('monitoring_logs').insertOne(monitoringResults);
 
-    // 3. Envoyer alertes si anomalies critiques
+    // 4. Envoyer alertes si anomalies critiques
     const criticalAnomalies = monitoringResults.anomalies.filter(a => a.severity === 'critical');
     if (criticalAnomalies.length > 0) {
       console.log(`⚠️  [CRON] monitoringCheck: ${criticalAnomalies.length} critical anomalies detected`);
       const alerts = await sendMonitoringAlerts(monitoringResults.anomalies);
       monitoringResults.alerts = alerts;
 
-      // Update log avec alertes
       await db.collection('monitoring_logs').updateOne(
         { _id: monitoringResults._id },
         { $set: { alerts } }
@@ -526,9 +406,131 @@ async function runMonitoringCheck() {
 }
 
 /**
+ * Initialiser le Data Lake pour une connexion
+ * @param {Object} connection - Configuration de la connexion Dashdoc
+ */
+async function initializeDatalakeForConnection(connection) {
+  try {
+    const DashdocConnector = require('./connectors/dashdoc.connector');
+    const dashdocConnector = new DashdocConnector(connection.credentials.apiToken, {
+      baseUrl: connection.credentials.apiUrl
+    });
+
+    const connectionId = connection._id.toString();
+
+    const syncService = new DatalakeSyncService(db, dashdocConnector, {
+      organizationId: connection.organizationId || 'default',
+      connectionId: connectionId,
+      incrementalInterval: INTERVALS.DATALAKE_INCREMENTAL,
+      periodicInterval: INTERVALS.DATALAKE_PERIODIC,
+      fullSyncInterval: INTERVALS.DATALAKE_FULL
+    });
+
+    datalakeSyncServices[connectionId] = syncService;
+
+    console.log(`✅ [DATALAKE] Initialized for connection: ${connection.organizationName} (${connectionId})`);
+
+    return syncService;
+  } catch (error) {
+    console.error(`❌ [DATALAKE] Failed to initialize for ${connection.organizationName}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Démarrer tous les Data Lake Services
+ */
+async function startDatalakeServices() {
+  try {
+    console.log('🚀 [DATALAKE] Starting Data Lake services...');
+
+    // Créer les index MongoDB pour le Data Lake
+    await createAllIndexes(db);
+
+    // Initialiser les readers (partagés pour toutes les connexions)
+    datalakeReaders = createReaders(db);
+    console.log('✅ [DATALAKE] Data readers initialized');
+
+    // Récupérer toutes les connexions Dashdoc actives
+    const activeConnections = await db.collection('tmsConnections').find({
+      tmsType: 'dashdoc',
+      isActive: true
+    }).toArray();
+
+    if (activeConnections.length === 0) {
+      console.warn('⚠️  [DATALAKE] No active Dashdoc connections found');
+      return;
+    }
+
+    console.log(`🔄 [DATALAKE] Initializing ${activeConnections.length} connections...`);
+
+    // Initialiser et démarrer le Data Lake pour chaque connexion
+    for (const connection of activeConnections) {
+      const syncService = await initializeDatalakeForConnection(connection);
+      if (syncService) {
+        await syncService.start();
+      }
+    }
+
+    console.log('✅ [DATALAKE] All Data Lake services started');
+
+  } catch (error) {
+    console.error('❌ [DATALAKE] Failed to start Data Lake services:', error.message);
+  }
+}
+
+/**
+ * Arrêter tous les Data Lake Services
+ */
+function stopDatalakeServices() {
+  console.log('🛑 [DATALAKE] Stopping Data Lake services...');
+
+  for (const [connectionId, syncService] of Object.entries(datalakeSyncServices)) {
+    try {
+      syncService.stop();
+      console.log(`✅ [DATALAKE] Stopped for connection: ${connectionId}`);
+    } catch (error) {
+      console.error(`❌ [DATALAKE] Error stopping ${connectionId}:`, error.message);
+    }
+  }
+
+  datalakeSyncServices = {};
+  datalakeReaders = null;
+  console.log('✅ [DATALAKE] All services stopped');
+}
+
+/**
+ * Obtenir le statut du Data Lake
+ */
+async function getDatalakeStatus() {
+  const status = {
+    enabled: true,
+    services: {}
+  };
+
+  for (const [connectionId, syncService] of Object.entries(datalakeSyncServices)) {
+    try {
+      status.services[connectionId] = await syncService.getStats();
+    } catch (error) {
+      status.services[connectionId] = { error: error.message };
+    }
+  }
+
+  return status;
+}
+
+/**
+ * Obtenir les readers du Data Lake
+ * @returns {Object} Les readers pour lire depuis MongoDB
+ */
+function getDatalakeReaders() {
+  return datalakeReaders;
+}
+
+/**
  * Demarrer tous les jobs planifies
  */
-function startAllJobs(database, tmsServiceInstance) {
+async function startAllJobs(database, tmsServiceInstance) {
   if (jobsRunning) {
     console.warn('⚠️  [CRON] Jobs already running');
     return;
@@ -550,27 +552,31 @@ function startAllJobs(database, tmsServiceInstance) {
   console.log('🚀 [CRON] Starting TMS Sync scheduled jobs...');
   console.log('============================================================================');
 
-  // Demarrer les jobs avec leurs intervalles respectifs
-  jobIntervals.autoSync = setInterval(runAutoSync, INTERVALS.AUTO_SYNC);
+  // ========== DÉMARRER LE DATA LAKE ==========
+  console.log('');
+  console.log('🗄️  [DATALAKE] === DATA LAKE SYNCHRONIZATION ===');
+  await startDatalakeServices();
+  console.log('');
+
+  // ========== JOBS ACTIFS ==========
   jobIntervals.symphoniaSync = setInterval(runSymphoniaSync, INTERVALS.SYMPHONIA_SYNC);
-  jobIntervals.carriersSync = setInterval(runCarriersSync, INTERVALS.CARRIERS_SYNC);
   jobIntervals.vigilanceUpdate = setInterval(runVigilanceUpdate, INTERVALS.VIGILANCE_UPDATE);
   jobIntervals.healthCheck = setInterval(runHealthCheck, INTERVALS.HEALTH_CHECK);
   jobIntervals.monitoringCheck = setInterval(runMonitoringCheck, INTERVALS.MONITORING_CHECK);
   jobIntervals.cleanupLogs = setInterval(runCleanupLogs, INTERVALS.CLEANUP_LOGS);
 
-  console.log('✅ [CRON] autoSync: every 30 seconds (HIGH FREQUENCY)');
-  console.log('✅ [CRON] symphoniaSync: every 1 minute (TAG SYMPHONIA)');
-  console.log('✅ [CRON] carriersSync: every 5 minutes (CARRIERS)');
-  console.log('✅ [CRON] vigilanceUpdate: every 1 hour (VIGILANCE SCORES)');
+  console.log('✅ [DATALAKE] Incremental sync: every 25 seconds');
+  console.log('✅ [DATALAKE] Periodic sync: every 5 minutes');
+  console.log('✅ [DATALAKE] Full sync: every 1 hour');
+  console.log('✅ [CRON] symphoniaSync: every 1 minute (reads from Data Lake)');
+  console.log('✅ [CRON] vigilanceUpdate: every 1 hour');
   console.log('✅ [CRON] healthCheck: every 5 minutes');
-  console.log('✅ [CRON] monitoringCheck: every 5 minutes (MONITORING & ALERTS)');
+  console.log('✅ [CRON] monitoringCheck: every 5 minutes');
   console.log('✅ [CRON] cleanupLogs: every 24 hours');
   console.log('============================================================================');
 
   // Executer immediatement une premiere fois (apres 10s)
   setTimeout(() => {
-    runAutoSync();
     runSymphoniaSync();
   }, 10000);
 }
@@ -586,6 +592,10 @@ function stopAllJobs() {
 
   console.log('🛑 [CRON] Stopping scheduled jobs...');
 
+  // Arrêter le Data Lake
+  stopDatalakeServices();
+
+  // Arrêter les intervalles
   Object.values(jobIntervals).forEach(interval => {
     if (interval) clearInterval(interval);
   });
@@ -607,24 +617,35 @@ function getJobsStatus() {
     running: jobsRunning,
     dbConnected: !!db,
     lastSyncResults,
+    datalake: {
+      enabled: true,
+      servicesCount: Object.keys(datalakeSyncServices).length,
+      readersInitialized: !!datalakeReaders
+    },
     jobs: {
-      autoSync: {
-        interval: '30 seconds',
-        intervalMs: INTERVALS.AUTO_SYNC,
-        active: !!jobIntervals.autoSync,
-        description: 'High-frequency Dashdoc synchronization'
+      datalakeIncremental: {
+        interval: '25 seconds',
+        intervalMs: INTERVALS.DATALAKE_INCREMENTAL,
+        active: Object.keys(datalakeSyncServices).length > 0,
+        description: 'Data Lake incremental sync (transports, counters)'
+      },
+      datalakePeriodic: {
+        interval: '5 minutes',
+        intervalMs: INTERVALS.DATALAKE_PERIODIC,
+        active: Object.keys(datalakeSyncServices).length > 0,
+        description: 'Data Lake periodic sync (companies, vehicles, truckers)'
+      },
+      datalakeFull: {
+        interval: '1 hour',
+        intervalMs: INTERVALS.DATALAKE_FULL,
+        active: Object.keys(datalakeSyncServices).length > 0,
+        description: 'Data Lake full sync (all entities)'
       },
       symphoniaSync: {
         interval: '1 minute',
         intervalMs: INTERVALS.SYMPHONIA_SYNC,
         active: !!jobIntervals.symphoniaSync,
-        description: 'Sync transports with Symphonia tag'
-      },
-      carriersSync: {
-        interval: '5 minutes',
-        intervalMs: INTERVALS.CARRIERS_SYNC,
-        active: !!jobIntervals.carriersSync,
-        description: 'Sync carriers from Dashdoc'
+        description: 'Sync transports with Symphonia tag (from Data Lake)'
       },
       vigilanceUpdate: {
         interval: '1 hour',
@@ -659,9 +680,7 @@ function getJobsStatus() {
  */
 async function runJobManually(jobName) {
   const jobs = {
-    autoSync: runAutoSync,
     symphoniaSync: runSymphoniaSync,
-    carriersSync: runCarriersSync,
     vigilanceUpdate: runVigilanceUpdate,
     healthCheck: runHealthCheck,
     cleanupLogs: runCleanupLogs
@@ -696,10 +715,15 @@ module.exports = {
   stopAllJobs,
   getJobsStatus,
   runJobManually,
-  runAutoSync,
   runSymphoniaSync,
-  runCarriersSync,
   runVigilanceUpdate,
   runHealthCheck,
-  runCleanupLogs
+  runCleanupLogs,
+
+  // Data Lake exports
+  getDatalakeStatus,
+  getDatalakeReaders,
+  startDatalakeServices,
+  stopDatalakeServices,
+  initializeDatalakeForConnection
 };

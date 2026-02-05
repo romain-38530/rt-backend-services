@@ -53,12 +53,26 @@ async function connectMongoDB() {
     db = mongoClient.db();
     mongoConnected = true;
 
-    // Initialiser le service TMS
+    // ==================== DATA LAKE INITIALIZATION ====================
+    // Initialiser les Data Lake readers pour tous les services
+    let datalakeReaders = null;
+    try {
+      const { createReaders } = require('./services/dashdoc-datalake/data-readers');
+      datalakeReaders = createReaders(db);
+      console.log('[DATA LAKE] Readers initialized for tms-sync-eb');
+    } catch (err) {
+      console.warn('[DATA LAKE] Readers not available:', err.message);
+    }
+
+    // Initialiser le service TMS avec Data Lake
     tmsService = new TMSConnectionService(db);
     await tmsService.init();
+    if (datalakeReaders) {
+      tmsService.setDatalakeReaders(datalakeReaders);
+    }
 
-    // Initialiser le service de vigilance
-    vigilanceService = new VigilanceService(db);
+    // Initialiser le service de vigilance avec Data Lake
+    vigilanceService = new VigilanceService(db, datalakeReaders);
 
     // Initialiser le cache Redis
     await cacheService.init();
@@ -74,6 +88,33 @@ async function connectMongoDB() {
       console.error('[Affret.IA Sync] Failed to initialize:', error);
     }
 
+    // Configurer la base de données pour les routes Tracking IA
+    try {
+      const trackingIARoutes = require('./routes/tracking-ia.routes');
+      trackingIARoutes.setDatabase(db);
+      console.log('[Tracking IA] Routes configured with database');
+    } catch (error) {
+      console.error('[Tracking IA] Failed to configure:', error);
+    }
+
+    // Configurer la base de données pour les routes Vigilance
+    try {
+      const vigilanceRoutes = require('./routes/vigilance.routes');
+      // Initialiser Data Lake readers pour enrichir les données Dashdoc
+      let datalakeReaders = null;
+      try {
+        const { createReaders } = require('./services/dashdoc-datalake/data-readers');
+        datalakeReaders = createReaders(db);
+        console.log('[Vigilance] Data Lake readers initialized');
+      } catch (err) {
+        console.warn('[Vigilance] Data Lake readers not available:', err.message);
+      }
+      vigilanceRoutes.setDatabase(db, datalakeReaders);
+      console.log('[Vigilance] Routes configured with database');
+    } catch (error) {
+      console.error('[Vigilance] Failed to configure:', error);
+    }
+
     console.log('Connected to MongoDB');
     return true;
   } catch (error) {
@@ -86,30 +127,19 @@ async function connectMongoDB() {
 // Middleware
 app.use(helmet());
 
-// CORS configuration - Allow specific origins with credentials
-const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(',') || [
-  'https://transporteur.symphonia-controltower.com',
-  'https://d3800xay5mlft6.cloudfront.net',
-  'http://localhost:3102',
-  'http://localhost:3000'
-];
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins === true) {
-      callback(null, true);
-    } else {
-      console.log(`[CORS] Blocked origin: ${origin}`);
-      callback(null, false);
-    }
-  },
+// CORS configuration - Allow all origins for public API access
+const corsOptions = {
+  origin: true, // Allow all origins
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'X-Request-Id'],
+  maxAge: 86400 // 24 hours preflight cache
+};
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly for all routes
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
@@ -157,7 +187,7 @@ app.get('/', (req, res) => {
     message: 'RT TMS Sync API',
     version: VERSION,
     supportedTMS: ['dashdoc'],
-    features: ['carriers', 'vigilance', 'orders', 'real-time-sync', 'affretia-dashdoc-sync'],
+    features: ['carriers', 'vigilance', 'orders', 'real-time-sync', 'affretia-dashdoc-sync', 'datalake', 'tracking-ia'],
     endpoints: [
       'GET /health',
       'POST /api/v1/tms/connections',
@@ -177,10 +207,41 @@ app.get('/', (req, res) => {
       'POST /api/v1/tms/carriers/:id/vigilance/update',
       'POST /api/v1/tms/carriers/vigilance/update-all',
       'GET /api/v1/tms/carriers/vigilance/stats',
+      '--- Truckers (Data Lake) ---',
+      'GET /api/v1/tms/truckers',
+      'GET /api/v1/tms/truckers/:id',
+      'GET /api/v1/tms/truckers/search',
+      'GET /api/v1/tms/truckers/stats',
+      'GET /api/v1/tms/truckers/expiring-docs',
+      '--- Contacts (Data Lake) ---',
+      'GET /api/v1/tms/contacts',
+      'GET /api/v1/tms/contacts/:id',
+      'GET /api/v1/tms/contacts/search',
+      'GET /api/v1/tms/contacts/stats',
+      'GET /api/v1/tms/contacts/by-company/:companyPk',
       'POST /api/v1/tms/affretia-sync/manual',
       'POST /api/v1/tms/affretia-sync/test',
       'POST /api/v1/tms/affretia-sync/webhook',
-      'GET /api/v1/tms/affretia-sync/status'
+      'GET /api/v1/tms/affretia-sync/status',
+      '--- Data Lake ---',
+      'GET /api/v1/datalake/status',
+      'GET /api/v1/datalake/transports',
+      'GET /api/v1/datalake/carriers',
+      'GET /api/v1/datalake/freshness',
+      '--- Tracking IA ---',
+      'POST /api/v1/tracking-ia/events',
+      'POST /api/v1/tracking-ia/position',
+      'POST /api/v1/tracking-ia/eta',
+      'POST /api/v1/tracking-ia/status',
+      'POST /api/v1/tracking-ia/batch',
+      'GET /api/v1/tracking-ia/history/:transportUid',
+      '--- Vigilance ---',
+      'GET /api/v1/vigilance/carriers/:carrierId',
+      'POST /api/v1/vigilance/carriers/:carrierId/update',
+      'GET /api/v1/vigilance/datalake/carriers',
+      'GET /api/v1/vigilance/datalake/stats',
+      'POST /api/v1/vigilance/update-all',
+      'GET /api/v1/vigilance/stats'
     ]
   });
 });
@@ -530,11 +591,53 @@ app.get('/api/v1/tms/connections/:id/stats', requireMongo, async (req, res) => {
 /**
  * Recuperer les transports/commandes avec filtres (tag, status, etc.)
  * GET /api/v1/tms/orders?tag=Symphonia&status=ongoing
+ * ⚠️ DATA LAKE: Supporte source=datalake pour lire depuis dashdoc_transports
+ *
+ * Query params:
+ * - source: 'local' (default) | 'datalake'
+ * - connectionId: Filter by TMS connection (multi-tenant)
  */
 app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
   try {
-    const { tag = 'Symphonia', status, limit = 100, skip = 0, noTransportMeans } = req.query;
+    const { tag = 'Symphonia', status, limit = 100, skip = 0, noTransportMeans, source = 'local', connectionId } = req.query;
 
+    // ✅ NOUVEAU: Support Data Lake
+    if (source === 'datalake') {
+      const datalakeQuery = {};
+
+      if (connectionId) datalakeQuery.connectionId = connectionId;
+
+      // Filtre par tag
+      if (tag && tag !== 'all') {
+        datalakeQuery['_rawData.tags'] = { $elemMatch: { name: tag } };
+      }
+
+      // Filtre par status
+      if (status) {
+        datalakeQuery.status = { $in: status.split(',') };
+      }
+
+      const [transports, total] = await Promise.all([
+        db.collection('dashdoc_transports')
+          .find(datalakeQuery)
+          .skip(parseInt(skip))
+          .limit(parseInt(limit))
+          .sort({ created: -1 })
+          .toArray(),
+        db.collection('dashdoc_transports').countDocuments(datalakeQuery)
+      ]);
+
+      return res.json({
+        success: true,
+        source: 'datalake',
+        total,
+        limit: parseInt(limit),
+        skip: parseInt(skip),
+        orders: transports.map(t => t._rawData || t)
+      });
+    }
+
+    // Source=local (comportement par défaut)
     const query = { externalSource: 'dashdoc' };
 
     // Filtre par tag (par défaut "Symphonia")
@@ -580,6 +683,7 @@ app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
 
     res.json({
       success: true,
+      source: 'local',
       total,
       limit: parseInt(limit),
       skip: parseInt(skip),
@@ -593,8 +697,11 @@ app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
 /**
  * Filtrage avance des commandes
  * GET /api/v1/tms/orders/filtered
+ * ⚠️ DATA LAKE: Supporte source=datalake pour lire depuis dashdoc_transports
  *
  * Query params:
+ * - source: 'local' (default) | 'datalake'
+ * - connectionId: Filter by TMS connection (multi-tenant)
  * - status: string (PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED)
  * - toPlan: boolean (true = uniquement les commandes "À planifier" = DRAFT ou PENDING)
  * - city: string (ville de pickup ou delivery, recherche partielle)
@@ -634,8 +741,72 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
       skip = 0,
       limit = 50,
       sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
+      source = 'local',
+      connectionId
     } = req.query;
+
+    // ✅ NOUVEAU: Support Data Lake
+    if (source === 'datalake') {
+      const datalakeQuery = {};
+      if (connectionId) datalakeQuery.connectionId = connectionId;
+
+      // Filtre par tag
+      if (tag && tag !== 'all') {
+        datalakeQuery['_rawData.tags'] = { $elemMatch: { name: tag } };
+      }
+
+      // Filtre par status
+      if (status) {
+        datalakeQuery.status = { $in: status.split(',') };
+      } else if (toPlan === 'true') {
+        datalakeQuery.status = { $in: ['created', 'unassigned'] };
+      }
+
+      // Filtre par ville
+      if (city) {
+        datalakeQuery.$or = [
+          { 'pickup.address.city': { $regex: city, $options: 'i' } },
+          { 'delivery.address.city': { $regex: city, $options: 'i' } }
+        ];
+      }
+
+      // Filtre par carrier
+      if (carrierId) {
+        datalakeQuery['carrier.pk'] = parseInt(carrierId.replace('dashdoc-', '')) || carrierId;
+      }
+
+      // Pagination
+      const skipNum = parseInt(skip) || 0;
+      const limitNum = Math.min(parseInt(limit) || 50, 100);
+      const sortDir = sortOrder === 'asc' ? 1 : -1;
+
+      const [transports, total] = await Promise.all([
+        db.collection('dashdoc_transports')
+          .find(datalakeQuery)
+          .sort({ created: sortDir })
+          .skip(skipNum)
+          .limit(limitNum)
+          .toArray(),
+        db.collection('dashdoc_transports').countDocuments(datalakeQuery)
+      ]);
+
+      return res.json({
+        success: true,
+        source: 'datalake',
+        cached: false,
+        filters: { status, city, postalCode, carrierId, carrierName, toPlan, tag },
+        meta: {
+          total,
+          skip: skipNum,
+          limit: limitNum,
+          returned: transports.length,
+          page: Math.floor(skipNum / limitNum) + 1,
+          totalPages: Math.ceil(total / limitNum)
+        },
+        orders: transports.map(t => t._rawData || t)
+      });
+    }
 
     // 1. Vérifier cache (uniquement pour les requêtes sans pagination avancée)
     const canUseCache = parseInt(skip) === 0 && parseInt(limit) <= 50;
@@ -835,11 +1006,83 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
 /**
  * GET /api/v1/tms/carriers
  * Récupérer tous les transporteurs synchronisés
+ * ⚠️ DATA LAKE: Supporte source=datalake pour lire depuis dashdoc_companies
+ *
+ * Query params:
+ * - source: 'local' (default) | 'datalake' | 'all'
+ * - connectionId: Filter by TMS connection (multi-tenant)
  */
 app.get('/api/v1/tms/carriers', requireMongo, async (req, res) => {
   try {
-    const { limit = 50, skip = 0, search, status, level } = req.query;
+    const { limit = 50, skip = 0, search, status, level, source = 'local', connectionId } = req.query;
 
+    // ✅ NOUVEAU: Support Data Lake
+    if (source === 'datalake' || source === 'all') {
+      // Lecture depuis Data Lake (dashdoc_companies)
+      const datalakeQuery = { isCarrier: true };
+
+      if (connectionId) datalakeQuery.connectionId = connectionId;
+
+      if (search) {
+        datalakeQuery.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { 'siret': { $regex: search, $options: 'i' } },
+          { '_rawData.siren': { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      const [datalakeCarriers, datalakeTotal] = await Promise.all([
+        db.collection('dashdoc_companies')
+          .find(datalakeQuery)
+          .sort({ name: 1 })
+          .skip(parseInt(skip))
+          .limit(parseInt(limit))
+          .toArray(),
+        db.collection('dashdoc_companies').countDocuments(datalakeQuery)
+      ]);
+
+      // Si source=all, fusionner avec local
+      if (source === 'all') {
+        const localQuery = { externalSource: 'dashdoc' };
+        if (search) {
+          localQuery.$or = [
+            { companyName: { $regex: search, $options: 'i' } },
+            { legalName: { $regex: search, $options: 'i' } },
+            { siret: { $regex: search, $options: 'i' } }
+          ];
+        }
+        if (status) localQuery.status = status;
+        if (level) localQuery.vigilanceLevel = level;
+
+        const [localCarriers, localTotal] = await Promise.all([
+          db.collection('carriers')
+            .find(localQuery)
+            .sort({ companyName: 1 })
+            .skip(parseInt(skip))
+            .limit(parseInt(limit))
+            .toArray(),
+          db.collection('carriers').countDocuments(localQuery)
+        ]);
+
+        return res.json({
+          success: true,
+          source: 'all',
+          local: { total: localTotal, carriers: localCarriers },
+          datalake: { total: datalakeTotal, carriers: datalakeCarriers }
+        });
+      }
+
+      return res.json({
+        success: true,
+        source: 'datalake',
+        total: datalakeTotal,
+        limit: parseInt(limit),
+        skip: parseInt(skip),
+        carriers: datalakeCarriers
+      });
+    }
+
+    // Source=local (comportement par défaut)
     const query = { externalSource: 'dashdoc' };
 
     // Recherche par nom ou SIRET
@@ -873,6 +1116,7 @@ app.get('/api/v1/tms/carriers', requireMongo, async (req, res) => {
 
     res.json({
       success: true,
+      source: 'local',
       total,
       limit: parseInt(limit),
       skip: parseInt(skip),
@@ -1036,58 +1280,440 @@ app.get('/api/v1/tms/orders/:id', requireMongo, async (req, res) => {
 });
 
 /**
- * Recuperer les transports Dashdoc en temps reel via API
+ * Recuperer les transports Dashdoc depuis le Data Lake MongoDB
+ * ⚠️ ARCHITECTURE DATA LAKE: Lecture depuis MongoDB au lieu d'appels API directs
  * GET /api/v1/tms/dashdoc/transports?tag=Symphonia
  */
 app.get('/api/v1/tms/dashdoc/transports', requireMongo, async (req, res) => {
   try {
-    const { tag, status, limit = 50 } = req.query;
+    const { tag, status, limit = 50, connectionId } = req.query;
 
-    // Recuperer la premiere connexion Dashdoc active
-    const connection = await db.collection('tmsConnections').findOne({
-      tmsType: 'dashdoc',
-      isActive: true
-    });
+    // ✅ NOUVEAU: Lire depuis Data Lake MongoDB
+    const query = {};
 
-    if (!connection) {
-      return res.status(404).json({ error: 'No active Dashdoc connection found' });
+    // Filtre par tag
+    if (tag) {
+      query['_rawData.tags'] = { $elemMatch: { name: tag } };
     }
 
-    const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
-      baseUrl: connection.credentials.apiUrl
-    });
+    // Filtre par status
+    if (status) {
+      query.status = { $in: status.split(',') };
+    }
 
-    // Appeler l'API Dashdoc avec filtre tag
-    const params = { limit: parseInt(limit) };
-    if (tag) params.tags__in = tag;
-    if (status) params.status__in = status;
+    // Filtre multi-tenant
+    if (connectionId) {
+      query.connectionId = connectionId;
+    }
 
-    // Appeler l'API directement pour eviter les erreurs de mapping
-    const axios = require('axios');
-    const client = axios.create({
-      baseURL: connection.credentials.apiUrl || 'https://www.dashdoc.eu/api/v4',
-      timeout: 30000,
-      headers: {
-        'Authorization': `Token ${connection.credentials.apiToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const transportsCollection = db.collection('dashdoc_transports');
+    const [transports, total] = await Promise.all([
+      transportsCollection.find(query)
+        .sort({ created: -1 })
+        .limit(parseInt(limit))
+        .toArray(),
+      transportsCollection.countDocuments(query)
+    ]);
 
-    const urlParams = new URLSearchParams();
-    urlParams.append('limit', params.limit);
-    if (params.tags__in) urlParams.append('tags__in', params.tags__in);
-    if (params.status__in) urlParams.append('status__in', params.status__in);
-
-    const response = await client.get(`/transports/?${urlParams.toString()}`);
-    const data = response.data;
+    // Retourner les données brutes Dashdoc (_rawData) pour compatibilité
+    const results = transports.map(t => t._rawData || t);
 
     res.json({
       success: true,
-      total: data.count || 0,
-      transports: data.results || []
+      total,
+      source: 'datalake',
+      transports: results
     });
   } catch (error) {
-    console.error('Error fetching Dashdoc transports:', error.message);
+    console.error('Error fetching transports from Data Lake:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== TRUCKERS ROUTES (DATA LAKE) ====================
+
+/**
+ * GET /api/v1/tms/truckers
+ * Récupérer tous les chauffeurs depuis le Data Lake
+ * Query params: connectionId, limit, skip, search
+ */
+app.get('/api/v1/tms/truckers', requireMongo, async (req, res) => {
+  try {
+    const { connectionId, limit = 100, skip = 0, search, carrierId } = req.query;
+
+    const query = {};
+    if (connectionId) query.connectionId = connectionId;
+    if (carrierId) query.carrierPk = parseInt(carrierId.replace('dashdoc-', '')) || parseInt(carrierId);
+
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [truckers, total] = await Promise.all([
+      db.collection('dashdoc_truckers')
+        .find(query)
+        .sort({ lastName: 1, firstName: 1 })
+        .skip(parseInt(skip))
+        .limit(parseInt(limit))
+        .toArray(),
+      db.collection('dashdoc_truckers').countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      total,
+      limit: parseInt(limit),
+      skip: parseInt(skip),
+      truckers
+    });
+  } catch (error) {
+    console.error('[GET Truckers] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/truckers/search
+ * Recherche avancée de chauffeurs
+ */
+app.get('/api/v1/tms/truckers/search', requireMongo, async (req, res) => {
+  try {
+    const { q, connectionId, limit = 50 } = req.query;
+
+    if (!q || q.length < 2) {
+      return res.status(400).json({ error: 'Search term must be at least 2 characters' });
+    }
+
+    const query = {
+      $or: [
+        { firstName: { $regex: q, $options: 'i' } },
+        { lastName: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } },
+        { phoneNumber: { $regex: q, $options: 'i' } }
+      ]
+    };
+    if (connectionId) query.connectionId = connectionId;
+
+    const truckers = await db.collection('dashdoc_truckers')
+      .find(query)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      query: q,
+      count: truckers.length,
+      truckers
+    });
+  } catch (error) {
+    console.error('[Search Truckers] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/truckers/stats
+ * Statistiques des chauffeurs
+ */
+app.get('/api/v1/tms/truckers/stats', requireMongo, async (req, res) => {
+  try {
+    const { connectionId } = req.query;
+
+    const matchStage = connectionId ? { connectionId } : {};
+
+    const stats = await db.collection('dashdoc_truckers').aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          active: { $sum: { $cond: ['$isActive', 1, 0] } },
+          withAdr: { $sum: { $cond: [{ $ne: ['$adrLicense', null] }, 1, 0] } },
+          withExpiredDocs: {
+            $sum: {
+              $cond: [
+                {
+                  $or: [
+                    { $lt: ['$drivingLicenseDeadline', new Date()] },
+                    { $lt: ['$adrLicenseDeadline', new Date()] },
+                    { $lt: ['$driverCardDeadline', new Date()] }
+                  ]
+                },
+                1, 0
+              ]
+            }
+          }
+        }
+      }
+    ]).toArray();
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      stats: stats[0] || { total: 0, active: 0, withAdr: 0, withExpiredDocs: 0 }
+    });
+  } catch (error) {
+    console.error('[Truckers Stats] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/truckers/expiring-docs
+ * Chauffeurs avec documents expirant bientôt
+ */
+app.get('/api/v1/tms/truckers/expiring-docs', requireMongo, async (req, res) => {
+  try {
+    const { connectionId, daysAhead = 30, limit = 100 } = req.query;
+
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + parseInt(daysAhead));
+
+    const query = {
+      $or: [
+        { drivingLicenseDeadline: { $lte: futureDate, $gte: new Date() } },
+        { adrLicenseDeadline: { $lte: futureDate, $gte: new Date() } },
+        { driverCardDeadline: { $lte: futureDate, $gte: new Date() } }
+      ]
+    };
+    if (connectionId) query.connectionId = connectionId;
+
+    const truckers = await db.collection('dashdoc_truckers')
+      .find(query)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      daysAhead: parseInt(daysAhead),
+      count: truckers.length,
+      truckers
+    });
+  } catch (error) {
+    console.error('[Expiring Docs] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/truckers/:id
+ * Récupérer un chauffeur par ID (dashdocPk)
+ */
+app.get('/api/v1/tms/truckers/:id', requireMongo, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { connectionId } = req.query;
+
+    const query = { dashdocPk: parseInt(id) };
+    if (connectionId) query.connectionId = connectionId;
+
+    const trucker = await db.collection('dashdoc_truckers').findOne(query);
+
+    if (!trucker) {
+      return res.status(404).json({ error: 'Trucker not found' });
+    }
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      trucker
+    });
+  } catch (error) {
+    console.error('[GET Trucker] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== CONTACTS ROUTES (DATA LAKE) ====================
+
+/**
+ * GET /api/v1/tms/contacts
+ * Récupérer tous les contacts depuis le Data Lake
+ * Query params: connectionId, limit, skip, search, role
+ */
+app.get('/api/v1/tms/contacts', requireMongo, async (req, res) => {
+  try {
+    const { connectionId, limit = 100, skip = 0, search, role, companyPk } = req.query;
+
+    const query = {};
+    if (connectionId) query.connectionId = connectionId;
+    if (role) query.role = role;
+    if (companyPk) query.companyPk = parseInt(companyPk);
+
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [contacts, total] = await Promise.all([
+      db.collection('dashdoc_contacts')
+        .find(query)
+        .sort({ lastName: 1, firstName: 1 })
+        .skip(parseInt(skip))
+        .limit(parseInt(limit))
+        .toArray(),
+      db.collection('dashdoc_contacts').countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      total,
+      limit: parseInt(limit),
+      skip: parseInt(skip),
+      contacts
+    });
+  } catch (error) {
+    console.error('[GET Contacts] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/contacts/search
+ * Recherche avancée de contacts
+ */
+app.get('/api/v1/tms/contacts/search', requireMongo, async (req, res) => {
+  try {
+    const { q, connectionId, limit = 50 } = req.query;
+
+    if (!q || q.length < 2) {
+      return res.status(400).json({ error: 'Search term must be at least 2 characters' });
+    }
+
+    const query = {
+      $or: [
+        { firstName: { $regex: q, $options: 'i' } },
+        { lastName: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } },
+        { phoneNumber: { $regex: q, $options: 'i' } }
+      ]
+    };
+    if (connectionId) query.connectionId = connectionId;
+
+    const contacts = await db.collection('dashdoc_contacts')
+      .find(query)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      query: q,
+      count: contacts.length,
+      contacts
+    });
+  } catch (error) {
+    console.error('[Search Contacts] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/contacts/stats
+ * Statistiques des contacts
+ */
+app.get('/api/v1/tms/contacts/stats', requireMongo, async (req, res) => {
+  try {
+    const { connectionId } = req.query;
+
+    const matchStage = connectionId ? { connectionId } : {};
+
+    const stats = await db.collection('dashdoc_contacts').aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          withEmail: {
+            $sum: { $cond: [{ $and: [{ $ne: ['$email', null] }, { $ne: ['$email', ''] }] }, 1, 0] }
+          },
+          withPhone: {
+            $sum: { $cond: [{ $and: [{ $ne: ['$phoneNumber', null] }, { $ne: ['$phoneNumber', ''] }] }, 1, 0] }
+          },
+          managers: {
+            $sum: { $cond: [{ $eq: ['$role', 'manager'] }, 1, 0] }
+          }
+        }
+      }
+    ]).toArray();
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      stats: stats[0] || { total: 0, withEmail: 0, withPhone: 0, managers: 0 }
+    });
+  } catch (error) {
+    console.error('[Contacts Stats] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/contacts/by-company/:companyPk
+ * Récupérer les contacts d'une entreprise
+ */
+app.get('/api/v1/tms/contacts/by-company/:companyPk', requireMongo, async (req, res) => {
+  try {
+    const { companyPk } = req.params;
+    const { connectionId, limit = 100 } = req.query;
+
+    const query = { companyPk: parseInt(companyPk) };
+    if (connectionId) query.connectionId = connectionId;
+
+    const contacts = await db.collection('dashdoc_contacts')
+      .find(query)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      companyPk: parseInt(companyPk),
+      count: contacts.length,
+      contacts
+    });
+  } catch (error) {
+    console.error('[Contacts by Company] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/tms/contacts/:id
+ * Récupérer un contact par ID (dashdocPk)
+ */
+app.get('/api/v1/tms/contacts/:id', requireMongo, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { connectionId } = req.query;
+
+    const query = { dashdocPk: parseInt(id) };
+    if (connectionId) query.connectionId = connectionId;
+
+    const contact = await db.collection('dashdoc_contacts').findOne(query);
+
+    if (!contact) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    res.json({
+      success: true,
+      source: 'datalake',
+      contact
+    });
+  } catch (error) {
+    console.error('[GET Contact] Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1541,6 +2167,145 @@ app.get('/api/v1/monitoring/status', requireMongo, async (req, res) => {
 
 // Routes Affret.IA synchronization
 app.use('/api/v1/tms/affretia-sync', authenticateToken, affretIASyncRoutes);
+
+// ==================== PUBLIC DATA LAKE ROUTES (No Auth) ====================
+// Routes publiques pour le portail transporteur
+const datalakeRoutes = require('./routes/datalake.routes');
+
+// Public read-only endpoints for transporter portal
+app.get('/api/v1/datalake/status', (req, res, next) => {
+  req.readers = null; // Will use getDatalakeStatus from scheduled-jobs
+  datalakeRoutes.handle(req, res, next);
+});
+
+// Public transports endpoint (read-only)
+app.get('/api/v1/datalake/transports', requireMongo, async (req, res) => {
+  try {
+    const { status, carrierId, tag, limit = 50, skip = 0 } = req.query;
+
+    const query = {};
+    if (status) query.status = { $in: status.split(',') };
+    if (carrierId) query['carrier.externalId'] = carrierId;
+    if (tag) query['tags.name'] = tag;
+
+    const [results, total] = await Promise.all([
+      db.collection('dashdoc_transports')
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip(parseInt(skip))
+        .limit(parseInt(limit))
+        .toArray(),
+      db.collection('dashdoc_transports').countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: results,
+      pagination: {
+        total,
+        page: Math.floor(parseInt(skip) / parseInt(limit)) + 1,
+        totalPages: Math.ceil(total / parseInt(limit)),
+        limit: parseInt(limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== PUBLIC ORDERS ROUTES (No Auth) ====================
+// Routes publiques pour le portail transporteur - compatibilité legacy
+
+// GET /api/orders - Route legacy sans /v1 (utilisée par le frontend transporteur)
+app.get('/api/orders', requireMongo, async (req, res) => {
+  try {
+    const { carrierId, carrier, limit = 50, skip = 0, status } = req.query;
+    const carrierIdParam = carrierId || carrier;
+
+    const query = {};
+    if (carrierIdParam) {
+      // Support both formats: "6980504" or "dashdoc-6980504"
+      const cleanId = String(carrierIdParam).replace('dashdoc-', '');
+      query['carrier.externalId'] = cleanId;
+    }
+    if (status) query.status = { $in: status.split(',') };
+
+    const [results, total] = await Promise.all([
+      db.collection('dashdoc_transports')
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip(parseInt(skip))
+        .limit(parseInt(limit))
+        .toArray(),
+      db.collection('dashdoc_transports').countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      total,
+      orders: results,
+      source: 'datalake'
+    });
+  } catch (error) {
+    console.error('[ORDERS] Error:', error.message);
+    res.json({
+      success: true,
+      total: 0,
+      orders: [],
+      message: 'Service temporairement indisponible'
+    });
+  }
+});
+
+// Public carriers endpoint (read-only)
+app.get('/api/v1/datalake/carriers', requireMongo, async (req, res) => {
+  try {
+    const { search, limit = 500, skip = 0 } = req.query;
+
+    const query = { isCarrier: true };
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { siret: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [results, total] = await Promise.all([
+      db.collection('dashdoc_companies')
+        .find(query)
+        .sort({ name: 1 })
+        .skip(parseInt(skip))
+        .limit(parseInt(limit))
+        .toArray(),
+      db.collection('dashdoc_companies').countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: results,
+      pagination: {
+        total,
+        page: Math.floor(parseInt(skip) / parseInt(limit)) + 1,
+        totalPages: Math.ceil(total / parseInt(limit)),
+        limit: parseInt(limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== AUTHENTICATED DATA LAKE ROUTES ====================
+// Routes avec authentification pour opérations sensibles
+app.use('/api/v1/datalake', authenticateToken, datalakeRoutes);
+
+// Routes Tracking IA (événements temps réel)
+const trackingIARoutes = require('./routes/tracking-ia.routes');
+app.use('/api/v1/tracking-ia', authenticateToken, trackingIARoutes);
+
+// Routes Vigilance (scores et surveillance transporteurs)
+const vigilanceRoutes = require('./routes/vigilance.routes');
+app.use('/api/v1/vigilance', authenticateToken, vigilanceRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {

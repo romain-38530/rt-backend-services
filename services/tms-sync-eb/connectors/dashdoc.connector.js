@@ -12,15 +12,80 @@
  * - /manager-truckers/ - Chauffeurs
  * - /invoices/ - Factures
  * - /counters/ - Compteurs temps reel
+ *
+ * ⚠️ RATE LIMITING: Maximum 10 req/s vers Dashdoc
+ * - Délai minimum entre requêtes: 150ms (≈6.6 req/s effectif)
+ * - Délai entre pages pagination: 200ms
+ * - Marge de sécurité pour pics
  */
 
 const axios = require('axios');
+
+/**
+ * Rate Limiter pour respecter les limites API Dashdoc
+ * Maximum 10 requêtes par seconde
+ */
+class RateLimiter {
+  constructor(options = {}) {
+    // Délai minimum entre requêtes (150ms = max ~6.6 req/s, laisse marge pour autres instances)
+    this.minDelayMs = options.minDelayMs || 150;
+    // Délai entre pages de pagination (plus long pour éviter les pics)
+    this.paginationDelayMs = options.paginationDelayMs || 200;
+    // Timestamp de la dernière requête
+    this.lastRequestTime = 0;
+    // Compteur pour logging
+    this.requestCount = 0;
+    this.windowStart = Date.now();
+  }
+
+  /**
+   * Attendre avant la prochaine requête si nécessaire
+   */
+  async throttle() {
+    const now = Date.now();
+    const elapsed = now - this.lastRequestTime;
+
+    if (elapsed < this.minDelayMs) {
+      const waitTime = this.minDelayMs - elapsed;
+      await this.delay(waitTime);
+    }
+
+    this.lastRequestTime = Date.now();
+    this.requestCount++;
+
+    // Log toutes les 10 secondes
+    if (now - this.windowStart >= 10000) {
+      const rate = this.requestCount / ((now - this.windowStart) / 1000);
+      console.log(`[DASHDOC RATE] ${this.requestCount} requests in 10s = ${rate.toFixed(2)} req/s`);
+      this.requestCount = 0;
+      this.windowStart = now;
+    }
+  }
+
+  /**
+   * Délai pour pagination (plus long)
+   */
+  async paginationDelay() {
+    await this.delay(this.paginationDelayMs);
+  }
+
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// Instance globale du rate limiter (partagée entre toutes les instances du connector)
+const globalRateLimiter = new RateLimiter();
 
 class DashdocConnector {
   constructor(apiToken, options = {}) {
     this.apiToken = apiToken;
     this.baseUrl = options.baseUrl || 'https://www.dashdoc.eu/api/v4';
     this.timeout = options.timeout || 30000;
+
+    // Rate limiter (utilise l'instance globale par défaut)
+    this.rateLimiter = options.rateLimiter || globalRateLimiter;
+
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: this.timeout,
@@ -32,10 +97,19 @@ class DashdocConnector {
   }
 
   /**
-   * Test de connexion API
+   * Wrapper pour toutes les requêtes avec rate limiting
+   */
+  async _request(method, url, options = {}) {
+    await this.rateLimiter.throttle();
+    return this.client[method](url, options);
+  }
+
+  /**
+   * Test de connexion API (avec rate limiting)
    */
   async testConnection() {
     try {
+      await this.rateLimiter.throttle();
       const response = await this.client.get('/counters/');
       return {
         success: true,
@@ -52,17 +126,20 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les compteurs en temps reel
+   * Recuperer les compteurs en temps reel (avec rate limiting)
    */
   async getCounters() {
+    await this.rateLimiter.throttle();
     const response = await this.client.get('/counters/');
     return response.data;
   }
 
   /**
-   * Recuperer les transports avec pagination
+   * Recuperer les transports avec pagination (avec rate limiting)
    */
   async getTransports(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
     if (options.page) params.append('page', options.page);
@@ -83,9 +160,10 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer un transport par UID
+   * Recuperer un transport par UID (avec rate limiting)
    */
   async getTransport(uid) {
+    await this.rateLimiter.throttle();
     const response = await this.client.get(`/transports/${uid}/`);
     return this.mapTransport(response.data);
   }
@@ -96,6 +174,8 @@ class DashdocConnector {
    * @param {Object} options - Options de filtre (tags__in, status__in, ordering, etc.)
    * @param {Number} maxPages - Limite de securite (defaut: 100 pages = 10 000 transports)
    * @returns {Promise<Array>} Tous les transports
+   *
+   * ⚠️ RATE LIMITING: Respecte le délai de 200ms entre chaque page
    */
   async getAllTransportsWithPagination(options = {}, maxPages = 100) {
     const allTransports = [];
@@ -103,13 +183,14 @@ class DashdocConnector {
     let hasMorePages = true;
     const limit = 100; // Limite API Dashdoc
 
-    console.log('[DASHDOC] Starting full pagination...');
+    console.log('[DASHDOC] Starting full pagination (rate limited)...');
     console.log('[DASHDOC] Options:', options);
 
     while (hasMorePages && page <= maxPages) {
       try {
         console.log(`[DASHDOC] Fetching page ${page}...`);
 
+        // getTransports inclut déjà le rate limiting
         const result = await this.getTransports({
           ...options,
           limit,
@@ -124,9 +205,9 @@ class DashdocConnector {
         hasMorePages = result.next !== null && allTransports.length < result.count;
         page++;
 
-        // Petit delai pour ne pas surcharger l'API
+        // ⚠️ RATE LIMITING: Délai obligatoire entre pages de pagination
         if (hasMorePages) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await this.rateLimiter.paginationDelay();
         }
 
       } catch (error) {
@@ -150,6 +231,8 @@ class DashdocConnector {
    * @param {Object} options - Options de filtre
    * @param {Number} maxPages - Limite de securite (defaut: 100 pages = 50 000 carriers)
    * @returns {Promise<Array>} Tous les carriers
+   *
+   * ⚠️ RATE LIMITING: Respecte le délai de 200ms entre chaque page
    */
   async getAllCarriersWithPagination(options = {}, maxPages = 100) {
     const allCarriers = [];
@@ -157,13 +240,14 @@ class DashdocConnector {
     let hasMorePages = true;
     const limit = 500; // Limite API Dashdoc pour companies
 
-    console.log('[DASHDOC CARRIERS] Starting full pagination...');
+    console.log('[DASHDOC CARRIERS] Starting full pagination (rate limited)...');
     console.log('[DASHDOC CARRIERS] Options:', options);
 
     while (hasMorePages && page <= maxPages) {
       try {
         console.log(`[DASHDOC CARRIERS] Fetching page ${page}...`);
 
+        // getCarriers inclut déjà le rate limiting
         const result = await this.getCarriers({
           ...options,
           limit,
@@ -178,9 +262,9 @@ class DashdocConnector {
         hasMorePages = result.next !== null && result.next !== undefined;
         page++;
 
-        // Petit delai pour ne pas surcharger l'API
+        // ⚠️ RATE LIMITING: Délai obligatoire entre pages de pagination
         if (hasMorePages) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await this.rateLimiter.paginationDelay();
         }
 
       } catch (error) {
@@ -199,9 +283,11 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les livraisons
+   * Recuperer les livraisons (avec rate limiting)
    */
   async getDeliveries(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
     if (options.page) params.append('page', options.page);
@@ -214,9 +300,11 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les entreprises
+   * Recuperer les entreprises (avec rate limiting)
    */
   async getCompanies(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
     if (options.page) params.append('page', options.page);
@@ -229,9 +317,11 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les contacts
+   * Recuperer les contacts (avec rate limiting)
    */
   async getContacts(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
     if (options.page) params.append('page', options.page);
@@ -244,9 +334,11 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les vehicules
+   * Recuperer les vehicules (avec rate limiting)
    */
   async getVehicles(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
 
@@ -258,9 +350,11 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les remorques
+   * Recuperer les remorques (avec rate limiting)
    */
   async getTrailers(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
 
@@ -272,9 +366,11 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les chauffeurs
+   * Recuperer les chauffeurs (avec rate limiting)
    */
   async getTruckers(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
 
@@ -286,9 +382,11 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les factures
+   * Recuperer les factures (avec rate limiting)
    */
   async getInvoices(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
     if (options.page) params.append('page', options.page);
@@ -301,9 +399,11 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les adresses
+   * Recuperer les adresses (avec rate limiting)
    */
   async getAddresses(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
     if (options.page) params.append('page', options.page);
@@ -316,10 +416,12 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les transporteurs partenaires (sous-traitants)
+   * Recuperer les transporteurs partenaires (sous-traitants) (avec rate limiting)
    * Filtre les entreprises qui sont des transporteurs (carriers)
    */
   async getCarriers(options = {}) {
+    await this.rateLimiter.throttle();
+
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit || 500);
     if (options.page) params.append('page', options.page);
@@ -417,11 +519,13 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les stats de transports par transporteur
+   * Recuperer les stats de transports par transporteur (avec rate limiting)
    * Pour enrichir les donnees des carriers
    */
   async getCarrierStats(carrierId) {
     try {
+      await this.rateLimiter.throttle();
+
       const params = new URLSearchParams();
       params.append('carrier', carrierId);
       params.append('limit', '1000');
@@ -504,9 +608,9 @@ class DashdocConnector {
 
       enrichedCarriers.push(...enrichedBatch);
 
-      // Petit delai entre les batchs
+      // ⚠️ RATE LIMITING: Délai entre les batchs
       if (i + batchSize < carriersArray.length) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await this.rateLimiter.paginationDelay();
       }
     }
 

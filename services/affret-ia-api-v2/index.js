@@ -15,7 +15,20 @@ const app = express();
 const PORT = process.env.PORT || 3017;
 const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456XY';
 
-app.use(cors());
+// CORS Configuration - Allow all origins with proper headers
+const corsOptions = {
+  origin: true, // Allow all origins
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'X-Request-Id'],
+  maxAge: 86400 // 24 hours preflight cache
+};
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 
 // WebSocket
@@ -101,12 +114,35 @@ try {
   console.warn('[METRICS] Failed to initialize CloudWatch:', error.message);
 }
 
+// Import services for Data Lake initialization
+const pricingService = require('./services/pricing.service');
+
 // MongoDB connection
 let db = null;
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('[MONGODB] Connected');
     db = mongoose.connection.db;
+
+    // ==================== DATA LAKE INITIALIZATION ====================
+    // Initialiser la connexion au Data Lake pour les services
+    // Les readers sont importés depuis tms-sync-eb (même dépôt)
+    try {
+      const { createReaders } = require('../tms-sync-eb/services/dashdoc-datalake/data-readers');
+      const datalakeReaders = createReaders(db);
+
+      // Configurer pricingService avec Data Lake
+      pricingService.setDatalakeConnection(db, datalakeReaders);
+
+      console.log('[DATA LAKE] Readers initialized for affret-ia-api-v2');
+      console.log('[DATA LAKE] Available readers: transports, carriers, vehicles, truckers, contacts');
+    } catch (err) {
+      console.warn('[DATA LAKE] Could not initialize readers:', err.message);
+      console.warn('[DATA LAKE] Falling back to legacy API mode');
+
+      // Passer au moins db pour permettre les requêtes directes
+      pricingService.setDatalakeConnection(db, null);
+    }
   })
   .catch(err => console.error('[MONGODB] Error:', err));
 
@@ -349,9 +385,14 @@ app.get('/', (req, res) => {
   res.json({
     success: true,
     service: 'AFFRET.IA API v2',
-    version: '2.7.0',
+    version: '2.9.8',
     status: 'healthy',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    features: {
+      datalake: 'MongoDB Data Lake pour lectures',
+      pricing: 'Service pricing connecté au Data Lake',
+      dashdocSync: 'Sync automatique toutes les 25s via tms-sync-eb'
+    }
   });
 });
 
@@ -359,10 +400,11 @@ app.get('/health', (req, res) => {
   const health = {
     success: true,
     service: 'AFFRET.IA API v2',
-    version: '2.7.0',
+    version: '2.9.8',
     status: 'healthy',
     uptime: process.uptime(),
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    datalake: pricingService.datalakeDb ? 'connected' : 'not_configured',
     timestamp: new Date().toISOString()
   };
 
@@ -373,6 +415,10 @@ app.get('/health', (req, res) => {
 // ==================== AFFRET.IA ROUTES ====================
 const affretiaRoutes = require('./routes/affretia.routes');
 app.use('/api/v1/affretia', affretiaRoutes);
+
+// ==================== DASHDOC INVITATIONS ROUTES ====================
+const dashdocInvitationsRoutes = require('./routes/dashdoc-invitations.routes');
+app.use('/api/v1/dashdoc-invitations', dashdocInvitationsRoutes);
 
 // POST /api/v1/affret-ia/search - Rechercher des transporteurs disponibles
 app.post('/api/v1/affret-ia/search', authenticateToken, async (req, res) => {
@@ -677,7 +723,19 @@ mongoose.connection.once('open', () => {
 // GET /api/v1/carriers/:carrierId/vigilance - Statut de vigilance transporteur
 app.get('/api/v1/carriers/:carrierId/vigilance', async (req, res) => {
   try {
-    const { carrierId } = req.params;
+    let { carrierId } = req.params;
+
+    // Nettoyer le carrierId (enlever les tirets en fin, espaces, etc.)
+    carrierId = carrierId ? carrierId.replace(/[-\s]+$/, '').trim() : '';
+
+    // Valider le carrierId
+    if (!carrierId || carrierId.length < 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid carrierId',
+        data: { carrierId: req.params.carrierId, overallStatus: 'unknown' }
+      });
+    }
 
     // Appeler l'API authz-eb pour récupérer le statut de vigilance
     const AUTHZ_API_URL = process.env.AUTHZ_API_URL || 'https://d1w7fjn84zr7zk.cloudfront.net';
@@ -701,7 +759,8 @@ app.get('/api/v1/carriers/:carrierId/vigilance', async (req, res) => {
             insurance: { status: 'valid', score: 85 },
             licenses: { status: 'valid', score: 80 }
           },
-          message: 'Statut de vigilance récupéré (cache)'
+          lastCheckedAt: new Date().toISOString(),
+          message: 'Statut de vigilance récupéré (mode dégradé)'
         }
       });
     }
@@ -721,8 +780,8 @@ app.get('/api/v1/orders', async (req, res) => {
     const { carrier, carrierId, limit = 50, status } = req.query;
     const carrierIdParam = carrierId || carrier;
 
-    // Appeler l'API TMS Sync pour récupérer les commandes
-    const TMS_SYNC_URL = process.env.TMS_SYNC_API_URL || 'https://dn9acecf2uw0a.cloudfront.net';
+    // Appeler l'API TMS Sync pour récupérer les commandes via Data Lake
+    const TMS_SYNC_URL = process.env.TMS_SYNC_API_URL || 'https://dn8zbjfd06ewt.cloudfront.net';
 
     try {
       const params = new URLSearchParams();
@@ -730,24 +789,54 @@ app.get('/api/v1/orders', async (req, res) => {
       if (limit) params.append('limit', limit);
       if (status) params.append('status', status);
 
-      const response = await axios.get(`${TMS_SYNC_URL}/api/v1/tms/orders?${params.toString()}`, {
+      // Essayer d'abord le Data Lake endpoint
+      const response = await axios.get(`${TMS_SYNC_URL}/api/v1/datalake/transports?${params.toString()}`, {
         headers: req.headers.authorization ? { 'Authorization': req.headers.authorization } : {},
         timeout: 10000
       });
-      return res.json(response.data);
+
+      // Transformer la réponse du Data Lake pour correspondre au format attendu
+      const data = response.data;
+      return res.json({
+        success: true,
+        total: data.pagination?.total || data.data?.length || 0,
+        orders: data.data || [],
+        source: 'datalake'
+      });
     } catch (apiError) {
-      console.log(`[ORDERS] API error:`, apiError.message);
-      // Retourner une liste vide en cas d'erreur
+      const errorStatus = apiError.response?.status;
+      const errorMessage = apiError.response?.data?.error || apiError.message;
+
+      console.log(`[ORDERS] Data Lake API error (${errorStatus}):`, errorMessage);
+
+      // Si 403/401, retourner une réponse appropriée
+      if (errorStatus === 403 || errorStatus === 401) {
+        return res.json({
+          success: true,
+          total: 0,
+          orders: [],
+          message: 'Authentification requise pour accéder aux commandes',
+          error_code: 'AUTH_REQUIRED'
+        });
+      }
+
+      // Retourner une liste vide en cas d'autre erreur
       return res.json({
         success: true,
         total: 0,
         orders: [],
-        message: 'Aucune commande disponible'
+        message: 'Service temporairement indisponible',
+        error_code: 'SERVICE_UNAVAILABLE'
       });
     }
   } catch (error) {
     console.error('[ORDERS] Error:', error.message);
-    res.status(500).json({ success: false, error: error.message, orders: [] });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      orders: [],
+      total: 0
+    });
   }
 });
 

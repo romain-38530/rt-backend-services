@@ -2,6 +2,11 @@
  * TMS Connection Service
  * Gere les connexions aux differents TMS clients (Dashdoc, etc.)
  * Stocke les configurations et execute les synchronisations
+ *
+ * ⚠️ ARCHITECTURE DATA LAKE:
+ * Ce service supporte la lecture depuis le Data Lake MongoDB
+ * - Compteurs temps réel depuis dashdoc_counters
+ * - Données synchronisées depuis dashdoc_* collections
  */
 
 const DashdocConnector = require('../connectors/dashdoc.connector');
@@ -11,6 +16,16 @@ class TMSConnectionService {
     this.db = db;
     this.connectionsCollection = null;
     this.syncLogsCollection = null;
+    this.datalakeReaders = null;
+  }
+
+  /**
+   * Configurer les Data Lake readers
+   * @param {Object} readers - Readers Data Lake
+   */
+  setDatalakeReaders(readers) {
+    this.datalakeReaders = readers;
+    console.log('[TMS Connection] Data Lake readers configured');
   }
 
   async init() {
@@ -573,25 +588,180 @@ class TMSConnectionService {
 
   /**
    * Obtenir les compteurs temps reel d'une connexion
+   * ⚠️ DATA LAKE: Lit depuis MongoDB dashdoc_counters si disponible
    */
-  async getRealtimeCounters(connectionId) {
+  async getRealtimeCounters(connectionId, options = {}) {
     const { ObjectId } = require('mongodb');
+    const { forceApi = false } = options;
+
     const connection = await this.connectionsCollection.findOne({ _id: new ObjectId(connectionId) });
 
     if (!connection || connection.connectionStatus !== 'connected') {
       throw new Error('Connection not available');
     }
 
+    // ✅ NOUVEAU: Lire depuis Data Lake si disponible (sauf si forceApi)
+    if (!forceApi && connection.tmsType === 'dashdoc') {
+      try {
+        const counters = await this._getCountersFromDatalake(connectionId);
+        if (counters) {
+          return {
+            ...counters,
+            source: 'datalake',
+            freshness: counters.syncedAt ? new Date() - new Date(counters.syncedAt) : null
+          };
+        }
+      } catch (err) {
+        console.warn('[TMS] Data Lake counters not available, falling back to API:', err.message);
+      }
+    }
+
+    // Fallback: Appel API direct
     switch (connection.tmsType) {
       case 'dashdoc':
         const dashdoc = new DashdocConnector(connection.credentials.apiToken, {
           baseUrl: connection.credentials.apiUrl
         });
-        return dashdoc.getCounters();
+        const counters = await dashdoc.getCounters();
+        return {
+          ...counters,
+          source: 'api'
+        };
 
       default:
         throw new Error(`TMS type ${connection.tmsType} not supported`);
     }
+  }
+
+  /**
+   * Récupérer les compteurs depuis le Data Lake MongoDB
+   * @private
+   */
+  async _getCountersFromDatalake(connectionId) {
+    const countersCollection = this.db.collection('dashdoc_counters');
+
+    // Récupérer les derniers compteurs synchronisés
+    const counters = await countersCollection.findOne(
+      { connectionId: connectionId },
+      { sort: { syncedAt: -1 } }
+    );
+
+    if (!counters) {
+      // Essayer sans filtre connectionId (compteurs globaux)
+      const globalCounters = await countersCollection.findOne(
+        {},
+        { sort: { syncedAt: -1 } }
+      );
+      return globalCounters;
+    }
+
+    return counters;
+  }
+
+  /**
+   * Récupérer les données synchronisées depuis le Data Lake
+   * @param {string} type - Type de données (transports, companies, etc.)
+   * @param {Object} options - Options de filtrage
+   */
+  async getDataFromDatalake(type, options = {}) {
+    const { connectionId, limit = 50, skip = 0, filters = {} } = options;
+
+    const collectionMap = {
+      'transports': 'dashdoc_transports',
+      'orders': 'dashdoc_transports',
+      'companies': 'dashdoc_companies',
+      'carriers': 'dashdoc_companies',
+      'vehicles': 'dashdoc_vehicles',
+      'trailers': 'dashdoc_trailers',
+      'truckers': 'dashdoc_truckers',
+      'drivers': 'dashdoc_truckers',
+      'contacts': 'dashdoc_contacts',
+      'invoices': 'dashdoc_invoices'
+    };
+
+    const collectionName = collectionMap[type];
+    if (!collectionName) {
+      throw new Error(`Unknown data type: ${type}`);
+    }
+
+    const query = { ...filters };
+    if (connectionId) query.connectionId = connectionId;
+
+    // Pour carriers, filtrer isCarrier: true
+    if (type === 'carriers') {
+      query.isCarrier = true;
+    }
+
+    const collection = this.db.collection(collectionName);
+    const [data, total] = await Promise.all([
+      collection.find(query).skip(skip).limit(limit).sort({ syncedAt: -1 }).toArray(),
+      collection.countDocuments(query)
+    ]);
+
+    return {
+      success: true,
+      type,
+      source: 'datalake',
+      collection: collectionName,
+      total,
+      limit,
+      skip,
+      data
+    };
+  }
+
+  /**
+   * Statistiques du Data Lake pour une connexion
+   */
+  async getDatalakeStats(connectionId = null) {
+    const query = connectionId ? { connectionId } : {};
+
+    const [
+      transportsCount,
+      companiesCount,
+      carriersCount,
+      vehiclesCount,
+      trailersCount,
+      truckersCount,
+      contactsCount,
+      invoicesCount
+    ] = await Promise.all([
+      this.db.collection('dashdoc_transports').countDocuments(query),
+      this.db.collection('dashdoc_companies').countDocuments(query),
+      this.db.collection('dashdoc_companies').countDocuments({ ...query, isCarrier: true }),
+      this.db.collection('dashdoc_vehicles').countDocuments(query),
+      this.db.collection('dashdoc_trailers').countDocuments(query),
+      this.db.collection('dashdoc_truckers').countDocuments(query),
+      this.db.collection('dashdoc_contacts').countDocuments(query),
+      this.db.collection('dashdoc_invoices').countDocuments(query)
+    ]);
+
+    // Dernière sync
+    const lastSync = await this.db.collection('dashdoc_sync_state').findOne(
+      connectionId ? { connectionId } : {},
+      { sort: { lastIncrementalSyncAt: -1 } }
+    );
+
+    return {
+      source: 'datalake',
+      connectionId: connectionId || 'all',
+      counts: {
+        transports: transportsCount,
+        companies: companiesCount,
+        carriers: carriersCount,
+        vehicles: vehiclesCount,
+        trailers: trailersCount,
+        truckers: truckersCount,
+        contacts: contactsCount,
+        invoices: invoicesCount,
+        total: transportsCount + companiesCount + vehiclesCount + trailersCount + truckersCount + contactsCount + invoicesCount
+      },
+      lastSync: lastSync ? {
+        incrementalAt: lastSync.lastIncrementalSyncAt,
+        fullSyncAt: lastSync.lastFullSyncAt,
+        metrics: lastSync.metrics
+      } : null
+    };
   }
 
   /**
