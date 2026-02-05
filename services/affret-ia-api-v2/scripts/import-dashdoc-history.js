@@ -1,13 +1,19 @@
 /**
  * Script d'import de l'historique des prix depuis Dashdoc
  *
+ * ARCHITECTURE DATA LAKE:
+ * - Lit depuis le Data Lake MongoDB (dashdoc_transports) au lieu d'appels API directs
+ * - Le Data Lake est synchronisé toutes les 25s par tms-sync-eb
+ * - Supporte le multi-tenant via connectionId
+ *
  * Usage:
  *   node scripts/import-dashdoc-history.js [options]
  *
  * Options:
- *   --months N         Nombre de mois d'historique à importer (défaut: 6)
- *   --org-id ID       ID de l'organisation (défaut: dashdoc-import)
- *   --dry-run         Mode simulation (n'écrit pas en base)
+ *   --months N           Nombre de mois d'historique à importer (défaut: 6)
+ *   --org-id ID         ID de l'organisation (défaut: dashdoc-import)
+ *   --connection-id ID  ID de connexion TMS pour multi-tenant (optionnel)
+ *   --dry-run           Mode simulation (n'écrit pas en base)
  */
 
 require('dotenv').config();
@@ -22,6 +28,7 @@ const args = process.argv.slice(2);
 const options = {
   months: 6,
   orgId: 'dashdoc-import',
+  connectionId: null,
   dryRun: false
 };
 
@@ -31,6 +38,9 @@ args.forEach((arg, index) => {
   }
   if (arg === '--org-id' && args[index + 1]) {
     options.orgId = args[index + 1];
+  }
+  if (arg === '--connection-id' && args[index + 1]) {
+    options.connectionId = args[index + 1];
   }
   if (arg === '--dry-run') {
     options.dryRun = true;
@@ -44,28 +54,54 @@ async function main() {
 
   try {
     // Connexion MongoDB
-    console.log('[1/4] Connexion à MongoDB...');
+    console.log('[1/5] Connexion à MongoDB...');
     await mongoose.connect(MONGODB_URI);
+    const db = mongoose.connection.db;
     console.log('✅ Connecté à MongoDB\n');
 
-    // Vérifier configuration Dashdoc
-    console.log('[2/4] Vérification configuration Dashdoc...');
-    if (!process.env.DASHDOC_API_KEY) {
-      throw new Error('❌ DASHDOC_API_KEY non configuré dans .env');
+    // Initialiser Data Lake
+    console.log('[2/5] Initialisation Data Lake...');
+    try {
+      const { createReaders } = require('../../tms-sync-eb/services/dashdoc-datalake/data-readers');
+      const datalakeReaders = createReaders(db);
+      pricingService.setDatalakeConnection(db, datalakeReaders);
+      console.log('✅ Data Lake initialisé - lecture depuis MongoDB\n');
+    } catch (err) {
+      console.warn('⚠️  Data Lake non disponible:', err.message);
+      console.warn('⚠️  Fallback: utilisation API Dashdoc directe\n');
+      pricingService.setDatalakeConnection(db, null);
+
+      // Vérifier configuration Dashdoc si Data Lake non dispo
+      if (!process.env.DASHDOC_API_KEY) {
+        throw new Error('❌ DASHDOC_API_KEY non configuré et Data Lake non disponible');
+      }
     }
-    if (!process.env.DASHDOC_API_URL) {
-      console.warn('⚠️  DASHDOC_API_URL non configuré, utilisation URL par défaut');
+
+    // Vérifier source de données
+    console.log('[3/5] Vérification source de données...');
+    if (pricingService.datalakeDb) {
+      const transportsCount = await db.collection('dashdoc_transports').countDocuments();
+      console.log(`✅ Data Lake contient ${transportsCount} transports`);
+      if (transportsCount === 0) {
+        console.warn('⚠️  Aucun transport dans le Data Lake - exécuter d\'abord la sync tms-sync-eb\n');
+      }
+    } else {
+      console.log('✅ Utilisation API Dashdoc directe');
     }
-    console.log('✅ Configuration Dashdoc OK\n');
+    console.log('');
 
     // Calculer période
     const endDate = new Date();
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - options.months);
 
-    console.log('[3/4] Import des données...');
+    console.log('[4/5] Import des données...');
     console.log(`    Période: ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()}`);
     console.log(`    Organisation ID: ${options.orgId}`);
+    if (options.connectionId) {
+      console.log(`    Connection ID: ${options.connectionId} (multi-tenant)`);
+    }
+    console.log(`    Source: ${pricingService.datalakeDb ? 'Data Lake MongoDB' : 'API Dashdoc'}`);
     console.log(`    Mode: ${options.dryRun ? '🔍 DRY-RUN (simulation)' : '💾 WRITE (écriture)'}\n`);
 
     if (options.dryRun) {
@@ -76,10 +112,12 @@ async function main() {
     const result = await pricingService.importFromDashdoc({
       startDate,
       endDate,
-      organizationId: options.orgId
+      organizationId: options.orgId,
+      connectionId: options.connectionId,
+      dryRun: options.dryRun
     });
 
-    console.log('\n[4/4] Résultats de l\'import:\n');
+    console.log('\n[5/5] Résultats de l\'import:\n');
     console.log(`    ✅ Importés: ${result.imported}`);
     console.log(`    ⏭️  Ignorés: ${result.skipped}`);
 
