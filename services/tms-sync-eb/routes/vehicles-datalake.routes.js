@@ -79,6 +79,69 @@ router.get('/status', async (req, res) => {
 });
 
 /**
+ * GET /api/v1/vehicles/debug/sources
+ * Liste les sources de données disponibles (carrierIds dans vehizen datalake)
+ */
+router.get('/debug/sources', async (req, res) => {
+  try {
+    const mongoose = require('mongoose');
+    const results = {
+      vehizenDatalake: { carrierIds: [], count: 0, database: 'rt-orders', connectionStatus: 'unknown' },
+      vehicles: { organizationIds: [], count: 0 },
+      config: {
+        ordersMongoUriConfigured: !!process.env.ORDERS_MONGODB_URI,
+      },
+    };
+
+    // Check vehizenvehicles collection in rt-orders database (via secondary connection)
+    try {
+      const ORDERS_MONGODB_URI = process.env.ORDERS_MONGODB_URI;
+      if (ORDERS_MONGODB_URI) {
+        // Create temporary connection to check
+        const ordersConn = mongoose.createConnection(ORDERS_MONGODB_URI);
+        await new Promise((resolve, reject) => {
+          ordersConn.once('connected', resolve);
+          ordersConn.once('error', reject);
+          setTimeout(() => reject(new Error('Connection timeout')), 10000);
+        });
+
+        const VechizenModel = ordersConn.model('VechizenVehicle', new mongoose.Schema({}, { collection: 'vehizenvehicles', strict: false }));
+        const carrierIds = await VechizenModel.distinct('carrierId');
+        const vechizenCount = await VechizenModel.countDocuments();
+
+        results.vehizenDatalake = {
+          carrierIds,
+          count: vechizenCount,
+          database: 'rt-orders',
+          connectionStatus: 'connected',
+        };
+
+        await ordersConn.close();
+      } else {
+        results.vehizenDatalake.connectionStatus = 'not_configured';
+        results.vehizenDatalake.error = 'ORDERS_MONGODB_URI not configured';
+      }
+    } catch (e) {
+      results.vehizenDatalake.connectionStatus = 'error';
+      results.vehizenDatalake.error = e.message;
+    }
+
+    // Check vehicles collection (unified data lake in main connection)
+    try {
+      const organizationIds = await Vehicle.distinct('organizationId');
+      const vehicleCount = await Vehicle.countDocuments();
+      results.vehicles = { organizationIds, count: vehicleCount };
+    } catch (e) {
+      results.vehicles.error = e.message;
+    }
+
+    res.json({ success: true, sources: results });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/v1/vehicles/sync
  * Force une synchronisation manuelle
  */

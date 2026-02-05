@@ -39,7 +39,8 @@ try {
 
 // ===============================================================
 // Vehizen Data Lake - SOURCE PRIMAIRE
-// Collection: vehizenvehicles (déjà peuplée par api-orders)
+// Collection: vehizenvehicles dans base rt-orders (api-orders)
+// Nécessite ORDERS_MONGODB_URI pour se connecter à cette base
 // ===============================================================
 const vechizenVehicleSchema = new mongoose.Schema({
   vehicleId: String,
@@ -60,19 +61,52 @@ const vechizenVehicleSchema = new mongoose.Schema({
     heading: Number,
   },
   odometer: Number,
+  telemetry: mongoose.Schema.Types.Mixed,
   _rawData: mongoose.Schema.Types.Mixed,
   createdAt: Date,
   updatedAt: Date,
-}, { collection: 'vehizenvehicles' });
+}, { collection: 'vehizenvehicles', strict: false });
 
-let VechizenVehicleDL;
-try {
-  // Essayer de récupérer le modèle existant ou le créer
-  VechizenVehicleDL = mongoose.models.VechizenVehicleDL || mongoose.model('VechizenVehicleDL', vechizenVehicleSchema);
-  console.log('[VEHICLES-DATALAKE] Modèle VechizenVehicleDL disponible (source PRIMAIRE)');
-} catch (e) {
-  console.log('[VEHICLES-DATALAKE] Modèle VechizenVehicleDL non disponible:', e.message);
+// Connexion secondaire vers la base rt-orders (api-orders)
+let ordersConnection = null;
+let VechizenVehicleDL = null;
+
+async function initOrdersConnection() {
+  const ORDERS_MONGODB_URI = process.env.ORDERS_MONGODB_URI;
+  if (!ORDERS_MONGODB_URI) {
+    console.log('[VEHICLES-DATALAKE] ORDERS_MONGODB_URI not configured, Vehizen Data Lake disabled');
+    return null;
+  }
+
+  try {
+    if (ordersConnection && ordersConnection.readyState === 1) {
+      return ordersConnection;
+    }
+
+    console.log('[VEHICLES-DATALAKE] Connecting to rt-orders database for Vehizen Data Lake...');
+    ordersConnection = mongoose.createConnection(ORDERS_MONGODB_URI);
+
+    ordersConnection.on('connected', () => {
+      console.log('[VEHICLES-DATALAKE] Connected to rt-orders database (Vehizen Data Lake)');
+    });
+
+    ordersConnection.on('error', (err) => {
+      console.error('[VEHICLES-DATALAKE] rt-orders connection error:', err.message);
+    });
+
+    // Créer le modèle sur cette connexion
+    VechizenVehicleDL = ordersConnection.model('VechizenVehicle', vechizenVehicleSchema);
+    console.log('[VEHICLES-DATALAKE] Modèle VechizenVehicleDL disponible (source PRIMAIRE)');
+
+    return ordersConnection;
+  } catch (e) {
+    console.error('[VEHICLES-DATALAKE] Failed to connect to rt-orders:', e.message);
+    return null;
+  }
 }
+
+// Initialize connection at module load
+initOrdersConnection();
 
 class VehicleDatalakeSyncService {
   constructor() {
@@ -442,11 +476,19 @@ class VehicleDatalakeSyncService {
 
   /**
    * Récupère les véhicules depuis Vehizen Data Lake (SOURCE PRIMAIRE)
-   * Collection: vehizenvehicles (peuplée par api-orders vehizen-sync.service)
+   * Collection: vehizenvehicles dans base rt-orders (via ORDERS_MONGODB_URI)
    * Utilise carrierId comme organizationId
    */
   async getVechizenDataLakeVehicles(organizationId) {
-    if (!VechizenVehicleDL) return [];
+    // Ensure connection is initialized
+    if (!VechizenVehicleDL) {
+      await initOrdersConnection();
+    }
+
+    if (!VechizenVehicleDL) {
+      console.log('[VEHICLES-DATALAKE] VechizenVehicleDL model not available (ORDERS_MONGODB_URI not configured?)');
+      return [];
+    }
 
     try {
       // Dans vehizen datalake, carrierId = organizationId
@@ -765,13 +807,18 @@ class VehicleDatalakeSyncService {
     const allOrgs = [];
 
     // 1. VEHIZEN DATA LAKE - SOURCE PRIMAIRE (carrierId = organizationId)
+    // Ensure connection is initialized
+    if (!VechizenVehicleDL) {
+      await initOrdersConnection();
+    }
+
     if (VechizenVehicleDL) {
       try {
         const vechizenDlOrgs = await VechizenVehicleDL.distinct('carrierId');
         allOrgs.push(...vechizenDlOrgs);
         console.log(`[VEHICLES-DATALAKE] ${vechizenDlOrgs.length} organisations Vehizen Data Lake trouvées (PRIMAIRE)`);
       } catch (e) {
-        console.log('[VEHICLES-DATALAKE] Pas de véhicules Vehizen Data Lake');
+        console.log('[VEHICLES-DATALAKE] Pas de véhicules Vehizen Data Lake:', e.message);
       }
     }
 
