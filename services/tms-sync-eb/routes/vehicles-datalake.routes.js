@@ -100,6 +100,188 @@ router.post('/sync', async (req, res) => {
 });
 
 // ==========================================
+// ROUTES GLOBALES (AVANT /:id pour éviter conflits)
+// ==========================================
+
+/**
+ * GET /api/v1/vehicles/stats
+ * Statistiques globales de la flotte
+ */
+router.get('/stats', async (req, res) => {
+  try {
+    const match = { organizationId: req.organizationId };
+
+    const [
+      totalVehicles,
+      activeVehicles,
+      inMaintenance,
+      pendingMaintenances,
+      activeBreakdowns,
+      pendingInvoices,
+    ] = await Promise.all([
+      Vehicle.countDocuments(match),
+      Vehicle.countDocuments({ ...match, status: 'active' }),
+      Vehicle.countDocuments({ ...match, status: 'maintenance' }),
+      VehicleMaintenance.countDocuments({ ...match, status: { $in: ['scheduled', 'in_progress'] } }),
+      VehicleBreakdown.countDocuments({ ...match, status: { $ne: 'resolved' } }),
+      VehicleInvoice.countDocuments({ ...match, status: 'pending' }),
+    ]);
+
+    res.json({
+      success: true,
+      stats: {
+        totalVehicles,
+        activeVehicles,
+        inMaintenance,
+        pendingMaintenances,
+        activeBreakdowns,
+        pendingInvoices,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/vehicles/maintenances
+ * Liste tous les entretiens
+ */
+router.get('/maintenances', async (req, res) => {
+  try {
+    const { status, type, vehicleId, page = 1, limit = 50 } = req.query;
+    const query = { organizationId: req.organizationId };
+
+    if (status) query.status = status;
+    if (type) query.type = type;
+    if (vehicleId) query.vehicleId = vehicleId;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [maintenances, total] = await Promise.all([
+      VehicleMaintenance.find(query)
+        .sort({ scheduledAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('vehicleId', 'licensePlate brand model'),
+      VehicleMaintenance.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      maintenances,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/vehicles/maintenances
+ * Créer un entretien
+ */
+router.post('/maintenances', async (req, res) => {
+  try {
+    const maintenanceService = getMaintenanceService();
+    const maintenance = await maintenanceService.scheduleMaintenance({
+      ...req.body,
+      organizationId: req.organizationId,
+    });
+
+    res.status(201).json({ success: true, maintenance });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/vehicles/breakdowns
+ * Liste toutes les pannes
+ */
+router.get('/breakdowns', async (req, res) => {
+  try {
+    const { status, severity, vehicleId, page = 1, limit = 50 } = req.query;
+    const query = { organizationId: req.organizationId };
+
+    if (status) query.status = status;
+    if (severity) query.severity = severity;
+    if (vehicleId) query.vehicleId = vehicleId;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [breakdowns, total] = await Promise.all([
+      VehicleBreakdown.find(query)
+        .sort({ reportedAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('vehicleId', 'licensePlate brand model'),
+      VehicleBreakdown.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      breakdowns,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/vehicles/breakdowns
+ * Déclarer une panne
+ */
+router.post('/breakdowns', async (req, res) => {
+  try {
+    const maintenanceService = getMaintenanceService();
+    const breakdown = await maintenanceService.reportBreakdown({
+      ...req.body,
+      organizationId: req.organizationId,
+    });
+
+    res.status(201).json({ success: true, breakdown });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/vehicles/invoices
+ * Liste toutes les factures fournisseurs
+ */
+router.get('/invoices', async (req, res) => {
+  try {
+    const { vehicleId, status, from, to, page = 1, limit = 50 } = req.query;
+
+    const query = { organizationId: req.organizationId };
+    if (vehicleId) query.vehicleId = vehicleId;
+    if (status) query.status = status;
+    if (from || to) {
+      query.uploadedAt = {};
+      if (from) query.uploadedAt.$gte = new Date(from);
+      if (to) query.uploadedAt.$lte = new Date(to);
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [invoices, total] = await Promise.all([
+      VehicleInvoice.find(query).sort({ uploadedAt: -1 }).skip(skip).limit(parseInt(limit)),
+      VehicleInvoice.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      invoices,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
 // VÉHICULES - CRUD
 // ==========================================
 

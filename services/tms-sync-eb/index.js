@@ -18,6 +18,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const mongoose = require('mongoose');
 const { MongoClient, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 const TMSConnectionService = require('./services/tms-connection.service');
@@ -48,10 +49,18 @@ async function connectMongoDB() {
   }
 
   try {
+    // Connect native MongoDB driver (for direct DB access)
     mongoClient = new MongoClient(process.env.MONGODB_URI);
     await mongoClient.connect();
     db = mongoClient.db();
     mongoConnected = true;
+
+    // Connect mongoose (for ODM models - vehicles, DKV, etc.)
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    console.log('[MONGOOSE] Connected successfully');
 
     // ==================== DATA LAKE INITIALIZATION ====================
     // Initialiser les Data Lake readers pour tous les services
