@@ -1,0 +1,146 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║   SYSTÈME DE VIGILANCE DES TRANSPORTEURS - GUIDE RAPIDE                   ║
+║   TMS Sync API v2.3.0                                                      ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📊 SCORE DE VIGILANCE : 0-100%
+────────────────────────────────────────────────────────────────────────────
+
+  Critères de calcul :
+  ┌─────────────────────────┬─────────┬──────────────────────────────┐
+  │ Documents légaux        │   30%   │ SIRET, TVA, Licence          │
+  │ Performance             │   40%   │ Taux de ponctualité          │
+  │ Activité récente        │   20%   │ Date dernière commande       │
+  │ Volume de commandes     │   10%   │ Nombre total de commandes    │
+  └─────────────────────────┴─────────┴──────────────────────────────┘
+
+
+🎯 NIVEAUX DE VIGILANCE
+────────────────────────────────────────────────────────────────────────────
+
+  95-100%  ⭐⭐⭐  N1-Premium      Excellent partenaire
+  85-94%   ⭐⭐   N1-Référence    Bon partenaire de confiance
+  70-84%   ⭐    Actif           Partenaire actif
+  50-69%   ⚠️    N2-Invité       Vigilance requise
+  0-49%    ⚠️⚠️   En Observation  À surveiller
+
+
+🚀 DÉMARRAGE RAPIDE
+────────────────────────────────────────────────────────────────────────────
+
+  1. Synchroniser les carriers depuis Dashdoc :
+     curl -X POST http://localhost:3000/api/v1/jobs/carriersSync/run
+
+  2. Calculer les scores de vigilance :
+     curl -X POST http://localhost:3000/api/v1/tms/carriers/vigilance/update-all
+
+  3. Récupérer la liste des carriers :
+     curl http://localhost:3000/api/v1/tms/carriers
+
+  4. Voir le score d'un carrier :
+     curl http://localhost:3000/api/v1/tms/carriers/{id}/vigilance
+
+  5. Statistiques globales :
+     curl http://localhost:3000/api/v1/tms/carriers/vigilance/stats
+
+
+📡 ENDPOINTS DISPONIBLES
+────────────────────────────────────────────────────────────────────────────
+
+  GET    /api/v1/tms/carriers
+         Liste des carriers avec filtres (search, level, status)
+
+  GET    /api/v1/tms/carriers/:id
+         Détails d'un carrier
+
+  GET    /api/v1/tms/carriers/:id/vigilance
+         Score de vigilance détaillé avec checks
+
+  POST   /api/v1/tms/carriers/:id/vigilance/update
+         Recalculer le score d'un carrier
+
+  POST   /api/v1/tms/carriers/vigilance/update-all
+         Recalculer tous les scores
+
+  GET    /api/v1/tms/carriers/vigilance/stats
+         Statistiques globales (répartition, moyenne)
+
+
+🤖 JOBS AUTOMATIQUES
+────────────────────────────────────────────────────────────────────────────
+
+  ⏰ carriersSync (5 minutes)
+     → Synchronise les carriers depuis Dashdoc
+     → Enrichit avec les stats (totalOrders, score)
+
+  ⏰ vigilanceUpdate (1 heure)
+     → Recalcule les scores de vigilance
+     → Met à jour les niveaux de classification
+
+
+🧪 TESTS
+────────────────────────────────────────────────────────────────────────────
+
+  Windows :
+    test-vigilance.bat
+
+  Linux/Mac :
+    chmod +x test-vigilance.sh
+    ./test-vigilance.sh
+
+
+📚 DOCUMENTATION
+────────────────────────────────────────────────────────────────────────────
+
+  README-VIGILANCE.md           Guide complet de démarrage
+  VIGILANCE.md                  Documentation API détaillée
+  ARCHITECTURE_VIGILANCE.md     Architecture et diagrammes
+  IMPLEMENTATION_VIGILANCE.md   Guide d'implémentation
+  CHANGELOG.md                  Historique des versions
+
+
+💡 EXEMPLES D'UTILISATION
+────────────────────────────────────────────────────────────────────────────
+
+  # Filtrer les N1-Premium
+  curl "http://localhost:3000/api/v1/tms/carriers?level=N1_premium"
+
+  # Rechercher un carrier
+  curl "http://localhost:3000/api/v1/tms/carriers?search=ACME"
+
+  # Voir les statistiques
+  curl "http://localhost:3000/api/v1/tms/carriers/vigilance/stats" | jq '.'
+
+  # Statut des jobs
+  curl http://localhost:3000/api/v1/jobs/status | jq '.status.jobs'
+
+
+🔍 MONITORING
+────────────────────────────────────────────────────────────────────────────
+
+  # Logs Docker
+  docker logs tms-sync-eb --tail=100 -f
+
+  # Health check
+  curl http://localhost:3000/health
+
+  # Vérifier les jobs
+  curl http://localhost:3000/api/v1/jobs/status
+
+
+✅ VERSION
+────────────────────────────────────────────────────────────────────────────
+
+  TMS Sync API : v2.3.0
+  Date         : 2026-01-30
+  Features     : carriers, vigilance, auto-sync, real-time-counters
+
+
+📞 SUPPORT
+────────────────────────────────────────────────────────────────────────────
+
+  Documentation complète disponible dans les fichiers .md
+  Consulter README-VIGILANCE.md pour commencer
+

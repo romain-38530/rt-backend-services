@@ -1,0 +1,186 @@
+services/tms-sync-eb/
+│
+├── index.js                              [MODIFIE] API Express + 6 nouveaux endpoints
+├── scheduled-jobs.js                     [MODIFIE] + 2 nouveaux jobs automatiques
+├── package.json
+├── .env
+│
+├── services/
+│   ├── tms-connection.service.js
+│   └── vigilance.service.js              [NOUVEAU] Service de calcul de vigilance
+│
+├── connectors/
+│   └── dashdoc.connector.js              [UTILISE] Methodes getCarriers(), syncCarriersWithStats()
+│
+├── Documentation/
+│   ├── README-VIGILANCE.md               [NOUVEAU] Guide de demarrage rapide
+│   ├── VIGILANCE.md                      [NOUVEAU] Documentation API complete
+│   ├── ARCHITECTURE_VIGILANCE.md         [NOUVEAU] Architecture detaillee
+│   ├── IMPLEMENTATION_VIGILANCE.md       [NOUVEAU] Guide d'implementation
+│   ├── CHANGELOG.md                      [NOUVEAU] Historique des versions
+│   ├── RESUME-FINAL.md                   [NOUVEAU] Resume executif
+│   ├── QUICK-START.txt                   [NOUVEAU] Guide rapide visuel
+│   ├── COMMIT-MESSAGE.txt                [NOUVEAU] Message de commit Git
+│   └── PROJECT-TREE.txt                  [NOUVEAU] Ce fichier
+│
+├── Tests/
+│   ├── test-vigilance.sh                 [NOUVEAU] Script de test Linux/Mac
+│   └── test-vigilance.bat                [NOUVEAU] Script de test Windows
+│
+└── Documentation Existante/
+    ├── README-IMPLEMENTATION.md
+    ├── DEPLOYMENT-STATUS.md
+    ├── DEPLOYMENT-SUCCESS.md
+    ├── FEATURE-TO-PLAN-FILTER.md
+    ├── RESUME-IMPLEMENTATION.md
+    └── VERIFICATION-MODIFICATIONS.md
+
+
+═══════════════════════════════════════════════════════════════════════════
+                            FICHIERS CREES/MODIFIES
+═══════════════════════════════════════════════════════════════════════════
+
+NOUVEAUX FICHIERS (12):
+
+Code source:
+  1. services/vigilance.service.js           (12 KB)  Service de vigilance
+
+Documentation:
+  2. VIGILANCE.md                            (8 KB)   Documentation API
+  3. ARCHITECTURE_VIGILANCE.md               (23 KB)  Architecture detaillee
+  4. IMPLEMENTATION_VIGILANCE.md             (10 KB)  Guide d'implementation
+  5. README-VIGILANCE.md                     (12 KB)  Guide de demarrage
+  6. CHANGELOG.md                            (6 KB)   Historique versions
+  7. RESUME-FINAL.md                         (14 KB)  Resume executif
+
+Utilitaires:
+  8. test-vigilance.sh                       (3 KB)   Tests Linux/Mac
+  9. test-vigilance.bat                      (2 KB)   Tests Windows
+  10. COMMIT-MESSAGE.txt                     (3 KB)   Message commit Git
+  11. QUICK-START.txt                        (4 KB)   Guide rapide visuel
+  12. PROJECT-TREE.txt                       (4 KB)   Ce fichier
+
+
+FICHIERS MODIFIES (2):
+
+  1. index.js                                (+150 lignes)
+     * Import VigilanceService
+     * Initialisation du service
+     * 6 nouveaux endpoints carriers/vigilance
+     * Version 2.2.0 -> 2.3.0
+
+  2. scheduled-jobs.js                       (+100 lignes)
+     * 2 nouveaux intervalles (CARRIERS_SYNC, VIGILANCE_UPDATE)
+     * 2 nouvelles fonctions (runCarriersSync, runVigilanceUpdate)
+     * Demarrage automatique des jobs
+     * Export des fonctions
+
+
+═══════════════════════════════════════════════════════════════════════════
+                              STATISTIQUES DU PROJET
+═══════════════════════════════════════════════════════════════════════════
+
+Code:
+  Service de vigilance                       ~400 lignes
+  Modifications index.js                     ~150 lignes
+  Modifications scheduled-jobs.js            ~100 lignes
+  Total code                                 ~650 lignes
+
+Documentation:
+  Documentation technique                    ~2500 lignes
+  Tests et utilitaires                       ~150 lignes
+  Total documentation                        ~2650 lignes
+
+Fichiers:
+  Fichiers crees                             12
+  Fichiers modifies                          2
+  Total fichiers impactes                    14
+
+Taille:
+  Code source                                ~25 KB
+  Documentation                              ~75 KB
+  Tests                                      ~5 KB
+  Total projet                               ~105 KB
+
+
+═══════════════════════════════════════════════════════════════════════════
+                                FONCTIONNALITES
+═══════════════════════════════════════════════════════════════════════════
+
+Systeme de Vigilance:
+  * Calcul automatique du score (0-100%)
+  * 4 criteres: Documents (30%), Performance (40%), Activite (20%), Volume (10%)
+  * 5 niveaux: N1-Premium, N1-Reference, Actif, N2-Invite, En Observation
+  * Detail complet des checks avec impact
+
+API REST (6 endpoints):
+  * GET  /api/v1/tms/carriers
+  * GET  /api/v1/tms/carriers/:id
+  * GET  /api/v1/tms/carriers/:id/vigilance
+  * POST /api/v1/tms/carriers/:id/vigilance/update
+  * POST /api/v1/tms/carriers/vigilance/update-all
+  * GET  /api/v1/tms/carriers/vigilance/stats
+
+Jobs Automatiques (2 jobs):
+  * carriersSync (5 min)        Sync carriers depuis Dashdoc
+  * vigilanceUpdate (1h)        Recalcul scores vigilance
+
+Tests:
+  * test-vigilance.sh           Script automatise Linux/Mac
+  * test-vigilance.bat          Script automatise Windows
+
+Documentation (7 fichiers):
+  * README-VIGILANCE.md         Guide de demarrage rapide
+  * VIGILANCE.md                Documentation API
+  * ARCHITECTURE_VIGILANCE.md   Architecture detaillee
+  * IMPLEMENTATION_VIGILANCE.md Guide d'implementation
+  * CHANGELOG.md                Historique versions
+  * RESUME-FINAL.md             Resume executif
+  * QUICK-START.txt             Guide rapide visuel
+
+
+═══════════════════════════════════════════════════════════════════════════
+                               STRUCTURE MONGODB
+═══════════════════════════════════════════════════════════════════════════
+
+Collection: carriers
+
+Nouveaux champs ajoutes:
+
+  vigilance: {
+    score: 85,                        // Score calcule 0-100
+    level: "N1-Reference",            // Niveau humain
+    levelCode: "N1_referenced",       // Code niveau
+    checks: [...],                    // Detail des verifications
+    summary: {...},                   // Resume par categorie
+    calculatedAt: ISODate("..."),     // Date calcul
+    carrierId: "...",                 // ID du carrier
+    carrierName: "ACME Transport"     // Nom du carrier
+  }
+
+  vigilanceScore: 85                  // [INDEXE] Score pour requetes rapides
+  vigilanceLevel: "N1_referenced"     // [INDEXE] Niveau pour filtres
+  vigilanceUpdatedAt: ISODate("...")  // Date derniere maj
+
+
+Indexes recommandes:
+  db.carriers.createIndex({ "vigilanceLevel": 1 })
+  db.carriers.createIndex({ "vigilanceScore": -1 })
+  db.carriers.createIndex({ "companyName": "text", "siret": "text" })
+
+
+═══════════════════════════════════════════════════════════════════════════
+                          PRET POUR LE DEPLOIEMENT
+═══════════════════════════════════════════════════════════════════════════
+
+[OK] Code source complet et teste
+[OK] API REST fonctionnelle (6 endpoints)
+[OK] Jobs automatiques configures (2 jobs)
+[OK] Documentation exhaustive (7 fichiers, >75 KB)
+[OK] Scripts de test fournis (Linux/Mac + Windows)
+[OK] Exemples d'integration frontend
+[OK] Message de commit Git pret
+[OK] Architecture scalable et performante
+[OK] Retrocompatible (pas de breaking change)
+
+Version: 2.3.0 (2026-01-30)

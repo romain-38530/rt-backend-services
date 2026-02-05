@@ -1,0 +1,10 @@
+{
+    "EnvironmentInfo": [
+        {
+            "InfoType": "tail",
+            "Ec2InstanceId": "i-0bc7fbc78d54359ea",
+            "SampleTimestamp": "2026-02-04T14:29:10.174000+00:00",
+            "Message": "https://elasticbeanstalk-eu-west-3-004843574253.s3.eu-west-3.amazonaws.com/resources/environments/logs/tail/e-bgdkjjr7w7/i-0bc7fbc78d54359ea/TailLogs-1770215350164.txt?X-Amz-Security-Token=IQoJb3JpZ2luX2VjEE8aCWV1LXdlc3QtMyJHMEUCIGjgbpfWInLn7t1PkbDEsRNkw6g%2Ft7cqaQCOd0fbDL3HAiEAvr2u000%2BkkhxnLuQJ3GfA682HhufHyWNNxuJNpVe9dwq7QIIGBAEGgw4OTEwNDI5Nzk0MzAiDKwrbgiqcfJZF4PXWyrKAquZc%2B8YMIvjSk%2BNuw5fu49sxEI4lPzCVieN7nxTFBkoWmAwbA9JCKMkKtsiHADxBYMYiyem%2F19%2BYSEXfzww11aRA5zWtiJzH%2FfKWOg5l78KJbdExXAy5QmAzaJ%2B03azumT9pZGtXoVLEUWOFe04qFKnIRgr2EvsFt9w35CHbWtx%2BEu0x2M1lMa49T5xVUL88FoTPwpmA6YTdktU6OOIxMGAZa%2Bb%2BXh4fjROqUxwrOUo9L54E1IkJJzxW2zCnqVC3GaSXfEHVpsh77nE%2BVa8N4GVroSX0AO71n4OhiEGFgnSrLnNsZ0M1rwRo%2FbMAm3SXQP0p6mCGUm5NAC4avaa4qhegp0CH4ukTOfqVESNxr6DoXGcVF17LNWyQd2cLlll3xNalHkJIupvlkfawMtID8wZC9cA11FO3HsBzGONXlXhdNCjSaDWdLmqGjD6rY3MBjq9AfzvtOTawDQMmW6dnMEAK432dzwMMp3ajKi8J03eI4wZAkY3R1JN9%2BDIn9QZOiCibD3qHYZsnz26APlLFEhRR7ushLQ%2Fl6XV%2BEqT%2BISJO%2B5NcHK%2F6uNU%2FUjPHMvSTZ7ydWjN1j6ZKeIQ0%2FjPgxYizoiB1TxjNLayAUBPXmbUpIrEriVFBYl12x8qm2aWG8rHsk%2FebWBiaSOk9fxpwxSQwGhzNarQzSpS2TM1b4K0baiTJgzgvSmSropQ1tDV2g%3D%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20260204T142920Z&X-Amz-SignedHeaders=host&X-Amz-Expires=86399&X-Amz-Credential=ASIA465SM3ZTPR2XLQNW%2F20260204%2Feu-west-3%2Fs3%2Faws4_request&X-Amz-Signature=f1507677c7f1057b375842549914eec0b7bfd82292f609fa95762a1e666f62ff"
+        }
+    ]
+}

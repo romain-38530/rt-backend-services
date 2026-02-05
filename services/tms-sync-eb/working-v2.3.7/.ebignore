@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Tests
+test/
+tests/
+*.test.js
+*.spec.js
+coverage/
+
+# Documentation locale
+README-IMPLEMENTATION.md
+FEATURE-TO-PLAN-FILTER.md
+RESUME-IMPLEMENTATION.md
+VERIFICATION-MODIFICATIONS.md
+
+# Scripts de test
+test-*.js
+send-test-emails.js
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
