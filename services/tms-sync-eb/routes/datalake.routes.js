@@ -8,7 +8,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { getDatalakeReaders, getDatalakeStatus, isDatalakeEnabled } = require('../scheduled-jobs');
+const { getDatalakeReaders, getDatalakeStatus, isDatalakeEnabled, getDatalakeSyncService } = require('../scheduled-jobs');
 
 /**
  * Middleware pour vérifier que le Data Lake est activé
@@ -726,6 +726,79 @@ router.get('/contacts/:pk', requireDatalake, async (req, res) => {
     res.json({
       success: true,
       data: contact
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ==================== SYNC CONTROL ====================
+
+/**
+ * POST /api/v1/datalake/sync
+ * Déclencher une sync manuelle
+ * Body: { type: 'full' | 'incremental' | 'periodic' | 'transports' }
+ */
+router.post('/sync', async (req, res) => {
+  try {
+    const { type = 'incremental' } = req.body;
+
+    const syncService = getDatalakeSyncService();
+    if (!syncService) {
+      return res.status(503).json({
+        success: false,
+        error: 'Sync service not initialized'
+      });
+    }
+
+    console.log(`[DATALAKE] Manual ${type} sync triggered via API`);
+
+    // Lancer la sync en background
+    syncService.triggerManualSync(type).catch(err => {
+      console.error(`[DATALAKE] Manual ${type} sync failed:`, err.message);
+    });
+
+    res.json({
+      success: true,
+      message: `${type} sync started`,
+      note: 'Sync is running in background'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/datalake/sync/full
+ * Déclencher une full sync manuelle
+ */
+router.post('/sync/full', async (req, res) => {
+  try {
+    const syncService = getDatalakeSyncService();
+    if (!syncService) {
+      return res.status(503).json({
+        success: false,
+        error: 'Sync service not initialized'
+      });
+    }
+
+    console.log('[DATALAKE] Manual FULL sync triggered via API');
+
+    // Lancer la sync en background
+    syncService.triggerManualSync('full').catch(err => {
+      console.error('[DATALAKE] Manual full sync failed:', err.message);
+    });
+
+    res.json({
+      success: true,
+      message: 'Full sync started',
+      note: 'Sync is running in background'
     });
   } catch (error) {
     res.status(500).json({

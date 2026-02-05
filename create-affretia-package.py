@@ -7,7 +7,7 @@ import zipfile
 
 def create_deployment_package():
     source_dir = os.path.join(os.path.dirname(__file__), 'services', 'affret-ia-api-v2')
-    output_file = os.path.join(os.path.dirname(__file__), 'affret-ia-v2.9.8-tms-url-fix.zip')
+    output_file = os.path.join(os.path.dirname(__file__), 'affret-ia-v2.9.10-carriers-routes.zip')
 
     exclude_dirs = {
         'node_modules', '.git', '.elasticbeanstalk', '__pycache__',

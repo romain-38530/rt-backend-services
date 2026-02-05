@@ -67,9 +67,59 @@ const vechizenVehicleSchema = new mongoose.Schema({
   updatedAt: Date,
 }, { collection: 'vehizenvehicles', strict: false });
 
-// Connexion secondaire vers la base rt-orders (api-orders)
+// Connexion secondaire vers la base rt-orders (api-orders) - pour vehizenvehicles
 let ordersConnection = null;
 let VechizenVehicleDL = null;
+
+// TMSConnection - dans la base locale rt-tms-sync (connexion principale mongoose)
+// Schema pour TMSConnection (connexions Vehizen configurées)
+const tmsConnectionSchema = new mongoose.Schema({
+  organizationId: String,
+  carrierId: String,
+  organizationName: String,
+  name: String,
+  tmsType: {
+    type: String,
+    enum: ['dashdoc', 'transporeon', 'shippeo', 'vehizen'],
+  },
+  tmsName: String,
+  isActive: { type: Boolean, default: true },
+  connectionStatus: {
+    type: String,
+    enum: ['connected', 'disconnected', 'error'],
+    default: 'disconnected',
+  },
+  credentials: {
+    apiUrl: String,
+    apiToken: String,
+    username: String,
+    password: String,
+    clientId: String,
+  },
+  syncConfig: {
+    autoSync: { type: Boolean, default: true },
+    syncVehicles: { type: Boolean, default: true },
+    syncDrivers: { type: Boolean, default: true },
+    syncPositions: { type: Boolean, default: true },
+    syncActivities: { type: Boolean, default: true },
+    positionInterval: { type: Number, default: 5 },
+    activityInterval: { type: Number, default: 15 },
+  },
+  lastConnectionTest: Date,
+  lastSyncAt: Date,
+  lastSyncStatus: String,
+  errorMessage: String,
+  stats: mongoose.Schema.Types.Mixed,
+}, { collection: 'tmsconnections', strict: false, timestamps: true });
+
+// Modèle TMSConnection sur la connexion principale (rt-tms-sync)
+let TMSConnectionModel = null;
+try {
+  TMSConnectionModel = mongoose.model('TMSConnection');
+} catch (e) {
+  TMSConnectionModel = mongoose.model('TMSConnection', tmsConnectionSchema);
+}
+console.log('[VEHICLES-DATALAKE] Modèle TMSConnection disponible (base locale rt-tms-sync)');
 
 async function initOrdersConnection() {
   const ORDERS_MONGODB_URI = process.env.ORDERS_MONGODB_URI;
@@ -94,14 +144,57 @@ async function initOrdersConnection() {
       console.error('[VEHICLES-DATALAKE] rt-orders connection error:', err.message);
     });
 
-    // Créer le modèle sur cette connexion
+    // Créer le modèle VechizenVehicle sur la connexion rt-orders
     VechizenVehicleDL = ordersConnection.model('VechizenVehicle', vechizenVehicleSchema);
-    console.log('[VEHICLES-DATALAKE] Modèle VechizenVehicleDL disponible (source PRIMAIRE)');
+    console.log('[VEHICLES-DATALAKE] Modèle VechizenVehicleDL disponible (base rt-orders)');
 
     return ordersConnection;
   } catch (e) {
     console.error('[VEHICLES-DATALAKE] Failed to connect to rt-orders:', e.message);
     return null;
+  }
+}
+
+/**
+ * Récupère les connexions Vehizen actives depuis TMSConnection (base rt-tms-sync)
+ * Retourne uniquement les transporteurs avec une connexion Vehizen configurée et active
+ * @returns {Promise<Array>} Liste des carrierIds avec connexion Vehizen active
+ */
+async function getActiveVechizenConnections() {
+  if (!TMSConnectionModel) {
+    console.log('[VEHICLES-DATALAKE] TMSConnection model not available');
+    return [];
+  }
+
+  try {
+    // Chercher les connexions Vehizen actives et connectées
+    const connections = await TMSConnectionModel.find({
+      tmsType: 'vehizen',
+      isActive: true,
+      connectionStatus: 'connected',
+    }).lean();
+
+    console.log(`[VEHICLES-DATALAKE] ${connections.length} connexions Vehizen actives trouvées dans TMSConnection`);
+
+    // Retourner les infos nécessaires pour chaque connexion
+    return connections.map(c => ({
+      carrierId: c.carrierId || c.organizationId,
+      organizationName: c.organizationName || c.name,
+      credentials: c.credentials ? {
+        username: c.credentials.username,
+        password: c.credentials.password,
+        apiUrl: c.credentials.apiUrl,
+      } : null,
+      syncConfig: c.syncConfig || {
+        syncVehicles: true,
+        syncDrivers: true,
+        syncPositions: true,
+      },
+      lastSyncAt: c.lastSyncAt,
+    }));
+  } catch (error) {
+    console.error('[VEHICLES-DATALAKE] Erreur lecture TMSConnections:', error.message);
+    return [];
   }
 }
 
@@ -800,57 +893,31 @@ class VehicleDatalakeSyncService {
   }
 
   /**
-   * Récupère les organisations actives
-   * Inclut les organisations ayant des véhicules dans : Vehizen Data Lake, DKV, Dashdoc, ou connecteurs Vehizen
+   * Récupère les organisations actives depuis TMSConnection
+   * SOURCE PRIMAIRE: Connexions Vehizen actives dans TMSConnection
+   * Seuls les transporteurs avec une connexion Vehizen configurée sont synchronisés
    */
   async getActiveOrganizations() {
-    const allOrgs = [];
+    // SOURCE PRIMAIRE: TMSConnection avec connexion Vehizen active
+    const vechizenConnections = await getActiveVechizenConnections();
 
-    // 1. VEHIZEN DATA LAKE - SOURCE PRIMAIRE (carrierId = organizationId)
-    // Ensure connection is initialized
-    if (!VechizenVehicleDL) {
-      await initOrdersConnection();
+    if (vechizenConnections.length === 0) {
+      console.log('[VEHICLES-DATALAKE] Aucune connexion Vehizen active dans TMSConnection');
+      console.log('[VEHICLES-DATALAKE] Conseil: Configurer une connexion via POST /api/v1/carriers/:carrierId/vehizen/configure');
+      return [];
     }
 
-    if (VechizenVehicleDL) {
-      try {
-        const vechizenDlOrgs = await VechizenVehicleDL.distinct('carrierId');
-        allOrgs.push(...vechizenDlOrgs);
-        console.log(`[VEHICLES-DATALAKE] ${vechizenDlOrgs.length} organisations Vehizen Data Lake trouvées (PRIMAIRE)`);
-      } catch (e) {
-        console.log('[VEHICLES-DATALAKE] Pas de véhicules Vehizen Data Lake:', e.message);
-      }
-    }
+    // Extraire les carrierIds des connexions actives
+    const activeCarrierIds = vechizenConnections
+      .filter(c => c.carrierId)
+      .map(c => c.carrierId);
 
-    // 2. Organisations avec connecteurs Vehizen API
-    const orgsFromVehizen = Array.from(this.connectors.keys());
-    allOrgs.push(...orgsFromVehizen);
+    console.log(`[VEHICLES-DATALAKE] ${activeCarrierIds.length} transporteurs avec connexion Vehizen active:`);
+    vechizenConnections.forEach(c => {
+      console.log(`  - ${c.carrierId} (${c.organizationName || 'N/A'}) - dernière sync: ${c.lastSyncAt || 'jamais'}`);
+    });
 
-    // 3. Organisations avec véhicules DKV Data Lake
-    if (DkvVehicle) {
-      try {
-        const dkvOrgs = await DkvVehicle.distinct('organizationId');
-        allOrgs.push(...dkvOrgs);
-        console.log(`[VEHICLES-DATALAKE] ${dkvOrgs.length} organisations DKV trouvées`);
-      } catch (e) {
-        console.log('[VEHICLES-DATALAKE] Pas de véhicules DKV');
-      }
-    }
-
-    // 4. Organisations avec véhicules Dashdoc
-    if (DashdocVehicle) {
-      try {
-        const dashdocOrgs = await DashdocVehicle.distinct('organizationId');
-        allOrgs.push(...dashdocOrgs);
-        console.log(`[VEHICLES-DATALAKE] ${dashdocOrgs.length} organisations Dashdoc trouvées`);
-      } catch (e) {
-        console.log('[VEHICLES-DATALAKE] Pas de véhicules Dashdoc');
-      }
-    }
-
-    const uniqueOrgs = [...new Set(allOrgs.filter(o => o))];
-    console.log(`[VEHICLES-DATALAKE] Total organisations actives: ${uniqueOrgs.length}`);
-    return uniqueOrgs;
+    return activeCarrierIds;
   }
 
   /**
@@ -939,4 +1006,5 @@ function getVehicleDatalakeSyncService() {
 module.exports = {
   VehicleDatalakeSyncService,
   getVehicleDatalakeSyncService,
+  getActiveVechizenConnections,
 };

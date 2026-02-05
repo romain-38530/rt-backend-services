@@ -709,6 +709,25 @@ async function runJobManually(jobName) {
   }
 }
 
+/**
+ * Get the sync service for a specific connection (or first available)
+ */
+function getDatalakeSyncService(connectionId = null) {
+  if (connectionId && datalakeSyncServices[connectionId]) {
+    return datalakeSyncServices[connectionId];
+  }
+  // Return first available sync service
+  const services = Object.values(datalakeSyncServices);
+  return services.length > 0 ? services[0] : null;
+}
+
+/**
+ * Check if Data Lake is enabled
+ */
+function isDatalakeEnabled() {
+  return Object.keys(datalakeSyncServices).length > 0;
+}
+
 module.exports = {
   INTERVALS,
   startAllJobs,
@@ -723,6 +742,8 @@ module.exports = {
   // Data Lake exports
   getDatalakeStatus,
   getDatalakeReaders,
+  getDatalakeSyncService,
+  isDatalakeEnabled,
   startDatalakeServices,
   stopDatalakeServices,
   initializeDatalakeForConnection

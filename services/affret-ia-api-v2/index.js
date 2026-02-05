@@ -720,6 +720,82 @@ mongoose.connection.once('open', () => {
 // ROUTES ALIAS POUR COMPATIBILITÉ FRONTEND TRANSPORTEUR
 // =====================================================================
 
+// GET /api/v1/carriers - Liste des carriers (proxy vers TMS-sync Data Lake)
+app.get('/api/v1/carriers', async (req, res) => {
+  try {
+    const { organizationId, limit = 500, skip = 0 } = req.query;
+    const TMS_SYNC_URL = process.env.TMS_SYNC_API_URL || 'https://dn8zbjfd06ewt.cloudfront.net';
+
+    try {
+      const params = new URLSearchParams();
+      if (limit) params.append('limit', limit);
+      if (skip) params.append('skip', skip);
+
+      const response = await axios.get(`${TMS_SYNC_URL}/api/v1/datalake/carriers?${params.toString()}`, {
+        headers: req.headers.authorization ? { 'Authorization': req.headers.authorization } : {},
+        timeout: 10000
+      });
+
+      const data = response.data;
+      return res.json({
+        success: true,
+        total: data.pagination?.total || data.data?.length || 0,
+        carriers: data.data || [],
+        source: 'datalake'
+      });
+    } catch (apiError) {
+      console.log(`[CARRIERS] Data Lake API error:`, apiError.message);
+      return res.json({
+        success: true,
+        total: 0,
+        carriers: [],
+        message: 'Service temporairement indisponible'
+      });
+    }
+  } catch (error) {
+    console.error('[CARRIERS] Error:', error.message);
+    res.status(500).json({ success: false, error: error.message, carriers: [], total: 0 });
+  }
+});
+
+// GET /api/v1/carriers/sync/stats - Stats de synchronisation carriers
+app.get('/api/v1/carriers/sync/stats', async (req, res) => {
+  try {
+    const TMS_SYNC_URL = process.env.TMS_SYNC_API_URL || 'https://dn8zbjfd06ewt.cloudfront.net';
+
+    try {
+      const response = await axios.get(`${TMS_SYNC_URL}/api/v1/datalake/status`, {
+        timeout: 5000
+      });
+
+      const data = response.data?.data || response.data;
+      return res.json({
+        success: true,
+        syncStats: {
+          totalCarriers: data?.collections?.companies || 0,
+          lastSyncAt: data?.lastSync?.full || new Date().toISOString(),
+          syncStatus: data?.isRunning ? 'running' : 'idle',
+          source: 'datalake'
+        }
+      });
+    } catch (apiError) {
+      console.log(`[CARRIERS SYNC STATS] API error:`, apiError.message);
+      return res.json({
+        success: true,
+        syncStats: {
+          totalCarriers: 0,
+          lastSyncAt: new Date().toISOString(),
+          syncStatus: 'unknown',
+          message: 'Stats temporairement indisponibles'
+        }
+      });
+    }
+  } catch (error) {
+    console.error('[CARRIERS SYNC STATS] Error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/v1/carriers/:carrierId/vigilance - Statut de vigilance transporteur
 app.get('/api/v1/carriers/:carrierId/vigilance', async (req, res) => {
   try {
@@ -821,6 +897,65 @@ app.get('/api/v1/orders', async (req, res) => {
       }
 
       // Retourner une liste vide en cas d'autre erreur
+      return res.json({
+        success: true,
+        total: 0,
+        orders: [],
+        message: 'Service temporairement indisponible',
+        error_code: 'SERVICE_UNAVAILABLE'
+      });
+    }
+  } catch (error) {
+    console.error('[ORDERS] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      orders: [],
+      total: 0
+    });
+  }
+});
+
+// GET /api/orders - Alias pour compatibilité (même endpoint que /api/v1/orders)
+app.get('/api/orders', async (req, res) => {
+  try {
+    const { carrier, carrierId, limit = 50, status } = req.query;
+    const carrierIdParam = carrierId || carrier;
+
+    const TMS_SYNC_URL = process.env.TMS_SYNC_API_URL || 'https://dn8zbjfd06ewt.cloudfront.net';
+
+    try {
+      const params = new URLSearchParams();
+      if (carrierIdParam) params.append('carrierId', carrierIdParam);
+      if (limit) params.append('limit', limit);
+      if (status) params.append('status', status);
+
+      const response = await axios.get(`${TMS_SYNC_URL}/api/v1/datalake/transports?${params.toString()}`, {
+        headers: req.headers.authorization ? { 'Authorization': req.headers.authorization } : {},
+        timeout: 10000
+      });
+
+      const data = response.data;
+      return res.json({
+        success: true,
+        total: data.pagination?.total || data.data?.length || 0,
+        orders: data.data || [],
+        source: 'datalake'
+      });
+    } catch (apiError) {
+      const errorStatus = apiError.response?.status;
+      console.log(`[ORDERS] Data Lake API error (${errorStatus}):`, apiError.message);
+
+      if (errorStatus === 403 || errorStatus === 401) {
+        return res.json({
+          success: true,
+          total: 0,
+          orders: [],
+          message: 'Authentification requise pour accéder aux commandes',
+          error_code: 'AUTH_REQUIRED'
+        });
+      }
+
       return res.json({
         success: true,
         total: 0,

@@ -8,7 +8,7 @@ import zipfile
 
 def create_deployment_package():
     source_dir = os.path.join(os.path.dirname(__file__), 'services', 'tms-sync-eb')
-    output_file = os.path.join(os.path.dirname(__file__), 'tms-sync-eb-v2.6.1-monitoring.zip')
+    output_file = os.path.join(os.path.dirname(__file__), 'tms-sync-eb-v2.8.0-vehicles-datalake.zip')
 
     # Directories to exclude entirely
     exclude_dirs = {
@@ -98,8 +98,19 @@ def create_deployment_package():
             'Procfile',
             'index.js',
             'connectors/dashdoc.connector.js',
+            'connectors/dkv.connector.js',
+            'connectors/vehizen.connector.js',
             'services/dashdoc-datalake/datalake-sync.service.js',
+            'services/dkv-datalake/datalake-sync.service.js',
+            'services/vehicles-datalake/datalake-sync.service.js',
+            'services/vehicles-datalake/document.service.js',
+            'services/vehicles-datalake/maintenance.service.js',
+            'services/vehicles-datalake/ocr/ocr.service.js',
             'models/dashdoc-datalake/index.js',
+            'models/dkv-datalake/index.js',
+            'models/vehicles-datalake/index.js',
+            'routes/dkv-datalake.routes.js',
+            'routes/vehicles-datalake.routes.js',
         ]
         for cf in critical_files:
             if cf in names:

@@ -2,11 +2,11 @@
  * Dashdoc Data Lake Sync Service
  * Orchestrateur principal pour la synchronisation centralisée des données Dashdoc
  *
- * Architecture (mise à jour suite demande Dashdoc):
- * - ⚠️ TEMPS RÉEL: Via webhooks Dashdoc (POST /api/v1/webhooks/dashdoc)
- * - Full sync toutes les 1h (réconciliation uniquement)
+ * Architecture:
+ * - ✅ Sync incrémentale toutes les 25s (transports récents, counters)
+ * - ✅ Webhooks Dashdoc (POST /api/v1/webhooks/dashdoc) pour temps réel additionnel
+ * - Full sync toutes les 1h (réconciliation)
  * - Sync périodique toutes les 30min (companies, vehicles, truckers)
- * - ❌ PLUS de polling 25s - remplacé par webhooks
  *
  * ⚠️ RATE LIMITING STRICT: Maximum 2 req/s vers Dashdoc
  * - Le rate limiter est géré dans dashdoc.connector.js (500ms entre requêtes)
@@ -27,14 +27,15 @@ class DatalakeSyncService {
 
     // Configuration
     this.config = {
-      // ❌ Sync incrémentale DÉSACTIVÉE - remplacée par webhooks
-      // incrementalIntervalMs: DISABLED - use webhooks instead
-      enableIncrementalSync: options.enableIncrementalSync || false,
+      // ✅ Sync incrémentale RÉACTIVÉE (25s) - en complément des webhooks
+      // Les webhooks peuvent être configurés en plus pour temps réel
+      enableIncrementalSync: options.enableIncrementalSync !== false, // Activé par défaut
+      incrementalIntervalMs: options.incrementalInterval || 25 * 1000, // 25s
 
-      // Intervalle de sync périodique pour données de référence (30min - augmenté)
+      // Intervalle de sync périodique pour données de référence (30min)
       periodicIntervalMs: options.periodicInterval || 30 * 60 * 1000,
 
-      // Intervalle de full sync (1h) - réconciliation uniquement
+      // Intervalle de full sync (1h) - réconciliation
       fullSyncIntervalMs: options.fullSyncInterval || 60 * 60 * 1000,
 
       // ⚠️ RATE LIMITING STRICT: 2 req/s max (demande Dashdoc)
@@ -236,6 +237,12 @@ class DatalakeSyncService {
    * Focus: transports modifiés, counters
    */
   startIncrementalSync() {
+    if (!this.config.enableIncrementalSync) {
+      console.log('[DATALAKE] Incremental sync DISABLED - using webhooks only');
+      return;
+    }
+
+    console.log(`[DATALAKE] Starting incremental sync every ${this.config.incrementalIntervalMs / 1000}s`);
     this.intervals.incremental = setInterval(async () => {
       if (this.isPaused) return;
       await this.runIncrementalSync();
@@ -1135,6 +1142,27 @@ class DatalakeSyncService {
       organizationId: this.config.organizationId,
       connectionId: this.config.connectionId
     });
+  }
+
+  /**
+   * Déclencher une sync manuelle
+   * @param {string} type - 'full', 'incremental', 'periodic' ou 'transports'
+   */
+  async triggerManualSync(type = 'incremental') {
+    console.log(`[DATALAKE] Manual ${type} sync triggered`);
+
+    switch (type) {
+      case 'full':
+        return this.runFullSync();
+      case 'incremental':
+        return this.runIncrementalSync();
+      case 'periodic':
+        return this.runPeriodicSync();
+      case 'transports':
+        return this.syncTransportsFull();
+      default:
+        throw new Error(`Unknown sync type: ${type}`);
+    }
   }
 
   /**

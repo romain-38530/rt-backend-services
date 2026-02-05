@@ -8,7 +8,7 @@
  * - OCR factures fournisseurs
  */
 
-const { VehicleDatalakeSyncService, getVehicleDatalakeSyncService } = require('./datalake-sync.service');
+const { VehicleDatalakeSyncService, getVehicleDatalakeSyncService, getActiveVechizenConnections } = require('./datalake-sync.service');
 const VehicleDocumentService = require('./document.service');
 const VehicleMaintenanceService = require('./maintenance.service');
 const OcrService = require('./ocr/ocr.service');
@@ -118,6 +118,7 @@ module.exports = {
   getVehicleDatalakeSyncService,
   getDocumentService,
   getMaintenanceService,
+  getActiveVechizenConnections,
 
   // Classes (pour usage direct)
   VehicleDatalakeSyncService,

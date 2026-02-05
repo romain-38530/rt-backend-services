@@ -18,6 +18,7 @@ const {
   getDocumentService,
   getMaintenanceService,
   getModuleStatus,
+  getActiveVechizenConnections,
 } = require('../services/vehicles-datalake');
 
 const {
@@ -136,6 +137,31 @@ router.get('/debug/sources', async (req, res) => {
     }
 
     res.json({ success: true, sources: results });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/vehicles/debug/tms-connections
+ * Liste les connexions Vehizen actives depuis TMSConnection (base rt-tms-sync)
+ */
+router.get('/debug/tms-connections', async (req, res) => {
+  try {
+    const connections = await getActiveVechizenConnections();
+    res.json({
+      success: true,
+      count: connections.length,
+      source: 'TMSConnection (rt-tms-sync)',
+      description: 'Seuls les transporteurs listés ici seront synchronisés',
+      connections: connections.map(c => ({
+        carrierId: c.carrierId,
+        organizationName: c.organizationName,
+        hasCredentials: !!(c.credentials?.username && c.credentials?.password),
+        syncConfig: c.syncConfig,
+        lastSyncAt: c.lastSyncAt,
+      })),
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
