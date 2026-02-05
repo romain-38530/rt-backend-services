@@ -20,6 +20,7 @@
  */
 
 const axios = require('axios');
+const { getMonitoringService } = require('../services/dashdoc-monitoring.service');
 
 /**
  * Rate Limiter pour respecter les limites API Dashdoc
@@ -97,11 +98,31 @@ class DashdocConnector {
   }
 
   /**
-   * Wrapper pour toutes les requêtes avec rate limiting
+   * Wrapper pour toutes les requêtes avec rate limiting et monitoring
    */
   async _request(method, url, options = {}) {
     await this.rateLimiter.throttle();
-    return this.client[method](url, options);
+
+    const startTime = Date.now();
+    const monitoring = getMonitoringService();
+
+    try {
+      const response = await this.client[method](url, options);
+      const responseTime = Date.now() - startTime;
+
+      // Record successful request
+      monitoring.recordRequest(url, response.status, responseTime);
+
+      return response;
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      const statusCode = error.response?.status || 0;
+
+      // Record failed request
+      monitoring.recordRequest(url, statusCode, responseTime, error);
+
+      throw error;
+    }
   }
 
   /**

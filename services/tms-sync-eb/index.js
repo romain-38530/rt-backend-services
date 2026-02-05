@@ -2319,6 +2319,11 @@ app.use('/api/v1/tracking-ia', authenticateToken, trackingIARoutes);
 const vigilanceRoutes = require('./routes/vigilance.routes');
 app.use('/api/v1/vigilance', authenticateToken, vigilanceRoutes);
 
+// ==================== DASHDOC API MONITORING ====================
+// Monitoring endpoint for Dashdoc API usage (public for dashboards)
+const dashdocMonitoringRoutes = require('./routes/dashdoc-monitoring.routes');
+app.use('/api/v1/monitoring/dashdoc', dashdocMonitoringRoutes);
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -2329,7 +2334,7 @@ app.use((err, req, res, next) => {
 async function startServer() {
   // Start server FIRST, then try MongoDB
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RT TMS Sync API v2.6.0 listening on port ${PORT}`);
+    console.log(`RT TMS Sync API v2.6.1 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`MongoDB: Connecting...`);
   });

@@ -22,6 +22,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const { getMonitoringService } = require('../services/dashdoc-monitoring.service');
 
 // Webhook secret for validation (set in environment)
 const WEBHOOK_SECRET = process.env.DASHDOC_WEBHOOK_SECRET || 'dashdoc-webhook-secret-symphonia-2026';
@@ -84,6 +85,10 @@ router.post('/dashdoc', async (req, res) => {
     const duration = Date.now() - startTime;
     console.log(`[WEBHOOK] Processed ${eventType} in ${duration}ms - ${result.action}`);
 
+    // Record webhook in monitoring
+    const monitoring = getMonitoringService();
+    monitoring.recordWebhook(eventType, true, duration);
+
     // Always return 200 quickly to avoid Dashdoc retries
     res.status(200).json({
       success: true,
@@ -95,6 +100,11 @@ router.post('/dashdoc', async (req, res) => {
 
   } catch (error) {
     console.error('[WEBHOOK] Error processing webhook:', error.message);
+
+    // Record failed webhook in monitoring
+    const monitoring = getMonitoringService();
+    const duration = Date.now() - startTime;
+    monitoring.recordWebhook(req.body?.type || 'unknown', false, duration);
 
     // Return 200 anyway to prevent retries for processing errors
     // Dashdoc will retry on 4xx/5xx errors
