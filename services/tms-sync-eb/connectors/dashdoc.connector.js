@@ -13,24 +13,24 @@
  * - /invoices/ - Factures
  * - /counters/ - Compteurs temps reel
  *
- * ⚠️ RATE LIMITING: Maximum 10 req/s vers Dashdoc
- * - Délai minimum entre requêtes: 150ms (≈6.6 req/s effectif)
- * - Délai entre pages pagination: 200ms
- * - Marge de sécurité pour pics
+ * ⚠️ RATE LIMITING: Maximum 2 req/s vers Dashdoc (limite stricte demandée par Dashdoc)
+ * - Délai minimum entre requêtes: 500ms (= 2 req/s max)
+ * - Délai entre pages pagination: 600ms
+ * - Temps réel: via webhooks (pas de polling)
  */
 
 const axios = require('axios');
 
 /**
  * Rate Limiter pour respecter les limites API Dashdoc
- * Maximum 10 requêtes par seconde
+ * ⚠️ LIMITE STRICTE: Maximum 2 requêtes par seconde (demande Dashdoc)
  */
 class RateLimiter {
   constructor(options = {}) {
-    // Délai minimum entre requêtes (150ms = max ~6.6 req/s, laisse marge pour autres instances)
-    this.minDelayMs = options.minDelayMs || 150;
+    // Délai minimum entre requêtes (500ms = max 2 req/s - limite Dashdoc stricte)
+    this.minDelayMs = options.minDelayMs || 500;
     // Délai entre pages de pagination (plus long pour éviter les pics)
-    this.paginationDelayMs = options.paginationDelayMs || 200;
+    this.paginationDelayMs = options.paginationDelayMs || 600;
     // Timestamp de la dernière requête
     this.lastRequestTime = 0;
     // Compteur pour logging

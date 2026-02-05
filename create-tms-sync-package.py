@@ -8,7 +8,7 @@ import zipfile
 
 def create_deployment_package():
     source_dir = os.path.join(os.path.dirname(__file__), 'services', 'tms-sync-eb')
-    output_file = os.path.join(os.path.dirname(__file__), 'tms-sync-eb-v2.5.3-cors-orders.zip')
+    output_file = os.path.join(os.path.dirname(__file__), 'tms-sync-eb-v2.6.0-webhooks.zip')
 
     # Directories to exclude entirely
     exclude_dirs = {

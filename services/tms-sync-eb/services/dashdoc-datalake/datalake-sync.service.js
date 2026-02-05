@@ -2,13 +2,14 @@
  * Dashdoc Data Lake Sync Service
  * Orchestrateur principal pour la synchronisation centralisée des données Dashdoc
  *
- * Architecture:
- * - Sync incrémentale toutes les 25s (transports, counters)
- * - Sync périodique toutes les 5min (companies, vehicles, truckers)
- * - Full sync toutes les 1h (toutes les entités)
+ * Architecture (mise à jour suite demande Dashdoc):
+ * - ⚠️ TEMPS RÉEL: Via webhooks Dashdoc (POST /api/v1/webhooks/dashdoc)
+ * - Full sync toutes les 1h (réconciliation uniquement)
+ * - Sync périodique toutes les 30min (companies, vehicles, truckers)
+ * - ❌ PLUS de polling 25s - remplacé par webhooks
  *
- * ⚠️ RATE LIMITING: Maximum 10 req/s vers Dashdoc
- * - Le rate limiter est géré dans dashdoc.connector.js (150ms entre requêtes)
+ * ⚠️ RATE LIMITING STRICT: Maximum 2 req/s vers Dashdoc
+ * - Le rate limiter est géré dans dashdoc.connector.js (500ms entre requêtes)
  * - Délais additionnels entre entités pour éviter les pics
  * - Skip Full Sync initial si données récentes (< 1h)
  *
@@ -26,21 +27,22 @@ class DatalakeSyncService {
 
     // Configuration
     this.config = {
-      // Intervalle de sync incrémentale (25s par défaut)
-      incrementalIntervalMs: options.incrementalInterval || 25000,
+      // ❌ Sync incrémentale DÉSACTIVÉE - remplacée par webhooks
+      // incrementalIntervalMs: DISABLED - use webhooks instead
+      enableIncrementalSync: options.enableIncrementalSync || false,
 
-      // Intervalle de sync périodique pour données de référence (5min)
-      periodicIntervalMs: options.periodicInterval || 5 * 60 * 1000,
+      // Intervalle de sync périodique pour données de référence (30min - augmenté)
+      periodicIntervalMs: options.periodicInterval || 30 * 60 * 1000,
 
-      // Intervalle de full sync (1h)
+      // Intervalle de full sync (1h) - réconciliation uniquement
       fullSyncIntervalMs: options.fullSyncInterval || 60 * 60 * 1000,
 
-      // ⚠️ RATE LIMITING: Délais entre entités lors des syncs
-      // Le rate limiter principal est dans dashdoc.connector.js (150ms entre requêtes)
+      // ⚠️ RATE LIMITING STRICT: 2 req/s max (demande Dashdoc)
+      // Le rate limiter principal est dans dashdoc.connector.js (500ms entre requêtes)
       // Ces délais sont EN PLUS pour espacer les syncs d'entités différentes
-      rateLimitDelayMs: options.rateLimitDelay || 1000,  // 1s entre entités (augmenté de 500ms)
-      entityDelayMs: options.entityDelay || 2000,        // 2s entre types d'entités (nouveau)
-      maxConcurrentRequests: options.maxConcurrent || 1, // 1 seule requête à la fois (réduit de 2)
+      rateLimitDelayMs: options.rateLimitDelay || 2000,  // 2s entre entités
+      entityDelayMs: options.entityDelay || 3000,        // 3s entre types d'entités
+      maxConcurrentRequests: options.maxConcurrent || 1, // 1 seule requête à la fois
 
       // Retry
       maxRetries: options.maxRetries || 3,

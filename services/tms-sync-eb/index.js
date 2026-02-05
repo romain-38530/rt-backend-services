@@ -2295,6 +2295,18 @@ app.get('/api/v1/datalake/carriers', requireMongo, async (req, res) => {
   }
 });
 
+// ==================== DASHDOC WEBHOOKS (Real-time updates) ====================
+// Webhook endpoint for Dashdoc real-time events (replaces 25s polling)
+// Configure in Dashdoc: Account Settings > API > Webhooks
+// URL: https://dn8zbjfd06ewt.cloudfront.net/api/v1/webhooks/dashdoc
+const dashdocWebhooksRoutes = require('./routes/dashdoc-webhooks.routes');
+
+// Store db reference for webhook handlers
+app.use('/api/v1/webhooks', (req, res, next) => {
+  req.app.locals.datalakeDb = db;
+  next();
+}, dashdocWebhooksRoutes);
+
 // ==================== AUTHENTICATED DATA LAKE ROUTES ====================
 // Routes avec authentification pour opérations sensibles
 app.use('/api/v1/datalake', authenticateToken, datalakeRoutes);
@@ -2317,7 +2329,7 @@ app.use((err, req, res, next) => {
 async function startServer() {
   // Start server FIRST, then try MongoDB
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RT TMS Sync API v2.3.0 listening on port ${PORT}`);
+    console.log(`RT TMS Sync API v2.6.0 listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`MongoDB: Connecting...`);
   });
