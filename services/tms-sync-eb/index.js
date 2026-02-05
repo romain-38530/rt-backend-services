@@ -2171,6 +2171,8 @@ app.use('/api/v1/tms/affretia-sync', authenticateToken, affretIASyncRoutes);
 // ==================== PUBLIC DATA LAKE ROUTES (No Auth) ====================
 // Routes publiques pour le portail transporteur
 const datalakeRoutes = require('./routes/datalake.routes');
+const dkvDatalakeRoutes = require('./routes/dkv-datalake.routes');
+const vehiclesDatalakeRoutes = require('./routes/vehicles-datalake.routes');
 
 // Public read-only endpoints for transporter portal
 app.get('/api/v1/datalake/status', (req, res, next) => {
@@ -2311,6 +2313,14 @@ app.use('/api/v1/webhooks', (req, res, next) => {
 // Routes avec authentification pour opérations sensibles
 app.use('/api/v1/datalake', authenticateToken, datalakeRoutes);
 
+// ==================== DKV DATA LAKE ROUTES ====================
+// Routes for DKV fuel card data
+app.use('/api/v1/dkv', dkvDatalakeRoutes.router);
+
+// ==================== VEHICLES DATA LAKE ROUTES ====================
+// Routes for vehicle management (sync, documents, maintenance, breakdowns)
+app.use('/api/v1/vehicles', vehiclesDatalakeRoutes);
+
 // Routes Tracking IA (événements temps réel)
 const trackingIARoutes = require('./routes/tracking-ia.routes');
 app.use('/api/v1/tracking-ia', authenticateToken, trackingIARoutes);
@@ -2348,6 +2358,49 @@ async function startServer() {
     if (mongoConnected && tmsService) {
       console.log('Starting scheduled jobs...');
       scheduledJobs.startAllJobs(db, tmsService);
+
+      // Initialize DKV Data Lake if connection exists
+      try {
+        const dkvConnection = await db.collection('dkvConnections').findOne({ isActive: true });
+        if (dkvConnection) {
+          console.log('[DKV] Found active DKV connection, initializing Data Lake...');
+          const { DkvConnector } = require('./connectors/dkv.connector');
+          const { DkvDatalakeSyncService, createReaders } = require('./services/dkv-datalake');
+
+          const dkvConnector = new DkvConnector({
+            customerNumber: dkvConnection.customerNumber,
+            clientId: dkvConnection.clientId,
+            clientSecret: dkvConnection.clientSecret,
+            subscriptionKey: dkvConnection.subscriptionKey,
+            authUrl: dkvConnection.authUrl,
+            apiBaseUrl: dkvConnection.apiBaseUrl,
+          });
+
+          const dkvSyncService = new DkvDatalakeSyncService(db, dkvConnector, {
+            organizationId: dkvConnection.organizationId || 'default',
+            connectionId: dkvConnection._id.toString(),
+            incrementalInterval: dkvConnection.config?.incrementalIntervalMs,
+            periodicInterval: dkvConnection.config?.periodicIntervalMs,
+            fullSyncInterval: dkvConnection.config?.fullSyncIntervalMs,
+            transactionDaysBack: dkvConnection.config?.transactionDaysBack || 30,
+          });
+
+          const dkvReaders = createReaders(db);
+          dkvDatalakeRoutes.initializeDkvDatalake(dkvReaders, dkvSyncService);
+
+          // Start sync service
+          await dkvSyncService.start();
+          console.log('[DKV] Data Lake initialized and sync started');
+        } else {
+          console.log('[DKV] No active DKV connection found, skipping Data Lake initialization');
+        }
+      } catch (dkvError) {
+        console.error('[DKV] Failed to initialize Data Lake:', dkvError.message);
+      }
+
+      // Initialize Vehicles Data Lake - DISABLED (manual activation required)
+      // To enable: POST /api/v1/vehicles/sync
+      console.log('[VEHICLES] Data Lake available but not auto-started (manual activation required)');
     } else {
       console.warn('⚠️  Scheduled jobs NOT started - MongoDB not connected');
     }
