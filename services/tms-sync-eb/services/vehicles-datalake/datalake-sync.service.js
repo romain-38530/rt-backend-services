@@ -28,6 +28,52 @@ try {
   console.log('[VEHICLES-DATALAKE] Modèles Dashdoc non disponibles');
 }
 
+// Import des modèles DKV Data Lake (backup source)
+let DkvVehicle;
+try {
+  DkvVehicle = require('../../models/dkv-datalake/DkvVehicle.model');
+  console.log('[VEHICLES-DATALAKE] Modèle DkvVehicle disponible');
+} catch (e) {
+  console.log('[VEHICLES-DATALAKE] Modèle DKV non disponible');
+}
+
+// ===============================================================
+// Vehizen Data Lake - SOURCE PRIMAIRE
+// Collection: vehizenvehicles (déjà peuplée par api-orders)
+// ===============================================================
+const vechizenVehicleSchema = new mongoose.Schema({
+  vehicleId: String,
+  vin: String,
+  registration: String,        // = licensePlate
+  carrierId: String,           // = organizationId
+  brand: String,
+  model: String,
+  type: String,
+  fuelType: String,
+  year: Number,
+  status: String,
+  lastPosition: {
+    latitude: Number,
+    longitude: Number,
+    timestamp: Date,
+    speed: Number,
+    heading: Number,
+  },
+  odometer: Number,
+  _rawData: mongoose.Schema.Types.Mixed,
+  createdAt: Date,
+  updatedAt: Date,
+}, { collection: 'vehizenvehicles' });
+
+let VechizenVehicleDL;
+try {
+  // Essayer de récupérer le modèle existant ou le créer
+  VechizenVehicleDL = mongoose.models.VechizenVehicleDL || mongoose.model('VechizenVehicleDL', vechizenVehicleSchema);
+  console.log('[VEHICLES-DATALAKE] Modèle VechizenVehicleDL disponible (source PRIMAIRE)');
+} catch (e) {
+  console.log('[VEHICLES-DATALAKE] Modèle VechizenVehicleDL non disponible:', e.message);
+}
+
 class VehicleDatalakeSyncService {
   constructor() {
     this.syncIntervals = {
@@ -198,30 +244,44 @@ class VehicleDatalakeSyncService {
 
   /**
    * Sync des véhicules pour une organisation
+   * Sources prioritaires: 1. VEHIZEN DATA LAKE (primaire), 2. DKV Data Lake, 3. Dashdoc Data Lake, 4. Vehizen API
+   * Utilise l'immatriculation comme clé unique pour éviter les doublons
    */
   async syncVehiclesForOrganization(organizationId, options = {}) {
     console.log(`[VEHICLES-DATALAKE] Sync véhicules pour ${organizationId}`);
 
-    // 1. Récupérer véhicules depuis Dashdoc Data Lake
+    // 1. VEHIZEN DATA LAKE - SOURCE PRIMAIRE (collection vehizenvehicles)
+    const vechizenDatalakeVehicles = await this.getVechizenDataLakeVehicles(organizationId);
+    console.log(`[VEHICLES-DATALAKE] Vehizen Data Lake (PRIMAIRE): ${vechizenDatalakeVehicles.length} véhicules`);
+
+    // 2. Récupérer véhicules depuis DKV Data Lake (backup)
+    const dkvVehicles = await this.getDkvVehicles(organizationId);
+    console.log(`[VEHICLES-DATALAKE] DKV: ${dkvVehicles.length} véhicules`);
+
+    // 3. Récupérer véhicules depuis Dashdoc Data Lake
     const dashdocVehicles = await this.getDashdocVehicles(organizationId);
     const dashdocTrailers = await this.getDashdocTrailers(organizationId);
+    console.log(`[VEHICLES-DATALAKE] Dashdoc: ${dashdocVehicles.length} véhicules, ${dashdocTrailers.length} remorques`);
 
-    // 2. Récupérer véhicules depuis Vehizen (si connecteur disponible)
+    // 4. Récupérer véhicules depuis Vehizen API (si connecteur disponible et pas de données Data Lake)
     const connector = this.connectors.get(organizationId);
-    let vechizenVehicles = [];
-    if (connector) {
+    let vechizenApiVehicles = [];
+    if (connector && vechizenDatalakeVehicles.length === 0) {
       try {
         const result = await connector.getVehicles();
-        vechizenVehicles = result.vehicles.map(v => connector.transformVehicle(v));
+        vechizenApiVehicles = result.vehicles.map(v => connector.transformVehicle(v));
+        console.log(`[VEHICLES-DATALAKE] Vehizen API (fallback): ${vechizenApiVehicles.length} véhicules`);
       } catch (error) {
-        console.error(`[VEHICLES-DATALAKE] Erreur récupération Vehizen:`, error.message);
+        console.error(`[VEHICLES-DATALAKE] Erreur récupération Vehizen API:`, error.message);
       }
     }
 
-    // 3. Fusionner les données
-    const mergedVehicles = this.mergeVehicleData(dashdocVehicles, dashdocTrailers, vechizenVehicles);
+    // 5. Fusionner les données (utilise licensePlate comme clé unique)
+    // Priorité: Vehizen Data Lake > DKV > Dashdoc > Vehizen API
+    const mergedVehicles = this.mergeVehicleData(dashdocVehicles, dashdocTrailers, vechizenApiVehicles, dkvVehicles, vechizenDatalakeVehicles);
+    console.log(`[VEHICLES-DATALAKE] Total après fusion: ${mergedVehicles.length} véhicules uniques`);
 
-    // 4. Sauvegarder en base
+    // 5. Sauvegarder en base
     let syncCount = 0;
     for (const vehicleData of mergedVehicles) {
       try {
@@ -332,12 +392,120 @@ class VehicleDatalakeSyncService {
   }
 
   /**
-   * Fusionne les données des différentes sources
+   * Récupère les véhicules DKV Data Lake (backup source)
+   * Utilise l'immatriculation comme clé unique pour éviter les doublons
    */
-  mergeVehicleData(dashdocVehicles, dashdocTrailers, vechizenVehicles) {
+  async getDkvVehicles(organizationId) {
+    if (!DkvVehicle) return [];
+
+    try {
+      const vehicles = await DkvVehicle.find({ organizationId }).lean();
+      console.log(`[VEHICLES-DATALAKE] ${vehicles.length} véhicules trouvés dans DKV Data Lake pour ${organizationId}`);
+
+      return vehicles.map(v => ({
+        source: 'dkv',
+        licensePlate: v.licensePlate?.replace(/[^A-Z0-9]/gi, '').toUpperCase(),
+        vin: v.vin,
+        brand: v.brand,
+        model: v.model,
+        vehicleType: this.mapDkvVehicleType(v.type),
+        fuelType: v.fuelType,
+        year: v.year,
+        tankCapacity: v.tankCapacity,
+        tollBoxId: v.tollBoxId,
+        emissionClass: v.emissionClass,
+        axleCount: v.axleCount,
+        currentMileage: v.stats?.lastOdometer,
+        isActive: true,
+        _dkvRawData: v._rawData,
+      }));
+    } catch (error) {
+      console.error('[VEHICLES-DATALAKE] Erreur lecture véhicules DKV:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Map le type de véhicule DKV vers notre format
+   */
+  mapDkvVehicleType(type) {
+    const mapping = {
+      'truck': 'truck',
+      'van': 'van',
+      'car': 'car',
+      'trailer': 'trailer',
+      'bus': 'other',
+      'other': 'other',
+    };
+    return mapping[type?.toLowerCase()] || 'truck';
+  }
+
+  /**
+   * Récupère les véhicules depuis Vehizen Data Lake (SOURCE PRIMAIRE)
+   * Collection: vehizenvehicles (peuplée par api-orders vehizen-sync.service)
+   * Utilise carrierId comme organizationId
+   */
+  async getVechizenDataLakeVehicles(organizationId) {
+    if (!VechizenVehicleDL) return [];
+
+    try {
+      // Dans vehizen datalake, carrierId = organizationId
+      const vehicles = await VechizenVehicleDL.find({ carrierId: organizationId }).lean();
+      console.log(`[VEHICLES-DATALAKE] ${vehicles.length} véhicules trouvés dans Vehizen Data Lake pour ${organizationId}`);
+
+      return vehicles.map(v => ({
+        source: 'vehizen_datalake',
+        vechizenId: v.vehicleId,
+        licensePlate: v.registration?.replace(/[^A-Z0-9]/gi, '').toUpperCase(),
+        vin: v.vin,
+        brand: v.brand,
+        model: v.model,
+        vehicleType: this.mapVechizenVehicleType(v.type),
+        fuelType: v.fuelType,
+        year: v.year,
+        currentMileage: v.odometer,
+        lastPosition: v.lastPosition ? {
+          lat: v.lastPosition.latitude,
+          lng: v.lastPosition.longitude,
+          timestamp: v.lastPosition.timestamp,
+          speed: v.lastPosition.speed,
+          heading: v.lastPosition.heading,
+        } : null,
+        isActive: v.status === 'active',
+        _vechizenDatalakeRawData: v._rawData,
+      }));
+    } catch (error) {
+      console.error('[VEHICLES-DATALAKE] Erreur lecture véhicules Vehizen Data Lake:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Map le type de véhicule Vehizen vers notre format
+   */
+  mapVechizenVehicleType(type) {
+    const mapping = {
+      'truck': 'truck',
+      'van': 'van',
+      'car': 'car',
+      'trailer': 'trailer',
+      'tractor': 'tractor',
+      'semi': 'semi_trailer',
+      'other': 'other',
+    };
+    return mapping[type?.toLowerCase()] || 'truck';
+  }
+
+  /**
+   * Fusionne les données des différentes sources
+   * Utilise l'immatriculation (licensePlate) comme clé unique pour éviter les doublons
+   * Priorité: VEHIZEN DATA LAKE > DKV > Vehizen API > Dashdoc
+   * (les données plus prioritaires écrasent/enrichissent les autres)
+   */
+  mergeVehicleData(dashdocVehicles, dashdocTrailers, vechizenApiVehicles, dkvVehicles = [], vechizenDatalakeVehicles = []) {
     const vehicleMap = new Map();
 
-    // 1. Ajouter véhicules Dashdoc
+    // 1. Ajouter véhicules Dashdoc (base - priorité la plus basse)
     for (const v of dashdocVehicles) {
       const key = v.licensePlate?.replace(/[^A-Z0-9]/gi, '').toUpperCase();
       if (key) {
@@ -361,30 +529,86 @@ class VehicleDatalakeSyncService {
       }
     }
 
-    // 3. Fusionner données Vehizen
-    for (const v of vechizenVehicles) {
+    // 3. Fusionner données Vehizen API (fallback)
+    for (const v of vechizenApiVehicles) {
       const key = v.licensePlate;
       if (!key) continue;
 
       if (vehicleMap.has(key)) {
-        // Enrichir les données existantes
         const existing = vehicleMap.get(key);
         vehicleMap.set(key, {
           ...existing,
-          // Données Vehizen prioritaires pour certains champs
           vechizenId: v.vechizenId,
           currentMileage: v.currentMileage || existing.currentMileage,
           mileageUpdatedAt: v.mileageUpdatedAt,
           lastPosition: v.lastPosition,
           equipment: { ...existing.equipment, ...v.equipment },
           _vechizenRawData: v._vechizenRawData,
-          dataSources: [...existing.dataSources, 'vehizen'],
+          dataSources: [...existing.dataSources, 'vehizen_api'],
         });
       } else {
-        // Nouveau véhicule (uniquement dans Vehizen)
         vehicleMap.set(key, {
           ...v,
-          dataSources: ['vehizen'],
+          dataSources: ['vehizen_api'],
+        });
+      }
+    }
+
+    // 4. Fusionner données DKV Data Lake
+    for (const v of dkvVehicles) {
+      const key = v.licensePlate;
+      if (!key) continue;
+
+      if (vehicleMap.has(key)) {
+        const existing = vehicleMap.get(key);
+        vehicleMap.set(key, {
+          ...existing,
+          tollBoxId: v.tollBoxId || existing.tollBoxId,
+          emissionClass: v.emissionClass || existing.emissionClass,
+          axleCount: v.axleCount || existing.axleCount,
+          tankCapacity: v.tankCapacity || existing.tankCapacity,
+          fuelType: v.fuelType || existing.fuelType,
+          currentMileage: v.currentMileage || existing.currentMileage,
+          _dkvRawData: v._dkvRawData,
+          dataSources: [...existing.dataSources, 'dkv'],
+        });
+      } else {
+        vehicleMap.set(key, {
+          ...v,
+          dataSources: ['dkv'],
+        });
+      }
+    }
+
+    // 5. VEHIZEN DATA LAKE - SOURCE PRIMAIRE (priorité la plus haute)
+    // Écrase/enrichit toutes les autres sources
+    for (const v of vechizenDatalakeVehicles) {
+      const key = v.licensePlate;
+      if (!key) continue;
+
+      if (vehicleMap.has(key)) {
+        const existing = vehicleMap.get(key);
+        vehicleMap.set(key, {
+          ...existing,
+          // Vehizen Data Lake a la priorité absolue pour ces champs
+          vechizenId: v.vechizenId || existing.vechizenId,
+          brand: v.brand || existing.brand,
+          model: v.model || existing.model,
+          vehicleType: v.vehicleType || existing.vehicleType,
+          vin: v.vin || existing.vin,
+          fuelType: v.fuelType || existing.fuelType,
+          year: v.year || existing.year,
+          currentMileage: v.currentMileage || existing.currentMileage,
+          lastPosition: v.lastPosition || existing.lastPosition,
+          isActive: v.isActive,
+          _vechizenDatalakeRawData: v._vechizenDatalakeRawData,
+          dataSources: [...existing.dataSources.filter(s => s !== 'vehizen_datalake'), 'vehizen_datalake'],
+        });
+      } else {
+        // Nouveau véhicule depuis Vehizen Data Lake
+        vehicleMap.set(key, {
+          ...v,
+          dataSources: ['vehizen_datalake'],
         });
       }
     }
@@ -409,15 +633,23 @@ class VehicleDatalakeSyncService {
         brand: vehicleData.brand,
         model: vehicleData.model,
         vehicleType: vehicleData.vehicleType,
+        year: vehicleData.year,
 
         // IDs externes
         dashdocPk: vehicleData.dashdocPk,
         vechizenId: vehicleData.vechizenId,
 
+        // DKV specific fields
+        tollBoxId: vehicleData.tollBoxId,
+        emissionClass: vehicleData.emissionClass,
+        axleCount: vehicleData.axleCount,
+        tankCapacity: vehicleData.tankCapacity,
+        fuelType: vehicleData.fuelType,
+
         // Kilométrage
         currentMileage: vehicleData.currentMileage,
         mileageUpdatedAt: vehicleData.mileageUpdatedAt,
-        mileageSource: vehicleData.currentMileage ? (vehicleData.vechizenId ? 'vehizen' : 'dashdoc') : null,
+        mileageSource: this.determineMileageSource(vehicleData),
 
         // Position
         lastPosition: vehicleData.lastPosition,
@@ -431,6 +663,8 @@ class VehicleDatalakeSyncService {
         // Données brutes
         '_rawData.dashdoc': vehicleData._dashdocRawData,
         '_rawData.vehizen': vehicleData._vechizenRawData,
+        '_rawData.vehizen_datalake': vehicleData._vechizenDatalakeRawData,
+        '_rawData.dkv': vehicleData._dkvRawData,
 
         // Statut
         status: vehicleData.isActive ? 'active' : 'inactive',
@@ -443,6 +677,19 @@ class VehicleDatalakeSyncService {
 
     const options = { upsert: true, new: true };
     return Vehicle.findOneAndUpdate(filter, update, options);
+  }
+
+  /**
+   * Détermine la source du kilométrage (priorité: Vehizen Data Lake > DKV > Vehizen API > Dashdoc)
+   */
+  determineMileageSource(vehicleData) {
+    if (!vehicleData.currentMileage) return null;
+    if (vehicleData.dataSources?.includes('vehizen_datalake')) return 'vehizen_datalake';
+    if (vehicleData.dataSources?.includes('dkv')) return 'dkv';
+    if (vehicleData.dataSources?.includes('vehizen_api')) return 'vehizen';
+    if (vehicleData.vechizenId) return 'vehizen';
+    if (vehicleData.dashdocPk) return 'dashdoc';
+    return 'manual';
   }
 
   /**
@@ -512,18 +759,51 @@ class VehicleDatalakeSyncService {
 
   /**
    * Récupère les organisations actives
+   * Inclut les organisations ayant des véhicules dans : Vehizen Data Lake, DKV, Dashdoc, ou connecteurs Vehizen
    */
   async getActiveOrganizations() {
-    // Récupérer depuis les connexions ou les véhicules existants
-    const orgsFromVehizen = Array.from(this.connectors.keys());
+    const allOrgs = [];
 
-    // Ajouter les organisations avec véhicules Dashdoc
-    if (DashdocVehicle) {
-      const dashdocOrgs = await DashdocVehicle.distinct('organizationId');
-      orgsFromVehizen.push(...dashdocOrgs);
+    // 1. VEHIZEN DATA LAKE - SOURCE PRIMAIRE (carrierId = organizationId)
+    if (VechizenVehicleDL) {
+      try {
+        const vechizenDlOrgs = await VechizenVehicleDL.distinct('carrierId');
+        allOrgs.push(...vechizenDlOrgs);
+        console.log(`[VEHICLES-DATALAKE] ${vechizenDlOrgs.length} organisations Vehizen Data Lake trouvées (PRIMAIRE)`);
+      } catch (e) {
+        console.log('[VEHICLES-DATALAKE] Pas de véhicules Vehizen Data Lake');
+      }
     }
 
-    return [...new Set(orgsFromVehizen)];
+    // 2. Organisations avec connecteurs Vehizen API
+    const orgsFromVehizen = Array.from(this.connectors.keys());
+    allOrgs.push(...orgsFromVehizen);
+
+    // 3. Organisations avec véhicules DKV Data Lake
+    if (DkvVehicle) {
+      try {
+        const dkvOrgs = await DkvVehicle.distinct('organizationId');
+        allOrgs.push(...dkvOrgs);
+        console.log(`[VEHICLES-DATALAKE] ${dkvOrgs.length} organisations DKV trouvées`);
+      } catch (e) {
+        console.log('[VEHICLES-DATALAKE] Pas de véhicules DKV');
+      }
+    }
+
+    // 4. Organisations avec véhicules Dashdoc
+    if (DashdocVehicle) {
+      try {
+        const dashdocOrgs = await DashdocVehicle.distinct('organizationId');
+        allOrgs.push(...dashdocOrgs);
+        console.log(`[VEHICLES-DATALAKE] ${dashdocOrgs.length} organisations Dashdoc trouvées`);
+      } catch (e) {
+        console.log('[VEHICLES-DATALAKE] Pas de véhicules Dashdoc');
+      }
+    }
+
+    const uniqueOrgs = [...new Set(allOrgs.filter(o => o))];
+    console.log(`[VEHICLES-DATALAKE] Total organisations actives: ${uniqueOrgs.length}`);
+    return uniqueOrgs;
   }
 
   /**
