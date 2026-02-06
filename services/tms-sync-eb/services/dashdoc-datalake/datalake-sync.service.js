@@ -49,10 +49,10 @@ class DatalakeSyncService {
       maxRetries: options.maxRetries || 3,
       retryDelayMs: options.retryDelay || 2000,
 
-      // Pagination (réduit pour limiter la charge)
+      // Pagination - TOUS les transports sans limite pratique
       transportPageSize: options.transportPageSize || 100,
       companyPageSize: options.companyPageSize || 500,
-      maxPages: options.maxPages || 50,  // Réduit de 100 à 50
+      maxPages: options.maxPages || 1000,  // 1000 pages = 100 000 transports max (illimité en pratique)
 
       // Organization/Connection context
       organizationId: options.organizationId,
