@@ -428,50 +428,69 @@ class DashdocUpdateConnector {
   /**
    * Récupérer les chauffeurs d'un transporteur
    *
-   * ✅ DATA LAKE: Lecture depuis MongoDB avec fallback API
+   * ✅ DATA LAKE ONLY: Lecture depuis MongoDB (truckers + transports)
+   * Note: L'API /manager-truckers/?carrier=X retourne des erreurs, donc on utilise uniquement le Data Lake
    */
   async getCarrierDrivers(companyPk) {
-    // ✅ PRIORITÉ: Lecture depuis Data Lake
-    if (this.datalakeDb) {
-      try {
-        const drivers = await this.datalakeDb.collection('dashdoc_truckers')
-          .find({ carrierPk: parseInt(companyPk) })
-          .toArray();
-
-        if (drivers.length > 0) {
-          console.log(`[Dashdoc Update] ✅ ${drivers.length} chauffeurs company ${companyPk} lus depuis Data Lake`);
-          return {
-            success: true,
-            drivers: drivers.map(d => d._rawData || d),
-            count: drivers.length,
-            source: 'datalake'
-          };
-        }
-        // Aucun chauffeur trouvé - vérifier si c'est normal ou fallback API
-        console.log(`[Dashdoc Update] Aucun chauffeur pour company ${companyPk} dans Data Lake, fallback API`);
-      } catch (dlError) {
-        console.warn(`[Dashdoc Update] Erreur Data Lake chauffeurs, fallback API:`, dlError.message);
-      }
+    if (!this.datalakeDb) {
+      console.warn(`[Dashdoc Update] Data Lake non disponible pour chauffeurs company ${companyPk}`);
+      return { success: false, drivers: [], error: 'Data Lake non disponible' };
     }
 
-    // ⚠️ FALLBACK: Appel API direct Dashdoc (rate limited)
     try {
-      console.log(`[Dashdoc Update] ⚠️ Appel API direct chauffeurs company ${companyPk}`);
-      await this.rateLimiter.throttle();
-      const response = await this.client.get(`/manager-truckers/?carrier=${companyPk}`);
+      // 1. Chercher d'abord dans la collection dashdoc_truckers
+      const drivers = await this.datalakeDb.collection('dashdoc_truckers')
+        .find({ carrierPk: parseInt(companyPk) })
+        .toArray();
+
+      if (drivers.length > 0) {
+        console.log(`[Dashdoc Update] ✅ ${drivers.length} chauffeurs company ${companyPk} lus depuis Data Lake truckers`);
+        return {
+          success: true,
+          drivers: drivers.map(d => d._rawData || d),
+          count: drivers.length,
+          source: 'datalake_truckers'
+        };
+      }
+
+      // 2. Fallback: Extraire les chauffeurs depuis les transports assignés à ce carrier
+      const transports = await this.datalakeDb.collection('dashdoc_transports')
+        .find({
+          'carrier.externalId': String(companyPk),
+          'trucker.name': { $exists: true, $ne: null }
+        })
+        .project({ trucker: 1 })
+        .toArray();
+
+      // Dédupliquer les chauffeurs par nom
+      const uniqueDrivers = new Map();
+      for (const t of transports) {
+        if (t.trucker?.name) {
+          const key = t.trucker.name.toLowerCase();
+          if (!uniqueDrivers.has(key)) {
+            uniqueDrivers.set(key, {
+              name: t.trucker.name,
+              phone: t.trucker.phone || null,
+              externalId: t.trucker.externalId || null
+            });
+          }
+        }
+      }
+
+      const driversFromTransports = Array.from(uniqueDrivers.values());
+      console.log(`[Dashdoc Update] ✅ ${driversFromTransports.length} chauffeurs company ${companyPk} extraits depuis transports`);
 
       return {
         success: true,
-        drivers: response.data.results || [],
-        count: response.data.count || 0,
-        source: 'api'
+        drivers: driversFromTransports,
+        count: driversFromTransports.length,
+        source: 'datalake_transports'
       };
-    } catch (error) {
-      console.error(`[Dashdoc Update] Erreur récupération chauffeurs company ${companyPk}:`, error.response?.data || error.message);
-
+    } catch (dlError) {
+      console.error(`[Dashdoc Update] Erreur Data Lake chauffeurs company ${companyPk}:`, dlError.message);
       return {
         success: false,
-        error: error.response?.data || error.message,
+        error: dlError.message,
         drivers: []
       };
     }
@@ -546,56 +565,59 @@ class DashdocUpdateConnector {
   /**
    * Rechercher un chauffeur par email ou nom
    *
-   * ✅ DATA LAKE: Lecture depuis MongoDB avec fallback API
+   * ✅ DATA LAKE ONLY: Lecture depuis MongoDB (truckers + transports)
+   * Note: L'API /manager-truckers/?email=X peut retourner des erreurs
    */
   async findDriverByEmail(email) {
-    // ✅ PRIORITÉ: Lecture depuis Data Lake
-    if (this.datalakeDb) {
-      try {
-        const driver = await this.datalakeDb.collection('dashdoc_truckers').findOne({
-          email: { $regex: `^${email}$`, $options: 'i' }
-        });
-
-        if (driver) {
-          const rawData = driver._rawData || driver;
-          console.log(`[Dashdoc Update] ✅ Chauffeur ${email} trouvé dans Data Lake`);
-          return {
-            success: true,
-            driver: rawData,
-            uid: rawData.uid || driver.dashdocUid,
-            source: 'datalake'
-          };
-        }
-        console.log(`[Dashdoc Update] Chauffeur ${email} non trouvé dans Data Lake, fallback API`);
-      } catch (dlError) {
-        console.warn(`[Dashdoc Update] Erreur Data Lake findDriver, fallback API:`, dlError.message);
-      }
+    if (!this.datalakeDb) {
+      console.warn(`[Dashdoc Update] Data Lake non disponible pour recherche chauffeur ${email}`);
+      return { success: false, error: 'Data Lake non disponible', message: `Recherche chauffeur ${email} impossible` };
     }
 
-    // ⚠️ FALLBACK: Appel API direct Dashdoc (rate limited)
     try {
-      console.log(`[Dashdoc Update] ⚠️ Appel API direct recherche chauffeur ${email}`);
-      await this.rateLimiter.throttle();
-      const response = await this.client.get(`/manager-truckers/?email=${encodeURIComponent(email)}`);
+      // 1. Chercher dans la collection dashdoc_truckers
+      const driver = await this.datalakeDb.collection('dashdoc_truckers').findOne({
+        email: { $regex: `^${email}$`, $options: 'i' }
+      });
 
-      if (response.data.results && response.data.results.length > 0) {
+      if (driver) {
+        const rawData = driver._rawData || driver;
+        console.log(`[Dashdoc Update] ✅ Chauffeur ${email} trouvé dans Data Lake truckers`);
         return {
           success: true,
-          driver: response.data.results[0],
-          uid: response.data.results[0].uid,
-          source: 'api'
+          driver: rawData,
+          uid: rawData.uid || driver.dashdocUid,
+          source: 'datalake_truckers'
         };
       }
 
+      // 2. Fallback: Chercher par nom dans les transports (si email contient le nom)
+      const searchName = email.split('@')[0].replace(/[._-]/g, ' ');
+      const transport = await this.datalakeDb.collection('dashdoc_transports').findOne({
+        'trucker.name': { $regex: searchName, $options: 'i' }
+      });
+
+      if (transport?.trucker) {
+        console.log(`[Dashdoc Update] ✅ Chauffeur trouvé via transport (nom: ${transport.trucker.name})`);
+        return {
+          success: true,
+          driver: transport.trucker,
+          uid: transport.trucker.externalId,
+          source: 'datalake_transports'
+        };
+      }
+
+      console.log(`[Dashdoc Update] Chauffeur ${email} non trouvé dans Data Lake`);
       return {
         success: false,
         error: 'Chauffeur non trouvé',
         message: `Aucun chauffeur avec email ${email}`
       };
-    } catch (error) {
+    } catch (dlError) {
+      console.error(`[Dashdoc Update] Erreur Data Lake findDriver ${email}:`, dlError.message);
       return {
         success: false,
-        error: error.response?.data || error.message,
+        error: dlError.message,
         message: `Erreur recherche chauffeur ${email}`
       };
     }

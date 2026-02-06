@@ -540,42 +540,27 @@ class DashdocConnector {
   }
 
   /**
-   * Recuperer les stats de transports par transporteur (avec rate limiting)
-   * Pour enrichir les donnees des carriers
+   * @deprecated Utiliser computeCarrierStatsFromTransports() dans datalake-sync.service.js
+   * 🚀 OPTIMISÉ: Les stats sont maintenant calculées depuis MongoDB, pas via API
+   * Cette méthode est conservée pour compatibilité mais ne fait plus d'appel API
    */
   async getCarrierStats(carrierId) {
-    try {
-      await this.rateLimiter.throttle();
-
-      const params = new URLSearchParams();
-      params.append('carrier', carrierId);
-      params.append('limit', '1000');
-
-      const response = await this.client.get(`/transports/?${params.toString()}`);
-      const transports = response.data.results || [];
-
-      const completed = transports.filter(t => t.status === 'done');
-      const lastOrder = transports.sort((a, b) => new Date(b.created) - new Date(a.created))[0];
-
-      return {
-        totalOrders: transports.length,
-        completedOrders: completed.length,
-        lastOrderAt: lastOrder?.created || null,
-        onTimeRate: completed.length > 0 ? Math.round((completed.length / transports.length) * 100) : 0
-      };
-    } catch (error) {
-      console.error('Error fetching carrier stats:', error.message);
-      return {
-        totalOrders: 0,
-        completedOrders: 0,
-        lastOrderAt: null,
-        onTimeRate: 0
-      };
-    }
+    console.warn(`[DASHDOC] getCarrierStats() is deprecated - stats computed from MongoDB`);
+    // Retourner des valeurs par défaut - les vraies stats sont dans MongoDB
+    return {
+      totalOrders: 0,
+      completedOrders: 0,
+      lastOrderAt: null,
+      onTimeRate: 0,
+      _note: 'Stats computed from MongoDB via computeCarrierStatsFromTransports()'
+    };
   }
 
   /**
-   * Synchroniser les transporteurs avec enrichissement des stats
+   * Synchroniser les transporteurs SANS enrichissement stats (OPTIMISÉ)
+   * 🚀 Les stats sont maintenant calculées depuis MongoDB dans datalake-sync.service.js
+   * via computeCarrierStatsFromTransports() - économise ~100 requêtes API
+   *
    * @param {Object} options - Options incluant pagination
    * @param {Boolean} options.usePagination - Activer pagination automatique (defaut: true)
    * @param {Number} options.maxPages - Limite de securite pour pagination (defaut: 20)
@@ -596,50 +581,15 @@ class DashdocConnector {
       carriersArray = carriers.results;
     }
 
-    console.log(`[DASHDOC CARRIERS] Total carriers to enrich: ${carriersArray.length}`);
+    console.log(`[DASHDOC CARRIERS] Total carriers: ${carriersArray.length}`);
+    console.log('[DASHDOC CARRIERS] 🚀 Stats will be computed from MongoDB (no API calls)');
 
-    // Enrichir avec les stats (en parallele par batch)
-    // Pour eviter de surcharger l'API, on traite par batch de 10
-    const enrichedCarriers = [];
-    const batchSize = 10;
-
-    for (let i = 0; i < carriersArray.length; i += batchSize) {
-      const batch = carriersArray.slice(i, i + batchSize);
-      console.log(`[DASHDOC CARRIERS] Enriching batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(carriersArray.length / batchSize)}...`);
-
-      const enrichedBatch = await Promise.all(
-        batch.map(async (carrier) => {
-          if (carrier.externalId) {
-            try {
-              const stats = await this.getCarrierStats(carrier.externalId);
-              return {
-                ...carrier,
-                totalOrders: stats.totalOrders,
-                lastOrderAt: stats.lastOrderAt,
-                score: stats.onTimeRate
-              };
-            } catch (error) {
-              console.warn(`[DASHDOC CARRIERS] Failed to get stats for ${carrier.companyName}:`, error.message);
-              return carrier;
-            }
-          }
-          return carrier;
-        })
-      );
-
-      enrichedCarriers.push(...enrichedBatch);
-
-      // ⚠️ RATE LIMITING: Délai entre les batchs
-      if (i + batchSize < carriersArray.length) {
-        await this.rateLimiter.paginationDelay();
-      }
-    }
-
-    console.log(`[DASHDOC CARRIERS] Enrichment complete: ${enrichedCarriers.length} carriers`);
+    // 🚀 OPTIMISÉ: Plus d'appels API pour les stats - calculées depuis MongoDB
+    // Les stats sont ajoutées par datalake-sync.service.js via computeCarrierStatsFromTransports()
 
     return {
-      count: enrichedCarriers.length,
-      results: enrichedCarriers
+      count: carriersArray.length,
+      results: carriersArray
     };
   }
 

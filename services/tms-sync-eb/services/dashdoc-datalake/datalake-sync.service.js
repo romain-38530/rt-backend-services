@@ -306,7 +306,7 @@ class DatalakeSyncService {
 
   /**
    * Sync périodique - données de référence
-   * ⚠️ RATE LIMITING: Délais entre chaque entité
+   * 🚀 OPTIMISÉ: vehicles/truckers extraits des transports, pas d'appels API séparés
    */
   async runPeriodicSync() {
     if (this.syncInProgress.periodic) {
@@ -318,25 +318,18 @@ class DatalakeSyncService {
     const startTime = Date.now();
 
     try {
-      console.log('[DATALAKE] Running periodic sync (rate limited)...');
+      console.log('[DATALAKE] Running periodic sync (OPTIMIZED - no vehicles/truckers API calls)...');
 
-      // Companies/Carriers
+      // Companies/Carriers uniquement - véhicules/chauffeurs extraits des transports
       await this.syncCompanies();
-      console.log(`[DATALAKE] Waiting ${this.config.entityDelayMs}ms before vehicles...`);
-      await this.delay(this.config.entityDelayMs);
 
-      // Vehicles
-      await this.syncVehicles();
-      console.log(`[DATALAKE] Waiting ${this.config.entityDelayMs}ms before truckers...`);
-      await this.delay(this.config.entityDelayMs);
-
-      // Truckers
-      await this.syncTruckers();
+      // Recalculer les stats carriers depuis MongoDB (pas d'appel API)
+      await this.computeCarrierStatsFromTransports();
 
       const duration = Date.now() - startTime;
       await this.recordSyncMetrics('periodic', duration, true);
 
-      console.log(`[DATALAKE] Periodic sync completed in ${duration}ms`);
+      console.log(`[DATALAKE] Periodic sync completed in ${duration}ms (1 API call instead of 3)`);
 
     } catch (error) {
       console.error('[DATALAKE] Periodic sync error:', error.message);
@@ -362,18 +355,16 @@ class DatalakeSyncService {
       console.log('[DATALAKE] Running FULL sync...');
       await this.updateSyncState({ status: 'syncing' });
 
-      // Ordre de sync (respecter les dépendances)
+      // Ordre de sync OPTIMISÉ - véhicules/chauffeurs/adresses extraits des transports
       // ⚠️ RATE LIMITING: Délais importants entre chaque entité
+      // 🚀 OPTIMISATION: On sync transports EN PREMIER puis on extrait vehicles/truckers/addresses
       const syncOrder = [
         { name: 'counters', fn: () => this.syncCounters() },
         { name: 'companies', fn: () => this.syncCompanies() },
-        { name: 'vehicles', fn: () => this.syncVehicles() },
+        { name: 'transports', fn: () => this.syncTransportsFullWithExtraction() },
         { name: 'trailers', fn: () => this.syncTrailers() },
-        { name: 'truckers', fn: () => this.syncTruckers() },
-        { name: 'contacts', fn: () => this.syncContacts() },
-        { name: 'transports', fn: () => this.syncTransportsFull() },
-        { name: 'invoices', fn: () => this.syncInvoices() },
-        { name: 'addresses', fn: () => this.syncAddresses() }
+        { name: 'invoices', fn: () => this.syncInvoices() }
+        // ❌ SUPPRIMÉ: vehicles, truckers, contacts, addresses - extraits des transports
       ];
 
       for (let i = 0; i < syncOrder.length; i++) {
@@ -511,6 +502,316 @@ class DatalakeSyncService {
       await this.updateEntityState('transports', { status: 'error' });
       throw error;
     }
+  }
+
+  /**
+   * 🚀 OPTIMISÉ: Full sync transports + extraction véhicules/chauffeurs/adresses
+   * Économise 4 appels API séparés en extrayant les données depuis les transports
+   */
+  async syncTransportsFullWithExtraction() {
+    try {
+      await this.updateEntityState('transports', { status: 'syncing' });
+
+      // Utiliser la pagination automatique du connecteur
+      const allTransports = await this.connector.getAllTransportsWithPagination({
+        ordering: '-created'
+      }, this.config.maxPages);
+
+      // Bulk upsert des transports
+      await this.bulkUpsertTransports(allTransports);
+
+      // 🚀 EXTRACTION: Véhicules, chauffeurs, adresses depuis les transports
+      console.log('[DATALAKE] 🚀 Extracting vehicles/truckers/addresses from transports...');
+      const extracted = this.extractEntitiesFromTransports(allTransports);
+
+      // Sauvegarder les entités extraites
+      if (extracted.vehicles.length > 0) {
+        await this.bulkUpsertVehiclesFromTransports(extracted.vehicles);
+        console.log(`[DATALAKE] Extracted ${extracted.vehicles.length} vehicles from transports`);
+      }
+
+      if (extracted.truckers.length > 0) {
+        await this.bulkUpsertTruckersFromTransports(extracted.truckers);
+        console.log(`[DATALAKE] Extracted ${extracted.truckers.length} truckers from transports`);
+      }
+
+      if (extracted.addresses.length > 0) {
+        await this.bulkUpsertAddressesFromTransports(extracted.addresses);
+        console.log(`[DATALAKE] Extracted ${extracted.addresses.length} addresses from transports`);
+      }
+
+      // Calculer et sauvegarder les stats des carriers depuis MongoDB
+      await this.computeCarrierStatsFromTransports();
+
+      this.lastSyncTimes.transports = new Date();
+      await this.updateEntityState('transports', {
+        status: 'idle',
+        lastSyncAt: new Date(),
+        totalCount: allTransports.length,
+        syncedCount: allTransports.length
+      });
+
+      console.log(`[DATALAKE] Full+Extraction: ${allTransports.length} transports, ${extracted.vehicles.length} vehicles, ${extracted.truckers.length} truckers`);
+
+    } catch (error) {
+      console.error('[DATALAKE] Error syncing transports (full+extraction):', error.message);
+      await this.updateEntityState('transports', { status: 'error' });
+      throw error;
+    }
+  }
+
+  /**
+   * 🚀 Extraire véhicules, chauffeurs et adresses depuis les transports
+   * Évite 4 appels API séparés à /vehicles/, /manager-truckers/, /contacts/, /addresses/
+   */
+  extractEntitiesFromTransports(transports) {
+    const vehiclesMap = new Map();
+    const truckersMap = new Map();
+    const addressesMap = new Map();
+
+    for (const t of transports) {
+      // Extraire véhicule depuis transportMeans
+      if (t.transportMeans?.vehicle?.externalId) {
+        const v = t.transportMeans.vehicle;
+        if (!vehiclesMap.has(v.externalId)) {
+          vehiclesMap.set(v.externalId, {
+            externalId: v.externalId,
+            licensePlate: v.licensePlate,
+            type: v.type,
+            source: 'transport_extraction',
+            lastSeenInTransport: t.externalId,
+            lastSeenAt: t.updatedAt || t.createdAt
+          });
+        }
+      }
+
+      // Extraire chauffeur depuis transportMeans
+      if (t.transportMeans?.trucker?.externalId) {
+        const tr = t.transportMeans.trucker;
+        if (!truckersMap.has(tr.externalId)) {
+          truckersMap.set(tr.externalId, {
+            externalId: tr.externalId,
+            name: tr.name,
+            phone: tr.phone,
+            source: 'transport_extraction',
+            carrierPk: t.carrier?.externalId ? parseInt(t.carrier.externalId) : null,
+            lastSeenInTransport: t.externalId,
+            lastSeenAt: t.updatedAt || t.createdAt
+          });
+        }
+      }
+
+      // Extraire adresses pickup et delivery
+      if (t.pickup?.address?.city) {
+        const addr = t.pickup.address;
+        const key = `${addr.city}-${addr.postalCode}-${addr.street || ''}`.toLowerCase();
+        if (!addressesMap.has(key)) {
+          addressesMap.set(key, {
+            key,
+            name: addr.name,
+            street: addr.street,
+            city: addr.city,
+            postalCode: addr.postalCode,
+            country: addr.country,
+            location: addr.location,
+            isOrigin: true,
+            source: 'transport_extraction'
+          });
+        }
+      }
+
+      if (t.delivery?.address?.city) {
+        const addr = t.delivery.address;
+        const key = `${addr.city}-${addr.postalCode}-${addr.street || ''}`.toLowerCase();
+        if (!addressesMap.has(key)) {
+          addressesMap.set(key, {
+            key,
+            name: addr.name,
+            street: addr.street,
+            city: addr.city,
+            postalCode: addr.postalCode,
+            country: addr.country,
+            location: addr.location,
+            isDestination: true,
+            source: 'transport_extraction'
+          });
+        }
+      }
+    }
+
+    return {
+      vehicles: Array.from(vehiclesMap.values()),
+      truckers: Array.from(truckersMap.values()),
+      addresses: Array.from(addressesMap.values())
+    };
+  }
+
+  /**
+   * 🚀 Calculer les stats des carriers depuis les transports en MongoDB
+   * Évite N appels API à /transports/?carrier=X
+   */
+  async computeCarrierStatsFromTransports() {
+    try {
+      console.log('[DATALAKE] Computing carrier stats from MongoDB...');
+
+      // Agrégation MongoDB pour calculer les stats par carrier
+      const stats = await this.collections.transports.aggregate([
+        {
+          $match: {
+            organizationId: this.config.organizationId,
+            'carrier.externalId': { $exists: true, $ne: null }
+          }
+        },
+        {
+          $group: {
+            _id: '$carrier.externalId',
+            carrierName: { $first: '$carrier.name' },
+            totalOrders: { $sum: 1 },
+            completedOrders: {
+              $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] }
+            },
+            lastOrderAt: { $max: '$createdAt' },
+            totalRevenue: { $sum: { $ifNull: ['$pricing.totalPrice', 0] } }
+          }
+        }
+      ]).toArray();
+
+      // Mettre à jour les companies avec leurs stats
+      for (const stat of stats) {
+        if (stat._id) {
+          const onTimeRate = stat.totalOrders > 0
+            ? Math.round((stat.completedOrders / stat.totalOrders) * 100)
+            : 0;
+
+          await this.collections.companies.updateOne(
+            { dashdocPk: parseInt(stat._id) },
+            {
+              $set: {
+                'stats.totalOrders': stat.totalOrders,
+                'stats.completedOrders': stat.completedOrders,
+                'stats.lastOrderAt': stat.lastOrderAt,
+                'stats.totalRevenue': stat.totalRevenue,
+                'stats.onTimeRate': onTimeRate,
+                'stats.computedAt': new Date()
+              }
+            }
+          );
+        }
+      }
+
+      console.log(`[DATALAKE] Computed stats for ${stats.length} carriers`);
+
+    } catch (error) {
+      console.error('[DATALAKE] Error computing carrier stats:', error.message);
+      // Non-blocking - on continue même si ça échoue
+    }
+  }
+
+  /**
+   * Bulk upsert véhicules extraits des transports
+   */
+  async bulkUpsertVehiclesFromTransports(vehicles) {
+    if (!vehicles.length) return;
+
+    const operations = vehicles.map(v => ({
+      updateOne: {
+        filter: { dashdocPk: parseInt(v.externalId) },
+        update: {
+          $set: {
+            dashdocPk: parseInt(v.externalId),
+            organizationId: this.config.organizationId,
+            connectionId: this.config.connectionId,
+            licensePlate: v.licensePlate,
+            type: v.type,
+            extractedFrom: 'transports',
+            lastSeenInTransport: v.lastSeenInTransport,
+            lastSeenAt: v.lastSeenAt ? new Date(v.lastSeenAt) : new Date(),
+            syncedAt: new Date()
+          },
+          $setOnInsert: {
+            createdAt: new Date()
+          },
+          $inc: { syncVersion: 1 }
+        },
+        upsert: true
+      }
+    }));
+
+    await this.collections.vehicles.bulkWrite(operations, { ordered: false });
+  }
+
+  /**
+   * Bulk upsert chauffeurs extraits des transports
+   */
+  async bulkUpsertTruckersFromTransports(truckers) {
+    if (!truckers.length) return;
+
+    const operations = truckers.map(t => ({
+      updateOne: {
+        filter: { dashdocPk: parseInt(t.externalId) },
+        update: {
+          $set: {
+            dashdocPk: parseInt(t.externalId),
+            organizationId: this.config.organizationId,
+            connectionId: this.config.connectionId,
+            name: t.name,
+            phone: t.phone,
+            carrierPk: t.carrierPk,
+            extractedFrom: 'transports',
+            lastSeenInTransport: t.lastSeenInTransport,
+            lastSeenAt: t.lastSeenAt ? new Date(t.lastSeenAt) : new Date(),
+            syncedAt: new Date()
+          },
+          $setOnInsert: {
+            createdAt: new Date()
+          },
+          $inc: { syncVersion: 1 }
+        },
+        upsert: true
+      }
+    }));
+
+    await this.collections.truckers.bulkWrite(operations, { ordered: false });
+  }
+
+  /**
+   * Bulk upsert adresses extraites des transports
+   */
+  async bulkUpsertAddressesFromTransports(addresses) {
+    if (!addresses.length) return;
+
+    const operations = addresses.map(a => ({
+      updateOne: {
+        filter: {
+          organizationId: this.config.organizationId,
+          city: a.city,
+          postalCode: a.postalCode
+        },
+        update: {
+          $set: {
+            organizationId: this.config.organizationId,
+            connectionId: this.config.connectionId,
+            name: a.name,
+            street: a.street,
+            city: a.city,
+            postalCode: a.postalCode,
+            country: a.country,
+            location: a.location,
+            isOrigin: a.isOrigin || false,
+            isDestination: a.isDestination || false,
+            extractedFrom: 'transports',
+            syncedAt: new Date()
+          },
+          $setOnInsert: {
+            createdAt: new Date()
+          },
+          $inc: { syncVersion: 1 }
+        },
+        upsert: true
+      }
+    }));
+
+    await this.collections.addresses.bulkWrite(operations, { ordered: false });
   }
 
   /**
