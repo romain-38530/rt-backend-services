@@ -2,11 +2,15 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb');
 const fetch = require('node-fetch');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // VAT Patterns for EU countries
 const VAT_PATTERNS = {
@@ -247,13 +251,17 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'RT Authentication API with VAT Validation',
-    version: '2.0.0',
-    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'VAT Validation'],
+    version: '3.0.0',
+    features: ['Express', 'MongoDB', 'CORS', 'Helmet', 'VAT Validation', 'SubUsers'],
     endpoints: [
       'GET /health',
       'GET /',
       'POST /api/vat/validate-format',
-      'POST /api/vat/validate'
+      'POST /api/vat/validate',
+      'GET /api/subusers',
+      'POST /api/subusers',
+      'PUT /api/subusers/:id',
+      'DELETE /api/subusers/:id'
     ]
   });
 });
@@ -365,6 +373,369 @@ app.post('/api/vat/validate', async (req, res) => {
   }
 });
 
+// ===========================================
+// Authentication Middleware
+// ===========================================
+const authenticateUser = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'No token provided' });
+    }
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = {
+      id: decoded.userId,
+      email: decoded.email,
+      role: decoded.role,
+      portal: decoded.portal
+    };
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, error: 'Invalid token' });
+  }
+};
+
+// ===========================================
+// SubUser Plan Limits
+// ===========================================
+const SUBUSER_LIMITS = {
+  trial: 1,
+  starter: 2,
+  pro: 10,
+  enterprise: -1
+};
+
+async function getUserPlan(userId) {
+  try {
+    if (!db) return 'starter';
+    const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+    if (!user) return 'trial';
+    if (user.role === 'super_admin' || user.role === 'admin') return 'enterprise';
+    if (user.role === 'manager') return 'pro';
+    return 'starter';
+  } catch (error) {
+    return 'starter';
+  }
+}
+
+async function getSubUserLimitInfo(parentUserId) {
+  const plan = await getUserPlan(parentUserId);
+  const maxAllowed = SUBUSER_LIMITS[plan];
+  const currentCount = await db.collection('subusers').countDocuments({
+    parentUserId: new ObjectId(parentUserId),
+    status: { $ne: 'inactive' }
+  });
+
+  if (maxAllowed === -1) {
+    return { allowed: true, currentCount, maxAllowed: -1, plan, remaining: -1 };
+  }
+
+  return {
+    allowed: currentCount < maxAllowed,
+    currentCount,
+    maxAllowed,
+    plan,
+    remaining: Math.max(0, maxAllowed - currentCount)
+  };
+}
+
+// ===========================================
+// SubUsers Routes
+// ===========================================
+
+// GET /api/subusers - List subusers
+app.get('/api/subusers', authenticateUser, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+    const userId = req.user.id;
+    const subUsers = await db.collection('subusers')
+      .find({ parentUserId: new ObjectId(userId) })
+      .project({ password: 0, activationToken: 0 })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const limitInfo = await getSubUserLimitInfo(userId);
+
+    res.json({
+      success: true,
+      data: {
+        subUsers: subUsers.map(u => ({
+          id: u._id,
+          email: u.email,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          accessLevel: u.accessLevel,
+          universes: u.universes || [],
+          status: u.status,
+          invitedAt: u.invitedAt
+        })),
+        limit: {
+          current: limitInfo.currentCount,
+          max: limitInfo.maxAllowed,
+          remaining: limitInfo.remaining,
+          plan: limitInfo.plan,
+          canAdd: limitInfo.allowed
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching subusers:', error);
+    res.status(500).json({ success: false, error: 'Erreur lors de la recuperation des membres' });
+  }
+});
+
+// POST /api/subusers - Create subuser
+app.post('/api/subusers', authenticateUser, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+    const userId = req.user.id;
+    const { email, firstName, lastName, accessLevel, universes, phone } = req.body;
+
+    if (!email || !firstName || !lastName) {
+      return res.status(400).json({ success: false, error: 'Email, prenom et nom sont requis' });
+    }
+
+    const limitInfo = await getSubUserLimitInfo(userId);
+    if (!limitInfo.allowed) {
+      return res.status(403).json({
+        success: false,
+        error: 'Limite de membres atteinte pour votre plan',
+        limit: { current: limitInfo.currentCount, max: limitInfo.maxAllowed, plan: limitInfo.plan }
+      });
+    }
+
+    const existingUser = await db.collection('users').findOne({ email: email.toLowerCase() });
+    const existingSubUser = await db.collection('subusers').findOne({ email: email.toLowerCase() });
+    if (existingUser || existingSubUser) {
+      return res.status(409).json({ success: false, error: 'Cet email est deja utilise' });
+    }
+
+    const validAccessLevels = ['admin', 'editor', 'reader'];
+    const level = validAccessLevels.includes(accessLevel) ? accessLevel : 'reader';
+    const validUniverses = ['industry', 'logistician', 'transporter', 'forwarder', 'supplier', 'recipient'];
+    const selectedUniverses = Array.isArray(universes)
+      ? universes.filter(u => validUniverses.includes(u))
+      : validUniverses;
+
+    const activationToken = crypto.randomBytes(32).toString('hex');
+    const subUser = {
+      parentUserId: new ObjectId(userId),
+      email: email.toLowerCase(),
+      firstName,
+      lastName,
+      phone: phone || null,
+      accessLevel: level,
+      universes: selectedUniverses,
+      status: 'pending',
+      activationToken,
+      invitedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('subusers').insertOne(subUser);
+    console.log('SubUser created:', { subUserId: result.insertedId, email, parentUserId: userId });
+
+    res.status(201).json({
+      success: true,
+      message: 'Invitation envoyee',
+      data: {
+        id: result.insertedId,
+        email: subUser.email,
+        firstName: subUser.firstName,
+        lastName: subUser.lastName,
+        accessLevel: subUser.accessLevel,
+        universes: subUser.universes,
+        status: subUser.status,
+        invitedAt: subUser.invitedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error creating subuser:', error);
+    res.status(500).json({ success: false, error: 'Erreur lors de la creation du membre' });
+  }
+});
+
+// GET /api/subusers/:id - Get single subuser
+app.get('/api/subusers/:id', authenticateUser, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const subUser = await db.collection('subusers').findOne({
+      _id: new ObjectId(id),
+      parentUserId: new ObjectId(userId)
+    }, { projection: { password: 0, activationToken: 0 } });
+
+    if (!subUser) {
+      return res.status(404).json({ success: false, error: 'Membre non trouve' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: subUser._id,
+        email: subUser.email,
+        firstName: subUser.firstName,
+        lastName: subUser.lastName,
+        accessLevel: subUser.accessLevel,
+        universes: subUser.universes || [],
+        status: subUser.status,
+        invitedAt: subUser.invitedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors de la recuperation du membre' });
+  }
+});
+
+// PUT /api/subusers/:id - Update subuser
+app.put('/api/subusers/:id', authenticateUser, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+    const { id } = req.params;
+    const userId = req.user.id;
+    const { firstName, lastName, accessLevel, universes, phone, status } = req.body;
+
+    const subUser = await db.collection('subusers').findOne({
+      _id: new ObjectId(id),
+      parentUserId: new ObjectId(userId)
+    });
+
+    if (!subUser) {
+      return res.status(404).json({ success: false, error: 'Membre non trouve' });
+    }
+
+    const updates = { updatedAt: new Date() };
+    if (firstName) updates.firstName = firstName;
+    if (lastName) updates.lastName = lastName;
+    if (phone !== undefined) updates.phone = phone;
+
+    const validAccessLevels = ['admin', 'editor', 'reader'];
+    if (accessLevel && validAccessLevels.includes(accessLevel)) {
+      updates.accessLevel = accessLevel;
+    }
+
+    const validUniverses = ['industry', 'logistician', 'transporter', 'forwarder', 'supplier', 'recipient'];
+    if (Array.isArray(universes)) {
+      updates.universes = universes.filter(u => validUniverses.includes(u));
+    }
+
+    if (status && ['active', 'inactive'].includes(status)) {
+      updates.status = status;
+    }
+
+    await db.collection('subusers').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updates }
+    );
+
+    const updated = await db.collection('subusers').findOne({ _id: new ObjectId(id) });
+
+    res.json({
+      success: true,
+      message: 'Membre mis a jour',
+      data: {
+        id: updated._id,
+        email: updated.email,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        accessLevel: updated.accessLevel,
+        universes: updated.universes || [],
+        status: updated.status
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors de la mise a jour du membre' });
+  }
+});
+
+// DELETE /api/subusers/:id - Delete subuser
+app.delete('/api/subusers/:id', authenticateUser, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const result = await db.collection('subusers').findOneAndDelete({
+      _id: new ObjectId(id),
+      parentUserId: new ObjectId(userId)
+    });
+
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Membre non trouve' });
+    }
+
+    res.json({ success: true, message: 'Membre supprime' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors de la suppression du membre' });
+  }
+});
+
+// POST /api/subusers/:id/resend-invite - Resend invitation
+app.post('/api/subusers/:id/resend-invite', authenticateUser, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const subUser = await db.collection('subusers').findOne({
+      _id: new ObjectId(id),
+      parentUserId: new ObjectId(userId),
+      status: 'pending'
+    });
+
+    if (!subUser) {
+      return res.status(404).json({ success: false, error: 'Membre non trouve ou deja active' });
+    }
+
+    const activationToken = crypto.randomBytes(32).toString('hex');
+    await db.collection('subusers').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { activationToken, invitedAt: new Date(), updatedAt: new Date() } }
+    );
+
+    res.json({ success: true, message: 'Invitation renvoyee' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors du renvoi de l\'invitation' });
+  }
+});
+
+// GET /api/subusers/limit/info - Get limit info
+app.get('/api/subusers/limit/info', authenticateUser, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not connected' });
+    }
+    const limitInfo = await getSubUserLimitInfo(req.user.id);
+    res.json({
+      success: true,
+      data: {
+        current: limitInfo.currentCount,
+        max: limitInfo.maxAllowed,
+        remaining: limitInfo.remaining,
+        plan: limitInfo.plan,
+        canAdd: limitInfo.allowed
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors de la recuperation des limites' });
+  }
+});
+
 // Start server
 async function startServer() {
   await connectMongoDB();
@@ -374,6 +745,7 @@ async function startServer() {
     console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
     console.log('MongoDB: ' + (mongoConnected ? 'Connected' : 'Not connected'));
     console.log('VAT Validation: Enabled (' + Object.keys(VAT_PATTERNS).length + ' EU countries)');
+    console.log('SubUsers API: Enabled');
   });
 }
 

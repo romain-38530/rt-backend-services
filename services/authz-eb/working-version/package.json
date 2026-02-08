@@ -1,7 +1,7 @@
 {
   "name": "rt-authz-api",
-  "version": "2.0.0",
-  "description": "RT Authz API with VAT Validation",
+  "version": "3.0.0",
+  "description": "RT Authz API with VAT Validation and SubUsers",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"

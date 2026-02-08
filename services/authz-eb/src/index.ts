@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
+import subusersRoutes from './routes/subusers';
 
 dotenv.config();
 
@@ -21,19 +22,26 @@ app.use(express.json());
 app.get('/', (req, res) => {
   res.json({
     name: 'RT Technologie Authentication API',
-    version: '1.0.0',
+    version: '2.0.0',
     endpoints: {
       health: '/health',
       auth: {
         register: 'POST /api/auth/register',
         login: 'POST /api/auth/login',
         me: 'GET /api/auth/me'
+      },
+      subusers: {
+        list: 'GET /api/subusers',
+        create: 'POST /api/subusers',
+        update: 'PUT /api/subusers/:id',
+        delete: 'DELETE /api/subusers/:id'
       }
     }
   });
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/subusers', subusersRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
