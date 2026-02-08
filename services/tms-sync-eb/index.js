@@ -664,18 +664,43 @@ app.get('/api/v1/tms/orders', requireMongo, async (req, res) => {
     }
 
     // Filtre: uniquement les commandes SANS moyen de transport assigné
+    // Vérifie à la fois transportMeans (nouveau format) et externalData.segments (données brutes Dashdoc)
     if (noTransportMeans === 'true' || noTransportMeans === true) {
       query.$and = query.$and || [];
+
+      // Pas de véhicule assigné
       query.$and.push({
-        $or: [
-          { 'transportMeans.hasVehicle': { $ne: true } },
-          { 'transportMeans.hasVehicle': { $exists: false } }
+        $and: [
+          {
+            $or: [
+              { 'transportMeans.hasVehicle': { $ne: true } },
+              { 'transportMeans.hasVehicle': { $exists: false } }
+            ]
+          },
+          {
+            $or: [
+              { 'externalData.segments.0.vehicle': { $exists: false } },
+              { 'externalData.segments.0.vehicle': null }
+            ]
+          }
         ]
       });
+
+      // Pas de chauffeur assigné
       query.$and.push({
-        $or: [
-          { 'transportMeans.hasTrucker': { $ne: true } },
-          { 'transportMeans.hasTrucker': { $exists: false } }
+        $and: [
+          {
+            $or: [
+              { 'transportMeans.hasTrucker': { $ne: true } },
+              { 'transportMeans.hasTrucker': { $exists: false } }
+            ]
+          },
+          {
+            $or: [
+              { 'externalData.segments.0.trucker': { $exists: false } },
+              { 'externalData.segments.0.trucker': null }
+            ]
+          }
         ]
       });
     }
@@ -926,18 +951,43 @@ app.get('/api/v1/tms/orders/filtered', requireMongo, async (req, res) => {
 
     // Filtre: uniquement les commandes SANS moyen de transport assigné
     // (ni véhicule, ni chauffeur)
+    // Vérifie à la fois transportMeans (nouveau format) et externalData.segments (données brutes Dashdoc)
     if (noTransportMeans === 'true' || noTransportMeans === true) {
       query.$and = query.$and || [];
+
+      // Pas de véhicule assigné
       query.$and.push({
-        $or: [
-          { 'transportMeans.hasVehicle': { $ne: true } },
-          { 'transportMeans.hasVehicle': { $exists: false } }
+        $and: [
+          {
+            $or: [
+              { 'transportMeans.hasVehicle': { $ne: true } },
+              { 'transportMeans.hasVehicle': { $exists: false } }
+            ]
+          },
+          {
+            $or: [
+              { 'externalData.segments.0.vehicle': { $exists: false } },
+              { 'externalData.segments.0.vehicle': null }
+            ]
+          }
         ]
       });
+
+      // Pas de chauffeur assigné
       query.$and.push({
-        $or: [
-          { 'transportMeans.hasTrucker': { $ne: true } },
-          { 'transportMeans.hasTrucker': { $exists: false } }
+        $and: [
+          {
+            $or: [
+              { 'transportMeans.hasTrucker': { $ne: true } },
+              { 'transportMeans.hasTrucker': { $exists: false } }
+            ]
+          },
+          {
+            $or: [
+              { 'externalData.segments.0.trucker': { $exists: false } },
+              { 'externalData.segments.0.trucker': null }
+            ]
+          }
         ]
       });
     }
