@@ -1,0 +1,64 @@
+version: 1
+applications:
+  - appRoot: apps/web-transporter
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm install -g pnpm@8.15.4
+            - cd ../..
+            - pnpm install
+            - pnpm turbo build --filter=@rt/contracts --filter=@rt/utils --filter=@rt/ui-components
+            - cd apps/web-transporter
+        build:
+          commands:
+            - pnpm run build
+      artifacts:
+        baseDirectory: out
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - ../../node_modules/**/*
+          - .next/cache/**/*
+          - ../../.turbo/**/*
+      customHeaders:
+        - pattern: '**/*'
+          headers:
+            - key: 'Cache-Control'
+              value: 'public, max-age=31536000, immutable'
+        - pattern: '*.html'
+          headers:
+            - key: 'Cache-Control'
+              value: 'public, max-age=0, must-revalidate'
+      environment:
+        variables:
+          # Site Configuration
+          NEXT_PUBLIC_SITE_URL: 'https://transporter.symphonia-controltower.com'
+          NEXT_PUBLIC_PORTAL_TYPE: 'transporter'
+
+          # Core APIs (CloudFront HTTPS)
+          NEXT_PUBLIC_API_URL: 'https://d2jgmccc3o2t9k.cloudfront.net/api'
+          NEXT_PUBLIC_ORDERS_API_URL: 'https://d2dbvsga281o6l.cloudfront.net'
+          NEXT_PUBLIC_AUTHZ_URL: 'https://d2jgmccc3o2t9k.cloudfront.net'
+          NEXT_PUBLIC_TRACKING_API_URL: 'https://d2mn43ccfvt3ub.cloudfront.net'
+          NEXT_PUBLIC_APPOINTMENTS_API_URL: 'https://d28uezz0327lfm.cloudfront.net'
+          NEXT_PUBLIC_DOCUMENTS_API_URL: 'https://d8987l284s9q4.cloudfront.net'
+          NEXT_PUBLIC_SCORING_API_URL: 'https://d1uyscmpcwc65a.cloudfront.net'
+          NEXT_PUBLIC_AFFRET_API_URL: 'https://d393yiia4ig3bw.cloudfront.net'
+          NEXT_PUBLIC_WS_URL: 'wss://d2aodzk1jwptdr.cloudfront.net'
+
+          # Transporter-specific APIs (CloudFront HTTPS)
+          NEXT_PUBLIC_ECMR_API: 'https://d28q05cx5hmg9q.cloudfront.net'
+          NEXT_PUBLIC_PLANNING_API_URL: 'https://dpw23bg2dclr1.cloudfront.net'
+          NEXT_PUBLIC_CHATBOT_API_URL: 'https://de1913kh0ya48.cloudfront.net'
+          NEXT_PUBLIC_BILLING_API_URL: 'https://d1ciol606nbfs0.cloudfront.net/api'
+          NEXT_PUBLIC_CARRIERS_API_URL: 'https://d39uizi9hzozo8.cloudfront.net'
+          NEXT_PUBLIC_SUBSCRIPTIONS_API_URL: 'https://d39uizi9hzozo8.cloudfront.net'
+
+          # Pricing Grids API (Grilles tarifaires inter-univers)
+          NEXT_PUBLIC_PRICING_GRIDS_API_URL: 'https://dxakwgzrkhboh.cloudfront.net'
+
+          # Build
+          NODE_VERSION: '20'
+          PNPM_VERSION: '8.15.4'
