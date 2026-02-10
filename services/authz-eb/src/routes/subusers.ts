@@ -343,4 +343,43 @@ router.get('/limit/info', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * POST /api/subusers/import-dashdoc
+ * Importe les utilisateurs Dashdoc SETT Transports
+ */
+router.post('/import-dashdoc', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // Import du service
+    const { dashdocUserImportService } = await import('../services/dashdoc-user-import.service');
+
+    console.log(`[API] Starting Dashdoc import for user ${userId}`);
+
+    // Importer les utilisateurs SETT depuis le fichier
+    const result = await dashdocUserImportService.importSETTUsersFromFile(userId);
+
+    // Compter les SubUsers après import
+    const counts = await dashdocUserImportService.countSubUsers(userId);
+
+    res.json({
+      success: result.success,
+      message: `Import termine: ${result.imported} importes, ${result.skipped} ignores, ${result.failed} echecs`,
+      data: {
+        imported: result.imported,
+        skipped: result.skipped,
+        failed: result.failed,
+        counts: counts,
+        details: result.details
+      }
+    });
+  } catch (error: any) {
+    console.error('[API] Error importing Dashdoc users:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de l\'importation des utilisateurs Dashdoc'
+    });
+  }
+});
+
 export default router;

@@ -1210,6 +1210,160 @@ app.post('/api/onboarding/submit', async (req, res) => {
   }
 });
 
+// SubUsers - Import Dashdoc users
+app.post('/api/subusers/import-dashdoc', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    if (!mongoConnected || !db) {
+      return res.status(503).json({ success: false, message: 'Database not connected' });
+    }
+
+    // Verify token and get user
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found' });
+    }
+
+    console.log(`[API] Starting Dashdoc import for user ${user.email} (${user._id})`);
+
+    // Load SETT users from file
+    const fs = require('fs');
+    const path = require('path');
+    const crypto = require('crypto');
+
+    const filePath = path.join(__dirname, '../../sett-users.json');
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Fichier sett-users.json non trouvé'
+      });
+    }
+
+    const rawData = fs.readFileSync(filePath, 'utf8');
+    const settUsers = JSON.parse(rawData);
+
+    // Filter for SETT Transports only
+    const filteredUsers = settUsers.filter(u =>
+      u.companyName === 'SARL SETT TRANSPORTS' &&
+      u.email &&
+      u.email.trim() !== ''
+    );
+
+    console.log(`[DashdocImport] ${filteredUsers.length} utilisateurs SETT à importer`);
+
+    const result = {
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      details: { imported: [], skipped: [], failed: [] }
+    };
+
+    const subusersCollection = db.collection('subusers');
+    const usersCollection = db.collection('users');
+
+    // Import each user
+    for (const dashdocUser of filteredUsers) {
+      try {
+        const email = dashdocUser.email.toLowerCase().trim();
+
+        if (!email || !dashdocUser.firstName || !dashdocUser.lastName) {
+          result.skipped++;
+          result.details.skipped.push({
+            email: dashdocUser.email,
+            reason: 'Données manquantes'
+          });
+          continue;
+        }
+
+        // Check if user already exists
+        const existingUser = await usersCollection.findOne({ email });
+        const existingSubUser = await subusersCollection.findOne({ email });
+
+        if (existingUser || existingSubUser) {
+          result.skipped++;
+          result.details.skipped.push({
+            email,
+            reason: existingUser ? 'Existe comme User' : 'Existe comme SubUser'
+          });
+          continue;
+        }
+
+        // Create SubUser
+        const activationToken = crypto.randomBytes(32).toString('hex');
+
+        const subUserDoc = {
+          parentUserId: user._id,
+          email,
+          firstName: dashdocUser.firstName,
+          lastName: dashdocUser.lastName,
+          phone: dashdocUser.phone || '',
+          accessLevel: 'editor',
+          universes: ['transporter'],
+          status: 'pending',
+          activationToken,
+          invitedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        const insertResult = await subusersCollection.insertOne(subUserDoc);
+
+        result.imported++;
+        result.details.imported.push({
+          email,
+          id: insertResult.insertedId.toString()
+        });
+
+        console.log(`[DashdocImport] ✓ Importé: ${email}`);
+
+      } catch (error) {
+        result.failed++;
+        result.details.failed.push({
+          email: dashdocUser.email,
+          error: error.message
+        });
+        console.error(`[DashdocImport] ✗ Échec: ${dashdocUser.email}`, error.message);
+      }
+    }
+
+    // Count SubUsers after import
+    const counts = {
+      total: await subusersCollection.countDocuments({ parentUserId: user._id }),
+      active: await subusersCollection.countDocuments({ parentUserId: user._id, status: 'active' }),
+      pending: await subusersCollection.countDocuments({ parentUserId: user._id, status: 'pending' }),
+      inactive: await subusersCollection.countDocuments({ parentUserId: user._id, status: 'inactive' })
+    };
+
+    console.log(`[DashdocImport] Import terminé:`, result);
+
+    res.json({
+      success: result.failed === 0,
+      message: `Import terminé: ${result.imported} importés, ${result.skipped} ignorés, ${result.failed} échecs`,
+      data: {
+        imported: result.imported,
+        skipped: result.skipped,
+        failed: result.failed,
+        counts,
+        details: result.details
+      }
+    });
+
+  } catch (error) {
+    console.error('[API] Error importing Dashdoc users:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Erreur lors de l\'importation'
+    });
+  }
+});
+
 // Start server
 async function startServer() {
   await connectMongoDB();
