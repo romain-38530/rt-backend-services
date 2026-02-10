@@ -1237,7 +1237,7 @@ app.post('/api/subusers/import-dashdoc', async (req, res) => {
     const path = require('path');
     const crypto = require('crypto');
 
-    const filePath = path.join(__dirname, '../../sett-users.json');
+    const filePath = path.join(__dirname, 'sett-users.json');
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({
