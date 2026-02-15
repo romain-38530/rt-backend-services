@@ -1210,6 +1210,353 @@ app.post('/api/onboarding/submit', async (req, res) => {
   }
 });
 
+// ============================================================
+// SubUsers CRUD API
+// ============================================================
+
+// Helper: authenticate and return user from token
+async function authenticateRequest(req, res) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) {
+    res.status(401).json({ success: false, message: 'No token provided' });
+    return null;
+  }
+  if (!mongoConnected || !db) {
+    res.status(503).json({ success: false, message: 'Database not connected' });
+    return null;
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
+    if (!user) {
+      res.status(401).json({ success: false, message: 'User not found' });
+      return null;
+    }
+    return user;
+  } catch (err) {
+    res.status(401).json({ success: false, message: 'Invalid token' });
+    return null;
+  }
+}
+
+// Helper: get subscription plan from user
+function getUserPlan(user) {
+  if (!user) return 'starter';
+  if (user.role === 'super_admin' || user.role === 'admin') return 'enterprise';
+  if (user.subscription && user.subscription.status === 'active') {
+    const planLevel = (user.subscription.planLevel || '').toUpperCase();
+    if (planLevel === 'PREMIUM' || planLevel === 'ENTERPRISE') return 'enterprise';
+    if (planLevel === 'PRO') return 'pro';
+  }
+  if (user.role === 'manager') return 'pro';
+  return 'starter';
+}
+
+// Helper: get subuser limit info
+async function getSubUserLimitInfo(userId, user) {
+  const LIMITS = { trial: 1, starter: 2, pro: 10, enterprise: -1 };
+  const plan = getUserPlan(user);
+  const maxAllowed = LIMITS[plan] || 2;
+  const currentCount = await db.collection('subusers').countDocuments({
+    parentUserId: new ObjectId(userId.toString()),
+    status: { $ne: 'inactive' }
+  });
+
+  if (maxAllowed === -1) {
+    return { allowed: true, currentCount, maxAllowed: -1, plan, remaining: -1 };
+  }
+  const remaining = Math.max(0, maxAllowed - currentCount);
+  return {
+    allowed: currentCount < maxAllowed,
+    currentCount,
+    maxAllowed,
+    plan,
+    remaining
+  };
+}
+
+// GET /api/subusers/limit/info - must be before /:id route
+app.get('/api/subusers/limit/info', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req, res);
+    if (!user) return;
+
+    const limitInfo = await getSubUserLimitInfo(user._id, user);
+    res.json({
+      success: true,
+      data: {
+        current: limitInfo.currentCount,
+        max: limitInfo.maxAllowed,
+        remaining: limitInfo.remaining,
+        plan: limitInfo.plan,
+        canAdd: limitInfo.allowed
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching limit info:', error);
+    res.status(500).json({ success: false, error: 'Erreur lors de la récupération des limites' });
+  }
+});
+
+// GET /api/subusers - List all team members
+app.get('/api/subusers', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req, res);
+    if (!user) return;
+
+    const subUsers = await db.collection('subusers')
+      .find({ parentUserId: user._id })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const limitInfo = await getSubUserLimitInfo(user._id, user);
+
+    res.json({
+      success: true,
+      data: {
+        subUsers: subUsers.map(u => ({
+          id: u._id.toString(),
+          email: u.email,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          accessLevel: u.accessLevel,
+          universes: u.universes,
+          status: u.status,
+          phone: u.phone,
+          invitedAt: u.invitedAt
+        })),
+        limit: {
+          current: limitInfo.currentCount,
+          max: limitInfo.maxAllowed,
+          remaining: limitInfo.remaining,
+          plan: limitInfo.plan,
+          canAdd: limitInfo.allowed
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching subusers:', error);
+    res.status(500).json({ success: false, error: 'Erreur lors de la récupération des membres' });
+  }
+});
+
+// GET /api/subusers/:id - Get specific team member
+app.get('/api/subusers/:id', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req, res);
+    if (!user) return;
+
+    const subUser = await db.collection('subusers').findOne({
+      _id: new ObjectId(req.params.id),
+      parentUserId: user._id
+    });
+
+    if (!subUser) {
+      return res.status(404).json({ success: false, error: 'Membre non trouvé' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: subUser._id.toString(),
+        email: subUser.email,
+        firstName: subUser.firstName,
+        lastName: subUser.lastName,
+        accessLevel: subUser.accessLevel,
+        universes: subUser.universes,
+        status: subUser.status,
+        phone: subUser.phone,
+        invitedAt: subUser.invitedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors de la récupération du membre' });
+  }
+});
+
+// POST /api/subusers - Create new team member
+app.post('/api/subusers', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req, res);
+    if (!user) return;
+
+    const { email, firstName, lastName, accessLevel, universes, phone } = req.body;
+    if (!email || !firstName || !lastName) {
+      return res.status(400).json({ success: false, error: 'Email, prénom et nom sont requis' });
+    }
+
+    const limitInfo = await getSubUserLimitInfo(user._id, user);
+    if (!limitInfo.allowed) {
+      return res.status(403).json({
+        success: false,
+        error: `Limite de ${limitInfo.maxAllowed} membres atteinte. Passez au plan supérieur.`,
+        limit: { current: limitInfo.currentCount, max: limitInfo.maxAllowed, plan: limitInfo.plan }
+      });
+    }
+
+    const existingUser = await db.collection('users').findOne({ email: email.toLowerCase() });
+    const existingSubUser = await db.collection('subusers').findOne({ email: email.toLowerCase() });
+    if (existingUser || existingSubUser) {
+      return res.status(409).json({ success: false, error: 'Cet email est déjà utilisé' });
+    }
+
+    const crypto = require('crypto');
+    const validAccessLevels = ['admin', 'editor', 'reader'];
+    const level = validAccessLevels.includes(accessLevel) ? accessLevel : 'reader';
+    const validUniverses = ['industry', 'logistician', 'transporter', 'forwarder', 'supplier', 'recipient'];
+    const selectedUniverses = Array.isArray(universes)
+      ? universes.filter(u => validUniverses.includes(u))
+      : ['transporter'];
+    const activationToken = crypto.randomBytes(32).toString('hex');
+
+    const subUserDoc = {
+      parentUserId: user._id,
+      email: email.toLowerCase(),
+      firstName,
+      lastName,
+      phone: phone || '',
+      accessLevel: level,
+      universes: selectedUniverses,
+      status: 'pending',
+      activationToken,
+      invitedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('subusers').insertOne(subUserDoc);
+
+    res.status(201).json({
+      success: true,
+      message: 'Invitation envoyée',
+      data: {
+        id: result.insertedId.toString(),
+        email: subUserDoc.email,
+        firstName: subUserDoc.firstName,
+        lastName: subUserDoc.lastName,
+        accessLevel: subUserDoc.accessLevel,
+        universes: subUserDoc.universes,
+        status: subUserDoc.status,
+        invitedAt: subUserDoc.invitedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error creating subuser:', error);
+    res.status(500).json({ success: false, error: 'Erreur lors de la création du membre' });
+  }
+});
+
+// PUT /api/subusers/:id - Update team member
+app.put('/api/subusers/:id', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req, res);
+    if (!user) return;
+
+    const subUser = await db.collection('subusers').findOne({
+      _id: new ObjectId(req.params.id),
+      parentUserId: user._id
+    });
+
+    if (!subUser) {
+      return res.status(404).json({ success: false, error: 'Membre non trouvé' });
+    }
+
+    const { firstName, lastName, accessLevel, universes, phone, status } = req.body;
+    const updateFields = { updatedAt: new Date() };
+
+    if (firstName) updateFields.firstName = firstName;
+    if (lastName) updateFields.lastName = lastName;
+    if (phone !== undefined) updateFields.phone = phone;
+
+    const validAccessLevels = ['admin', 'editor', 'reader'];
+    if (accessLevel && validAccessLevels.includes(accessLevel)) {
+      updateFields.accessLevel = accessLevel;
+    }
+
+    const validUniverses = ['industry', 'logistician', 'transporter', 'forwarder', 'supplier', 'recipient'];
+    if (Array.isArray(universes)) {
+      updateFields.universes = universes.filter(u => validUniverses.includes(u));
+    }
+
+    if (status && ['active', 'inactive'].includes(status)) {
+      updateFields.status = status;
+    }
+
+    await db.collection('subusers').updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: updateFields }
+    );
+
+    const updated = await db.collection('subusers').findOne({ _id: new ObjectId(req.params.id) });
+
+    res.json({
+      success: true,
+      message: 'Membre mis à jour',
+      data: {
+        id: updated._id.toString(),
+        email: updated.email,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        accessLevel: updated.accessLevel,
+        universes: updated.universes,
+        status: updated.status
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors de la mise à jour du membre' });
+  }
+});
+
+// DELETE /api/subusers/:id - Remove team member
+app.delete('/api/subusers/:id', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req, res);
+    if (!user) return;
+
+    const result = await db.collection('subusers').findOneAndDelete({
+      _id: new ObjectId(req.params.id),
+      parentUserId: user._id
+    });
+
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Membre non trouvé' });
+    }
+
+    res.json({ success: true, message: 'Membre supprimé' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors de la suppression du membre' });
+  }
+});
+
+// POST /api/subusers/:id/resend-invite - Resend invitation
+app.post('/api/subusers/:id/resend-invite', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req, res);
+    if (!user) return;
+
+    const crypto = require('crypto');
+    const subUser = await db.collection('subusers').findOne({
+      _id: new ObjectId(req.params.id),
+      parentUserId: user._id,
+      status: 'pending'
+    });
+
+    if (!subUser) {
+      return res.status(404).json({ success: false, error: 'Membre non trouvé ou déjà activé' });
+    }
+
+    const activationToken = crypto.randomBytes(32).toString('hex');
+    await db.collection('subusers').updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { activationToken, invitedAt: new Date(), updatedAt: new Date() } }
+    );
+
+    res.json({ success: true, message: 'Invitation renvoyée' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Erreur lors du renvoi de l'invitation" });
+  }
+});
+
 // SubUsers - Import Dashdoc users
 app.post('/api/subusers/import-dashdoc', async (req, res) => {
   try {
