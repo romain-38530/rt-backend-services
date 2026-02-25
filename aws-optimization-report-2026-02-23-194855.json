@@ -1,0 +1,57 @@
+﻿{
+    "Date":  "2026-02-23 19:48:55",
+    "TotalInstances":  50,
+    "ActionsExecuted":  0,
+    "ActionsPlanned":  [
+                           {
+                               "Type":  "Stop Instance",
+                               "Resource":  "RT-DeploymentInstance",
+                               "InstanceId":  "i-0ece63fb077366323",
+                               "Savings":  21,
+                               "Command":  "aws ec2 stop-instances --instance-ids i-0ece63fb077366323"
+                           },
+                           {
+                               "Type":  "Terminate Instance",
+                               "Resource":  "rt-affret-ia-api-prod",
+                               "InstanceId":  "i-03116e7c86d6d3599",
+                               "Savings":  7.5,
+                               "Command":  "aws ec2 terminate-instances --instance-ids i-03116e7c86d6d3599"
+                           },
+                           {
+                               "Type":  "Terminate Instance",
+                               "Resource":  "rt-orders-api-prod",
+                               "InstanceId":  "i-03ded696fdbef22cb",
+                               "Savings":  7.5,
+                               "Command":  "aws ec2 terminate-instances --instance-ids i-03ded696fdbef22cb"
+                           },
+                           {
+                               "Type":  "Terminate Instance",
+                               "Resource":  "rt-subscriptions-api-prod-v5",
+                               "InstanceId":  "i-02dd7db8947118d4d",
+                               "Savings":  15,
+                               "Command":  "aws ec2 terminate-instances --instance-ids i-02dd7db8947118d4d"
+                           },
+                           {
+                               "Type":  "Terminate Instance",
+                               "Resource":  "rt-tms-sync-api-prod",
+                               "InstanceId":  "i-004c65af6eb3b76bb",
+                               "Savings":  7.5,
+                               "Command":  "aws ec2 terminate-instances --instance-ids i-004c65af6eb3b76bb"
+                           },
+                           {
+                               "Type":  "Terminate Instance",
+                               "Resource":  "rt-tms-sync-api-v2",
+                               "InstanceId":  "i-0b2104524871b8802",
+                               "Savings":  7.5,
+                               "Command":  "aws ec2 terminate-instances --instance-ids i-0b2104524871b8802"
+                           },
+                           {
+                               "Type":  "Delete ElastiCache (Manual)",
+                               "Resource":  "exploit-ia-redis",
+                               "InstanceId":  "exploit-ia-redis",
+                               "Savings":  15,
+                               "Command":  "1. Mettre REDIS_ENABLED=false sur tous services\n      2. Attendre 24h\n      3. aws elasticache delete-cache-cluster --cache-cluster-id exploit-ia-redis"
+                           }
+                       ],
+    "TotalSavings":  81
+}

@@ -1,0 +1,142 @@
+{
+    "ETag": "ETI3LAUOS80T1",
+    "DistributionConfig": {
+        "CallerReference": "cli-1766954483-791498",
+        "Aliases": {
+            "Quantity": 0
+        },
+        "DefaultRootObject": "",
+        "Origins": {
+            "Quantity": 1,
+            "Items": [
+                {
+                    "Id": "rt-subscriptions-api-prod-v2.eba-pwrpmmxu.eu-central-1.elasticbeanstalk.com-1766954483-509763",
+                    "DomainName": "rt-subscriptions-api-prod-v5.eba-pwrpmmxu.eu-central-1.elasticbeanstalk.com",
+                    "OriginPath": "",
+                    "CustomHeaders": {
+                        "Quantity": 0
+                    },
+                    "CustomOriginConfig": {
+                        "HTTPPort": 80,
+                        "HTTPSPort": 443,
+                        "OriginProtocolPolicy": "http-only",
+                        "OriginSslProtocols": {
+                            "Quantity": 3,
+                            "Items": [
+                                "TLSv1",
+                                "TLSv1.1",
+                                "TLSv1.2"
+                            ]
+                        },
+                        "OriginReadTimeout": 30,
+                        "OriginKeepaliveTimeout": 5
+                    },
+                    "ConnectionAttempts": 3,
+                    "ConnectionTimeout": 10,
+                    "OriginShield": {
+                        "Enabled": false
+                    },
+                    "OriginAccessControlId": ""
+                }
+            ]
+        },
+        "OriginGroups": {
+            "Quantity": 0
+        },
+        "DefaultCacheBehavior": {
+            "TargetOriginId": "rt-subscriptions-api-prod-v2.eba-pwrpmmxu.eu-central-1.elasticbeanstalk.com-1766954483-509763",
+            "TrustedSigners": {
+                "Enabled": false,
+                "Quantity": 0
+            },
+            "TrustedKeyGroups": {
+                "Enabled": false,
+                "Quantity": 0
+            },
+            "ViewerProtocolPolicy": "allow-all",
+            "AllowedMethods": {
+                "Quantity": 7,
+                "Items": [
+                    "HEAD",
+                    "DELETE",
+                    "POST",
+                    "GET",
+                    "OPTIONS",
+                    "PUT",
+                    "PATCH"
+                ],
+                "CachedMethods": {
+                    "Quantity": 2,
+                    "Items": [
+                        "HEAD",
+                        "GET"
+                    ]
+                }
+            },
+            "SmoothStreaming": false,
+            "Compress": false,
+            "LambdaFunctionAssociations": {
+                "Quantity": 0
+            },
+            "FunctionAssociations": {
+                "Quantity": 0
+            },
+            "FieldLevelEncryptionId": "",
+            "GrpcConfig": {
+                "Enabled": false
+            },
+            "ForwardedValues": {
+                "QueryString": true,
+                "Cookies": {
+                    "Forward": "none"
+                },
+                "Headers": {
+                    "Quantity": 3,
+                    "Items": [
+                        "Authorization",
+                        "Origin",
+                        "Content-Type"
+                    ]
+                },
+                "QueryStringCacheKeys": {
+                    "Quantity": 0
+                }
+            },
+            "MinTTL": 0,
+            "DefaultTTL": 0,
+            "MaxTTL": 0
+        },
+        "CacheBehaviors": {
+            "Quantity": 0
+        },
+        "CustomErrorResponses": {
+            "Quantity": 0
+        },
+        "Comment": "",
+        "Logging": {
+            "Enabled": false,
+            "IncludeCookies": false,
+            "Bucket": "",
+            "Prefix": ""
+        },
+        "PriceClass": "PriceClass_All",
+        "Enabled": true,
+        "ViewerCertificate": {
+            "CloudFrontDefaultCertificate": true,
+            "SSLSupportMethod": "vip",
+            "MinimumProtocolVersion": "TLSv1",
+            "CertificateSource": "cloudfront"
+        },
+        "Restrictions": {
+            "GeoRestriction": {
+                "RestrictionType": "none",
+                "Quantity": 0
+            }
+        },
+        "WebACLId": "",
+        "HttpVersion": "http2",
+        "IsIPV6Enabled": true,
+        "ContinuousDeploymentPolicyId": "",
+        "Staging": false
+    }
+}

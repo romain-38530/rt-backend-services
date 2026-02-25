@@ -1,0 +1,113 @@
+{
+  "analysis_date": "2026-02-23T19:49:34.291734+00:00",
+  "period_days": 7,
+  "thresholds": {
+    "cpu_avg": 30.0,
+    "cpu_max": 60.0
+  },
+  "summary": {
+    "total_instances": 12,
+    "downgrade_candidates": 12,
+    "monitor_instances": 0,
+    "keep_instances": 0,
+    "estimated_monthly_savings_eur": 90.0
+  },
+  "instances": [
+    {
+      "id": "i-07aba2934ad4ed933",
+      "name": "rt-admin-api-prod",
+      "avg_cpu": 0.4011568436295336,
+      "max_cpu": 9.57531917730591,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-02260cfd794e7f43f",
+      "name": "rt-affret-ia-api-prod-v4",
+      "avg_cpu": 0.502804428625294,
+      "max_cpu": 9.216359454684845,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-03eb51b3c798e010f",
+      "name": "exploit-ia-planning-prod",
+      "avg_cpu": 0.21047773871725534,
+      "max_cpu": 0.4169724464607379,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-07eb45cf006ecc67a",
+      "name": "exploit-ia-planning-prod-v3",
+      "avg_cpu": 0.3741173342311429,
+      "max_cpu": 5.422360144818726,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-02b6585e3c7790e87",
+      "name": "exploit-ia-worker-v3",
+      "avg_cpu": 0.24009790639533451,
+      "max_cpu": 1.7429157562920095,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-0e6d027777df2b7c5",
+      "name": "exploit-ia-api-admin-prod-v1",
+      "avg_cpu": 0.28568236127518293,
+      "max_cpu": 0.7832680609949171,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-0a7f175d40c307e46",
+      "name": "exploit-ia-worker-ingestion-prod",
+      "avg_cpu": 0.19596482753258027,
+      "max_cpu": 0.4254396209416397,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-02dd7db8947118d4d",
+      "name": "rt-subscriptions-api-prod-v5",
+      "avg_cpu": 1.0142035087854349,
+      "max_cpu": 2.2582580580647313,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-04abe8e887385e2a2",
+      "name": "exploit-ia-api-auth-prod-v1",
+      "avg_cpu": 0.3885606257924315,
+      "max_cpu": 1.7833630560509344,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-04aeb2a387461a326",
+      "name": "exploit-ia-api-orders-prod-v1",
+      "avg_cpu": 0.2575905106139321,
+      "max_cpu": 0.8834069505792149,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-0c4bbdcabfcc1c478",
+      "name": "exploit-ia-profitability-v3",
+      "avg_cpu": 0.27141590239653085,
+      "max_cpu": 0.9197939661515819,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    },
+    {
+      "id": "i-093ef6b78139d9574",
+      "name": "exploit-ia-affretia-prod-v1",
+      "avg_cpu": 0.3989190076370039,
+      "max_cpu": 7.906852605591512,
+      "datapoints": 168,
+      "recommendation": "[OK] DOWNGRADE TO t3.micro"
+    }
+  ]
+}

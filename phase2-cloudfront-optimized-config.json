@@ -1,0 +1,494 @@
+{
+  "Comment": "Symphonia Unified CDN - Optimized for Data Transfer Cost Reduction",
+  "CallerReference": "symphonia-unified-cdn-2026-02-23",
+  "Enabled": true,
+  "PriceClass": "PriceClass_100",
+  "HttpVersion": "http3",
+  "IsIPV6Enabled": true,
+  "Origins": {
+    "Quantity": 10,
+    "Items": [
+      {
+        "Id": "authz-api-origin",
+        "DomainName": "rt-authz-api-prod.eba-smipp22d.eu-central-1.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "orders-api-origin",
+        "DomainName": "rt-orders-api-prod.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "tms-sync-api-origin",
+        "DomainName": "rt-tms-sync-api-prod.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "affretia-api-origin",
+        "DomainName": "rt-affret-ia-api-prod-v4.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "subscriptions-api-origin",
+        "DomainName": "rt-subscriptions-api-prod.eba-pwrpmmxu.eu-central-1.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "documents-s3-origin",
+        "DomainName": "rt-symphonia-documents.s3.eu-central-1.amazonaws.com",
+        "OriginPath": "",
+        "S3OriginConfig": {
+          "OriginAccessIdentity": ""
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "planning-api-origin",
+        "DomainName": "rt-planning-api-prod.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "tracking-api-origin",
+        "DomainName": "rt-tracking-api-prod.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "documents-api-origin",
+        "DomainName": "rt-documents-api-prod.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      },
+      {
+        "Id": "notifications-api-origin",
+        "DomainName": "rt-notifications-api-prod.elasticbeanstalk.com",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 60
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      }
+    ]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "authz-api-origin",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": {
+      "Quantity": 7,
+      "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+      "CachedMethods": {
+        "Quantity": 2,
+        "Items": ["GET", "HEAD"]
+      }
+    },
+    "Compress": true,
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+    "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+    "ResponseHeadersPolicyId": "5cc3b908-e619-4b99-88e5-2cf7f45965bd",
+    "SmoothStreaming": false,
+    "TrustedSigners": {
+      "Enabled": false,
+      "Quantity": 0
+    },
+    "TrustedKeyGroups": {
+      "Enabled": false,
+      "Quantity": 0
+    },
+    "MinTTL": 0,
+    "DefaultTTL": 0,
+    "MaxTTL": 31536000
+  },
+  "CacheBehaviors": {
+    "Quantity": 9,
+    "Items": [
+      {
+        "PathPattern": "/api/auth/health",
+        "TargetOriginId": "authz-api-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 2,
+          "Items": ["GET", "HEAD"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 30,
+        "DefaultTTL": 60,
+        "MaxTTL": 300
+      },
+      {
+        "PathPattern": "/api/auth/login",
+        "TargetOriginId": "authz-api-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 3,
+          "Items": ["POST", "OPTIONS", "HEAD"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 0,
+        "DefaultTTL": 0,
+        "MaxTTL": 0
+      },
+      {
+        "PathPattern": "/api/orders/*",
+        "TargetOriginId": "orders-api-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 7,
+          "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 0,
+        "DefaultTTL": 60,
+        "MaxTTL": 300
+      },
+      {
+        "PathPattern": "/api/documents/download/*",
+        "TargetOriginId": "documents-s3-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 2,
+          "Items": ["GET", "HEAD"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+        "OriginRequestPolicyId": "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 3600,
+        "DefaultTTL": 86400,
+        "MaxTTL": 31536000
+      },
+      {
+        "PathPattern": "/api/documents/upload/*",
+        "TargetOriginId": "documents-api-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 3,
+          "Items": ["POST", "OPTIONS", "HEAD"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 0,
+        "DefaultTTL": 0,
+        "MaxTTL": 0
+      },
+      {
+        "PathPattern": "/api/tms-sync/*",
+        "TargetOriginId": "tms-sync-api-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 7,
+          "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 0,
+        "DefaultTTL": 300,
+        "MaxTTL": 3600
+      },
+      {
+        "PathPattern": "/api/affretia/*",
+        "TargetOriginId": "affretia-api-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 7,
+          "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 0,
+        "DefaultTTL": 120,
+        "MaxTTL": 600
+      },
+      {
+        "PathPattern": "/api/subscriptions/*",
+        "TargetOriginId": "subscriptions-api-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 7,
+          "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 0,
+        "DefaultTTL": 300,
+        "MaxTTL": 3600
+      },
+      {
+        "PathPattern": "/api/static/*",
+        "TargetOriginId": "documents-s3-origin",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 2,
+          "Items": ["GET", "HEAD"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        },
+        "Compress": true,
+        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+        "OriginRequestPolicyId": "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf",
+        "SmoothStreaming": false,
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "MinTTL": 86400,
+        "DefaultTTL": 2592000,
+        "MaxTTL": 31536000
+      }
+    ]
+  },
+  "ViewerCertificate": {
+    "CloudFrontDefaultCertificate": true,
+    "MinimumProtocolVersion": "TLSv1.2_2021",
+    "CertificateSource": "cloudfront"
+  },
+  "Restrictions": {
+    "GeoRestriction": {
+      "RestrictionType": "none",
+      "Quantity": 0
+    }
+  },
+  "Logging": {
+    "Enabled": false,
+    "IncludeCookies": false,
+    "Bucket": "",
+    "Prefix": ""
+  },
+  "CustomErrorResponses": {
+    "Quantity": 2,
+    "Items": [
+      {
+        "ErrorCode": 502,
+        "ErrorCachingMinTTL": 10
+      },
+      {
+        "ErrorCode": 503,
+        "ErrorCachingMinTTL": 10
+      }
+    ]
+  }
+}

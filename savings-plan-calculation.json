@@ -1,0 +1,40 @@
+{
+  "analysis_date": "2026-02-23T20:04:59.844582",
+  "baseline": {
+    "initial_monthly_cost_eur": 487.0,
+    "post_optimization_monthly_cost_eur": 250.0,
+    "post_optimization_hourly_cost_eur": 0.3424657534246575
+  },
+  "phase_savings": {
+    "phase1_ebs_gp3_eur_month": 42.0,
+    "phase2_stop_dev_eur_month": 85.0,
+    "phase3_elb_optimization_eur_month": 20.0,
+    "phase4a_instance_downgrade_eur_month": 90.0,
+    "total_phases_1_to_4a_eur_month": 237.0
+  },
+  "recommended_savings_plan": {
+    "type": "Compute Savings Plan",
+    "term_years": 1,
+    "payment_option": "No Upfront",
+    "hourly_commitment_eur": 0.2911,
+    "monthly_commitment_eur": 212.5,
+    "annual_commitment_eur": 2550.0,
+    "discount_rate": 0.4,
+    "on_demand_equivalent_eur_month": 354.17,
+    "monthly_savings_eur": 141.67,
+    "annual_savings_eur": 1700.0,
+    "coverage_percentage": 85.0
+  },
+  "phase4_total": {
+    "phase4a_downgrade_eur_month": 90.0,
+    "phase4b_savings_plan_eur_month": 141.67,
+    "total_phase4_eur_month": 231.67,
+    "total_phase4_eur_year": 2780.0
+  },
+  "complete_optimization": {
+    "total_monthly_savings_eur": 378.67,
+    "total_annual_savings_eur": 4544.0,
+    "final_monthly_cost_eur": 108.33,
+    "cost_reduction_percentage": 77.8
+  }
+}
