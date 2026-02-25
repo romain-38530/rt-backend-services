@@ -816,23 +816,34 @@ class DashdocConnector {
       },
 
       // Transporteur assigné avec véhicule et chauffeur (format Symphonia)
-      assignedCarrier: (t.carrier_address || t.segments?.[0]) ? {
-        carrierId: t.carrier_address?.company?.pk,
-        carrierName: t.carrier_address?.company?.name,
-        // Informations chauffeur
-        driverFirstName: t.segments?.[0]?.trucker?.user?.first_name,
-        driverLastName: t.segments?.[0]?.trucker?.user?.last_name,
-        driverName: t.segments?.[0]?.trucker ?
-          `${t.segments[0].trucker.user?.first_name || ''} ${t.segments[0].trucker.user?.last_name || ''}`.trim() : null,
-        driverPhone: t.segments?.[0]?.trucker?.user?.phone_number,
-        // Informations véhicule
-        vehiclePlate: t.segments?.[0]?.vehicle?.license_plate,
-        tractorPlate: t.segments?.[0]?.vehicle?.type === 'tractor' ? t.segments[0].vehicle.license_plate : null,
-        trailerPlate: t.segments?.[0]?.trailer?.license_plate,
-        vehicleType: t.segments?.[0]?.vehicle?.type,
-        // Dates
-        acceptedAt: t.carrier_assignment_date || t.updated
-      } : null,
+      assignedCarrier: (() => {
+        const segment = (t.segments && t.segments[0]) || null;
+        const carrier = t.carrier_address || null;
+
+        if (!carrier && !segment) return null;
+
+        const trucker = segment ? segment.trucker : null;
+        const vehicle = segment ? segment.vehicle : null;
+        const trailer = segment ? segment.trailer : null;
+
+        return {
+          carrierId: carrier && carrier.company ? carrier.company.pk : null,
+          carrierName: carrier && carrier.company ? carrier.company.name : null,
+          // Informations chauffeur
+          driverFirstName: trucker && trucker.user ? trucker.user.first_name : null,
+          driverLastName: trucker && trucker.user ? trucker.user.last_name : null,
+          driverName: trucker && trucker.user ?
+            ((trucker.user.first_name || '') + ' ' + (trucker.user.last_name || '')).trim() || null : null,
+          driverPhone: trucker && trucker.user ? trucker.user.phone_number : null,
+          // Informations véhicule
+          vehiclePlate: vehicle ? vehicle.license_plate : null,
+          tractorPlate: vehicle && vehicle.type === 'tractor' ? vehicle.license_plate : null,
+          trailerPlate: trailer ? trailer.license_plate : null,
+          vehicleType: vehicle ? vehicle.type : null,
+          // Dates
+          acceptedAt: t.carrier_assignment_date || t.updated || null
+        };
+      })(),
 
       // Pricing
       pricing: {
