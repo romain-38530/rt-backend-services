@@ -11,23 +11,36 @@ Write-Host "[1/3] Vérification connexion MongoDB..." -ForegroundColor Yellow
 $healthUrl = "http://awseb-e-z-AWSEBLoa-ZPJXYR9FE1NP-105816728.eu-central-1.elb.amazonaws.com/health"
 
 try {
-    $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 10
+    $response = Invoke-WebRequest -Uri $healthUrl -TimeoutSec 10 -UseBasicParsing
+    $health = $response.Content | ConvertFrom-Json
 
-    if ($health.mongodb.connected) {
-        Write-Host "      OK MongoDB connecté" -ForegroundColor Green
+    if ($health.mongodb.connected -eq $true) {
+        Write-Host "      ✅ MongoDB connecté" -ForegroundColor Green
     } else {
-        Write-Host "      ERREUR MongoDB non connecté" -ForegroundColor Red
+        Write-Host "      ❌ MongoDB non connecté" -ForegroundColor Red
         Write-Host ""
-        Write-Host "Action requise:" -ForegroundColor Yellow
-        Write-Host "  1. Aller sur https://cloud.mongodb.com" -ForegroundColor White
-        Write-Host "  2. Network Access -> Add IP: 3.125.160.174/32" -ForegroundColor White
-        Write-Host "  3. Attendre 2 minutes et relancer ce script" -ForegroundColor White
+        Write-Host "⚠️  ACTION REQUISE:" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  1. Ouvrir MongoDB Atlas: https://cloud.mongodb.com" -ForegroundColor White
+        Write-Host "  2. Sélectionner cluster 'stagingrt'" -ForegroundColor White
+        Write-Host "  3. Menu Network Access → Add IP Address" -ForegroundColor White
+        Write-Host "  4. Entrer: 3.125.160.174/32" -ForegroundColor Cyan
+        Write-Host "     (ou 0.0.0.0/0 pour toutes les IPs)" -ForegroundColor Gray
+        Write-Host "  5. Cliquer Confirm" -ForegroundColor White
+        Write-Host "  6. Attendre 2 minutes et relancer ce script" -ForegroundColor White
+        Write-Host ""
+        Write-Host "Commande pour relancer:" -ForegroundColor Yellow
+        Write-Host "  powershell -ExecutionPolicy Bypass -File verify-fix.ps1" -ForegroundColor Gray
         Write-Host ""
         exit 1
     }
 } catch {
-    Write-Host "      ERREUR Impossible de contacter l'API" -ForegroundColor Red
-    Write-Host "      $_" -ForegroundColor Gray
+    Write-Host "      ❌ Impossible de contacter l'API" -ForegroundColor Red
+    Write-Host "      Erreur: $($_.Exception.Message)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Vérifier que l'API est accessible:" -ForegroundColor Yellow
+    Write-Host "  $healthUrl" -ForegroundColor Gray
+    Write-Host ""
     exit 1
 }
 
