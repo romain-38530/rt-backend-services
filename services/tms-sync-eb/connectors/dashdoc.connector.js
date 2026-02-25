@@ -815,6 +815,25 @@ class DashdocConnector {
         } : null
       },
 
+      // Transporteur assigné avec véhicule et chauffeur (format Symphonia)
+      assignedCarrier: (t.carrier_address || t.segments?.[0]) ? {
+        carrierId: t.carrier_address?.company?.pk,
+        carrierName: t.carrier_address?.company?.name,
+        // Informations chauffeur
+        driverFirstName: t.segments?.[0]?.trucker?.user?.first_name,
+        driverLastName: t.segments?.[0]?.trucker?.user?.last_name,
+        driverName: t.segments?.[0]?.trucker ?
+          `${t.segments[0].trucker.user?.first_name || ''} ${t.segments[0].trucker.user?.last_name || ''}`.trim() : null,
+        driverPhone: t.segments?.[0]?.trucker?.user?.phone_number,
+        // Informations véhicule
+        vehiclePlate: t.segments?.[0]?.vehicle?.license_plate,
+        tractorPlate: t.segments?.[0]?.vehicle?.type === 'tractor' ? t.segments[0].vehicle.license_plate : null,
+        trailerPlate: t.segments?.[0]?.trailer?.license_plate,
+        vehicleType: t.segments?.[0]?.vehicle?.type,
+        // Dates
+        acceptedAt: t.carrier_assignment_date || t.updated
+      } : null,
+
       // Pricing
       pricing: {
         totalPrice: parseFloat(t.pricing_total_price) || null,
