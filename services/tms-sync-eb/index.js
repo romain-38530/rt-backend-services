@@ -38,9 +38,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'RtProd2026KeyAuth0MainToken123456X
 // MongoDB connection
 let db = null;
 let mongoClient = null;
+let ordersClient = null;
+let ordersDb = null;
 let mongoConnected = false;
 let tmsService = null;
 let vigilanceService = null;
+let autoMonitoringService = null;
 
 async function connectMongoDB() {
   if (!process.env.MONGODB_URI) {
@@ -54,6 +57,21 @@ async function connectMongoDB() {
     await mongoClient.connect();
     db = mongoClient.db();
     mongoConnected = true;
+
+    // Connect to Orders database (for Vehizen GPS data)
+    if (process.env.ORDERS_MONGODB_URI) {
+      try {
+        ordersClient = new MongoClient(process.env.ORDERS_MONGODB_URI);
+        await ordersClient.connect();
+        ordersDb = ordersClient.db();
+        console.log('[ORDERS DB] Connected successfully (Vehizen GPS data)');
+      } catch (error) {
+        console.warn('[ORDERS DB] Failed to connect:', error.message);
+        console.warn('[ORDERS DB] GPS tracking features will be limited');
+      }
+    } else {
+      console.warn('[ORDERS DB] URI not configured - GPS tracking features will be limited');
+    }
 
     // Connect mongoose (for ODM models - vehicles, DKV, etc.)
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -109,9 +127,8 @@ async function connectMongoDB() {
     // Configurer les routes Tracking GPS (Vehizen)
     try {
       const trackingGPSRoutes = require('./routes/tracking-gps.routes');
-      // TODO: Ajouter connexion ordersDb pour accéder vehizenvehicles
-      trackingGPSRoutes.setDatabases(db, null);
-      console.log('[Tracking GPS] Routes configured with database');
+      trackingGPSRoutes.setDatabases(db, ordersDb);
+      console.log('[Tracking GPS] Routes configured with databases (main + orders)');
     } catch (error) {
       console.error('[Tracking GPS] Failed to configure:', error);
     }
@@ -123,6 +140,18 @@ async function connectMongoDB() {
       console.log('[Driver Alerts] Routes configured with database');
     } catch (error) {
       console.error('[Driver Alerts] Failed to configure:', error);
+    }
+
+    // Initialiser le service de monitoring automatisé
+    try {
+      const AutoMonitoringService = require('./services/automated-driver-monitoring.service');
+      autoMonitoringService = new AutoMonitoringService(db, ordersDb);
+
+      const autoMonitoringRoutes = require('./routes/auto-monitoring.routes');
+      autoMonitoringRoutes.setService(autoMonitoringService);
+      console.log('[Auto Monitoring] Service and routes configured');
+    } catch (error) {
+      console.error('[Auto Monitoring] Failed to configure:', error);
     }
 
     // Configurer la base de données pour les routes Vigilance
@@ -2411,6 +2440,10 @@ app.use('/api/v1/tracking-gps', authenticateToken, trackingGPSRoutes);
 const driverAlertsRoutes = require('./routes/driver-alerts.routes');
 app.use('/api/v1/driver-alerts', authenticateToken, driverAlertsRoutes);
 
+// Routes Monitoring Automatisé (système intelligent de surveillance)
+const autoMonitoringRoutes = require('./routes/auto-monitoring.routes');
+app.use('/api/v1/auto-monitoring', authenticateToken, autoMonitoringRoutes);
+
 // Routes Vigilance (scores et surveillance transporteurs)
 const vigilanceRoutes = require('./routes/vigilance.routes');
 app.use('/api/v1/vigilance', authenticateToken, vigilanceRoutes);
@@ -2482,6 +2515,24 @@ async function startServer() {
         }
       } catch (dkvError) {
         console.error('[DKV] Failed to initialize Data Lake:', dkvError.message);
+      }
+
+      // Démarrer le monitoring automatisé des retards chauffeurs
+      if (autoMonitoringService && ordersDb) {
+        try {
+          await autoMonitoringService.start();
+          console.log('[AUTO-MONITORING] Service de surveillance automatisé démarré');
+          console.log('[AUTO-MONITORING] Vérification des retards toutes les 5 minutes');
+        } catch (autoMonError) {
+          console.error('[AUTO-MONITORING] Échec du démarrage:', autoMonError.message);
+        }
+      } else {
+        if (!autoMonitoringService) {
+          console.warn('[AUTO-MONITORING] Service non initialisé');
+        }
+        if (!ordersDb) {
+          console.warn('[AUTO-MONITORING] Base de données Orders non connectée (GPS Vehizen indisponible)');
+        }
       }
 
       // Initialize Vehicles Data Lake - DISABLED (manual activation required)
