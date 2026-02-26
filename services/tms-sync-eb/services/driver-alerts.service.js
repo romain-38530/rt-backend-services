@@ -8,8 +8,8 @@
  * 4. Max 1 SMS par transport par jour
  */
 
-const AWS = require('aws-sdk');
-const sns = new AWS.SNS({ region: 'eu-central-1' });
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const snsClient = new SNSClient({ region: 'eu-central-1' });
 
 // Seuils de retard (en minutes)
 const DELAY_THRESHOLDS = {
@@ -144,7 +144,8 @@ class DriverAlertsService {
         }
       };
 
-      const result = await sns.publish(snsParams).promise();
+      const command = new PublishCommand(snsParams);
+      const result = await snsClient.send(command);
 
       // Enregistrer dans l'historique
       smsHistory.set(transportUid, Date.now());
