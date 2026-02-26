@@ -106,6 +106,25 @@ async function connectMongoDB() {
       console.error('[Tracking IA] Failed to configure:', error);
     }
 
+    // Configurer les routes Tracking GPS (Vehizen)
+    try {
+      const trackingGPSRoutes = require('./routes/tracking-gps.routes');
+      // TODO: Ajouter connexion ordersDb pour accéder vehizenvehicles
+      trackingGPSRoutes.setDatabases(db, null);
+      console.log('[Tracking GPS] Routes configured with database');
+    } catch (error) {
+      console.error('[Tracking GPS] Failed to configure:', error);
+    }
+
+    // Configurer les routes Alertes Chauffeurs
+    try {
+      const driverAlertsRoutes = require('./routes/driver-alerts.routes');
+      driverAlertsRoutes.setDatabase(db);
+      console.log('[Driver Alerts] Routes configured with database');
+    } catch (error) {
+      console.error('[Driver Alerts] Failed to configure:', error);
+    }
+
     // Configurer la base de données pour les routes Vigilance
     try {
       const vigilanceRoutes = require('./routes/vigilance.routes');
@@ -2383,6 +2402,14 @@ app.use('/api/v1/vehicles', vehiclesDatalakeRoutes);
 // Routes Tracking IA (événements temps réel)
 const trackingIARoutes = require('./routes/tracking-ia.routes');
 app.use('/api/v1/tracking-ia', authenticateToken, trackingIARoutes);
+
+// Routes Tracking GPS (positions temps réel Vehizen)
+const trackingGPSRoutes = require('./routes/tracking-gps.routes');
+app.use('/api/v1/tracking-gps', authenticateToken, trackingGPSRoutes);
+
+// Routes Alertes Chauffeurs (SMS manuels uniquement)
+const driverAlertsRoutes = require('./routes/driver-alerts.routes');
+app.use('/api/v1/driver-alerts', authenticateToken, driverAlertsRoutes);
 
 // Routes Vigilance (scores et surveillance transporteurs)
 const vigilanceRoutes = require('./routes/vigilance.routes');
