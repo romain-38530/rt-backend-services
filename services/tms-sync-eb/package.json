@@ -1,6 +1,6 @@
 {
     "name": "rt-tms-sync-api",
-    "version": "2.8.0",
+    "version": "2.11.0",
     "description": "RT TMS Sync API - Dashdoc, Transporeon, DKV, Vehizen integration with Vehicles Data Lake",
     "main": "index.js",
     "scripts": {
