@@ -829,6 +829,8 @@ class DashdocConnector {
         return {
           carrierId: carrier && carrier.company ? carrier.company.pk : null,
           carrierName: carrier && carrier.company ? carrier.company.name : null,
+          carrierPhone: carrier && carrier.company ? carrier.company.phone_number : null,
+          carrierEmail: carrier && carrier.company ? carrier.company.email : null,
           // Informations chauffeur
           driverFirstName: trucker && trucker.user ? trucker.user.first_name : null,
           driverLastName: trucker && trucker.user ? trucker.user.last_name : null,
